@@ -166,7 +166,7 @@ compatibility_date = "2024-01-01"
 directory = "./dist"
 ```
 
-SPA routing (deep-links) is handled by `public/_redirects` (`/* /index.html 200`). Do **not** add `not_found_handling = "single-page-application"` — it conflicts with `_redirects` and breaks the deploy.
+SPA routing (React Router deep-links) is handled by `not_found_handling = "single-page-application"`. Do **not** add a `public/_redirects` file — the `/* /index.html 200` rule is Cloudflare Pages syntax and causes error 100324 (infinite redirect loop) in Workers Assets.
 
 Deploy:
 ```bash

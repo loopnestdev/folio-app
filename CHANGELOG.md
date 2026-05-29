@@ -6,7 +6,7 @@ All notable changes to Folio App are documented here.
 
 ### Fixed
 
-- **Cloudflare deployment serving "Hello World"** — `frontend/wrangler.toml` used the deprecated `[site]` format, which causes Wrangler v3+ to deploy a default stub worker instead of the static assets. Migrated to the Wrangler v3+ `[assets]` format. SPA deep-link routing is handled by the existing `public/_redirects` file (`/* /index.html 200`). Note: `not_found_handling = "single-page-application"` must NOT be set alongside `_redirects` — it creates a Cloudflare redirect loop (error 100324).
+- **Cloudflare deployment serving "Hello World" / redirect loop** — `frontend/wrangler.toml` used the deprecated `[site]` format (Wrangler v3+ deploys a stub worker with this config). Migrated to `[assets]` format with `not_found_handling = "single-page-application"` for React Router deep-links. Removed `public/_redirects` (`/* /index.html 200`) — that rule is Cloudflare Pages syntax and causes error 100324 (infinite redirect loop) in Workers Assets.
 
 ---
 

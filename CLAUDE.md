@@ -314,9 +314,10 @@ The Moomoo parser (`backend/src/services/pdf-parser/moomoo.ts`) processes Moomoo
   ```toml
   [assets]
   directory = "./dist"
+  not_found_handling = "single-page-application"
   ```
 
-  SPA routing is handled by `frontend/public/_redirects` (`/* /index.html 200`). Do NOT add `not_found_handling = "single-page-application"` — it conflicts with `_redirects` and causes a Cloudflare deploy error (code 100324 infinite loop).
+  **Do NOT add `public/_redirects`** — `/* /index.html 200` is Cloudflare Pages syntax; in Workers Assets it causes error 100324 (infinite redirect loop). SPA routing is handled entirely by `not_found_handling`.
 - Deploy: `npm run build && npx wrangler deploy` (run from `frontend/`)
 - `VITE_*` vars are baked into the bundle at build time from `frontend/.env`
 - Custom domain: `folio.ailab.build`
