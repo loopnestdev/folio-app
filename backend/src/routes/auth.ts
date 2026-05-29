@@ -43,7 +43,31 @@ router.post('/profile', async (req: any, res: any) => {
   const full_name = (user.user_metadata?.full_name as string | undefined) ?? null;
   const avatar_url = (user.user_metadata?.avatar_url as string | undefined) ?? null;
 
-  // Check how many profiles exist to determine first user
+  // Check if profile already exists to avoid overwriting role/status on re-login.
+  const { data: existing } = await supabase
+    .from('profiles')
+    .select()
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (existing) {
+    // Returning user — only refresh mutable metadata, preserve role & status.
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({ email, full_name, avatar_url })
+      .eq('id', userId)
+      .select()
+      .single();
+
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+    res.json(data);
+    return;
+  }
+
+  // New user — determine role/status based on whether any profiles exist yet.
   const { count } = await supabase
     .from('profiles')
     .select('id', { count: 'exact', head: true });
@@ -52,17 +76,14 @@ router.post('/profile', async (req: any, res: any) => {
 
   const { data, error } = await supabase
     .from('profiles')
-    .upsert(
-      {
-        id: userId,
-        email,
-        full_name,
-        avatar_url,
-        role: isFirst ? 'admin' : 'standard',
-        status: isFirst ? 'approved' : 'pending',
-      },
-      { onConflict: 'id' }
-    )
+    .insert({
+      id: userId,
+      email,
+      full_name,
+      avatar_url,
+      role: isFirst ? 'admin' : 'standard',
+      status: isFirst ? 'approved' : 'pending',
+    })
     .select()
     .single();
 
