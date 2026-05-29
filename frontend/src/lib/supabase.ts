@@ -10,5 +10,11 @@ if (!supabaseUrl || !supabaseAnonKey) {
 export const supabase = createClient(
   supabaseUrl || 'https://placeholder.supabase.co',
   supabaseAnonKey || 'placeholder-anon-key',
-  { db: { schema: 'folio' } },
+  {
+    db: { schema: 'folio' },
+    // Disable automatic PKCE code detection — AuthCallbackPage handles the
+    // exchange explicitly. With detectSessionInUrl:true (default) the client
+    // would consume the ?code= param on init, causing our manual call to fail.
+    auth: { detectSessionInUrl: false },
+  },
 );

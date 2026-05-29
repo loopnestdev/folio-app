@@ -32,12 +32,15 @@ export function AuthCallbackPage() {
           if (error) {
             setError(error.message);
           } else {
-            navigate('/', { replace: true });
+            // Hard redirect so the app re-initialises with the session already
+            // in localStorage. React Router navigate() can race with AuthContext
+            // state updates and send AuthGuard to /login before session is set.
+            window.location.href = '/';
           }
         });
     } else {
       // Fallback: no code in URL — just go home and let AuthContext sort it out
-      navigate('/', { replace: true });
+      window.location.href = '/';
     }
   }, [navigate]);
 
