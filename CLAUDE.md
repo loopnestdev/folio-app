@@ -256,11 +256,13 @@ cd frontend && npm test   # 59 tests — Vitest
 All tests must pass before committing. Generate new tests when new logic is introduced.
 
 **Backend test coverage highlights:**
+
 - `src/services/calculations/holdings.ts` — FIFO cost basis, CGT discount logic
 - `src/services/calculations/statistics.ts` — Sharpe, Sortino, Beta, etc.
 - `src/services/pdf-parser/moomoo.ts` — Moomoo statement parsing
 
 **Frontend test coverage highlights:**
+
 - Auth flow, pending state, route guards
 - Chart component rendering (both Recharts and ECharts)
 - Form validation
@@ -270,19 +272,25 @@ All tests must pass before committing. Generate new tests when new logic is intr
 ## Key Conventions
 
 ### API pattern
+
 All data requests go through the Express backend (not direct Supabase queries from the frontend). The frontend Supabase client is used **only for auth** (session management, OAuth). Database reads/writes go through `VITE_API_URL`.
 
 ### Chart library toggle
+
 `chart_library` is stored on the user's profile in `folio.profiles`. The settings page patches it via `PATCH /api/auth/profile`. All chart pages check this value and render either Recharts or ECharts components — the switch is live (no page reload needed).
 
 ### Financial year
+
 `financial_year_start` is stored on the user's profile. `'july'` = Jul–Jun (Australian default), `'january'` = Jan–Dec. The tax report and CGT calculations use this setting.
 
 ### FIFO cost basis
+
 All holdings and CGT calculations use FIFO (first-in, first-out) matching. The 50% CGT discount applies to assets held for more than 12 months before disposal.
 
 ### PDF import
+
 The Moomoo parser (`backend/src/services/pdf-parser/moomoo.ts`) processes Moomoo Securities Australia monthly statements. The import flow:
+
 1. `POST /api/portfolios/:id/import` — upload PDF → returns preview of parsed trades
 2. `POST /api/portfolios/:id/import/confirm` — user confirms → trades are saved
 
@@ -291,6 +299,7 @@ The Moomoo parser (`backend/src/services/pdf-parser/moomoo.ts`) processes Moomoo
 ## Deployment
 
 ### Railway (backend)
+
 - Root directory: `backend/`
 - `backend/railway.json` handles build/start/healthcheck
 - Build command: `npm install --include=dev && npm run build` (devDeps needed for `tsc`)
@@ -299,12 +308,15 @@ The Moomoo parser (`backend/src/services/pdf-parser/moomoo.ts`) processes Moomoo
 - Node version: pinned to 22 via `backend/.nvmrc` (Nixpacks reads this)
 
 ### Cloudflare Workers + Assets (frontend)
+
 - `frontend/wrangler.toml` uses Wrangler v3+ `[assets]` format (NOT the deprecated `[site]` format):
+
   ```toml
   [assets]
   directory = "./dist"
-  not_found_handling = "single-page-application"
   ```
+
+  SPA routing is handled by `frontend/public/_redirects` (`/* /index.html 200`). Do NOT add `not_found_handling = "single-page-application"` — it conflicts with `_redirects` and causes a Cloudflare deploy error (code 100324 infinite loop).
 - Deploy: `npm run build && npx wrangler deploy` (run from `frontend/`)
 - `VITE_*` vars are baked into the bundle at build time from `frontend/.env`
 - Custom domain: `folio.ailab.build`

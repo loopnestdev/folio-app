@@ -56,7 +56,8 @@ FRONTEND_URL=http://localhost:5173
 ```
 
 **Frontend** (`frontend/.env`):
-```
+
+```text
 VITE_SUPABASE_URL=https://lcqsatefkutiakhgexue.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
 VITE_API_URL=http://localhost:3001
@@ -70,12 +71,14 @@ folio-app uses the shared **coredb** Supabase project with all tables in the `fo
 Supabase Dashboard → Project Settings → API → Exposed schemas → add `folio` → Save.
 
 **Step 2 — Run schema bootstrap** (Supabase SQL Editor):
+
 ```sql
 -- supabase-central/migrations/001_schemas.sql
 -- Creates folio, signal, moat schemas with grants (safe to re-run)
 ```
 
 **Step 3 — Run folio tables and RLS** (Supabase SQL Editor):
+
 ```sql
 -- supabase-central/migrations/002_folio.sql
 -- Creates all folio.* tables, folio.is_admin() function, RLS policies
@@ -84,7 +87,8 @@ Supabase Dashboard → Project Settings → API → Exposed schemas → add `fol
 
 **Step 4 — Add OAuth redirect URL:**
 Supabase Dashboard → Authentication → URL Configuration → Redirect URLs → add:
-```
+
+```text
 https://folio.ailab.build/auth/callback
 ```
 
@@ -92,6 +96,7 @@ https://folio.ailab.build/auth/callback
 The backend automatically grants `role=admin, status=approved` to the first user and sets `app_metadata.role=admin` in their JWT. Sign out and sign back in so the updated JWT is issued.
 
 Verify via SQL:
+
 ```sql
 SELECT id, email, role, status FROM folio.profiles;
 SELECT id, email, raw_app_meta_data FROM auth.users WHERE email = 'your-email@example.com';
@@ -159,8 +164,9 @@ compatibility_date = "2024-01-01"
 
 [assets]
 directory = "./dist"
-not_found_handling = "single-page-application"
 ```
+
+SPA routing (deep-links) is handled by `public/_redirects` (`/* /index.html 200`). Do **not** add `not_found_handling = "single-page-application"` — it conflicts with `_redirects` and breaks the deploy.
 
 Deploy:
 ```bash
