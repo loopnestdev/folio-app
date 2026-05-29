@@ -3,20 +3,24 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 
 /**
- * Handles the Supabase OAuth PKCE callback.
+ * Handles the Supabase OAuth callback for both PKCE and implicit flows.
  *
- * Supabase v2 uses PKCE by default. After Google redirects back to
- * /auth/callback?code=..., we must call exchangeCodeForSession() before
- * navigating away — otherwise the code is discarded and no session is
- * created.
+ * With detectSessionInUrl: true (the default), Supabase automatically handles:
+ *   - PKCE flow  → ?code= in query string → calls exchangeCodeForSession()
+ *   - Implicit   → #access_token= in hash → parses tokens directly
+ *
+ * We must NOT call exchangeCodeForSession() manually here — the library
+ * already does it, and a second call would fail with "code already used."
+ * Instead we just subscribe to onAuthStateChange and navigate once the
+ * session is confirmed.
  */
 export function AuthCallbackPage() {
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Surface any OAuth-level errors (e.g. user denied consent)
     const params = new URLSearchParams(window.location.search);
-    const code = params.get('code');
     const errorParam = params.get('error');
     const errorDescription = params.get('error_description');
 
@@ -25,23 +29,26 @@ export function AuthCallbackPage() {
       return;
     }
 
-    if (code) {
-      supabase.auth
-        .exchangeCodeForSession(code)
-        .then(({ error }) => {
-          if (error) {
-            setError(error.message);
-          } else {
-            // Hard redirect so the app re-initialises with the session already
-            // in localStorage. React Router navigate() can race with AuthContext
-            // state updates and send AuthGuard to /login before session is set.
-            window.location.href = '/';
-          }
-        });
-    } else {
-      // Fallback: no code in URL — just go home and let AuthContext sort it out
-      window.location.href = '/';
-    }
+    // Supabase fires SIGNED_IN (or INITIAL_SESSION with a session) once the
+    // token exchange / hash parsing completes. Navigate home on either event.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (session && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
+          // Hard redirect so AuthContext re-initialises with the persisted session.
+          window.location.href = '/';
+        }
+      },
+    );
+
+    // Safety timeout — if nothing fires in 15 s something went wrong
+    const timeout = setTimeout(() => {
+      setError('Sign-in timed out. Please try again.');
+    }, 15_000);
+
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(timeout);
+    };
   }, [navigate]);
 
   if (error) {

@@ -12,9 +12,9 @@ export const supabase = createClient(
   supabaseAnonKey || 'placeholder-anon-key',
   {
     db: { schema: 'folio' },
-    // Disable automatic PKCE code detection — AuthCallbackPage handles the
-    // exchange explicitly. With detectSessionInUrl:true (default) the client
-    // would consume the ?code= param on init, causing our manual call to fail.
-    auth: { detectSessionInUrl: false },
+    // detectSessionInUrl must stay true (the default). Setting it to false
+    // causes Supabase to skip PKCE entirely and fall back to implicit flow,
+    // returning #access_token= in the hash instead of ?code= in the query.
+    // AuthCallbackPage uses onAuthStateChange so there is no double-exchange.
   },
 );
