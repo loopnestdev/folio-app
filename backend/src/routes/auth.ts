@@ -1,25 +1,47 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { createClient } from '@supabase/supabase-js';
 import { authMiddleware } from '../middleware/auth';
 import { supabase } from '../lib/supabase';
+import { env } from '../config/env';
 import type { AuthenticatedRequest } from '../types';
 
 const router = Router();
 
-router.post('/profile', authMiddleware as any, async (req: AuthenticatedRequest, res: any) => {
-  const userId = req.userId!;
-
-  const schema = z.object({
-    full_name: z.string().optional(),
-    email: z.string().email(),
-    avatar_url: z.string().url().optional(),
-  });
-
-  const body = schema.safeParse(req.body);
-  if (!body.success) {
-    res.status(400).json({ error: body.error.flatten() });
+/**
+ * POST /api/auth/profile — Bootstrap or return the caller's folio profile.
+ *
+ * Uses JWT-only verification (no existing profile required) so that brand-new
+ * users can create their profile on first sign-in. All other protected routes
+ * use the full authMiddleware which additionally checks that a profile exists.
+ *
+ * User data (email, name, avatar) is read from the Supabase user record — no
+ * request body is needed, which removes a previous chicken-and-egg problem
+ * where the frontend had to supply user data it didn't always have.
+ */
+router.post('/profile', async (req: any, res: any) => {
+  const authHeader = req.headers.authorization as string | undefined;
+  if (!authHeader?.startsWith('Bearer ')) {
+    res.status(401).json({ error: 'Missing authorization header' });
     return;
   }
+  const token = authHeader.slice(7);
+
+  // Verify the JWT without requiring an existing profile
+  const anonKey = env.SUPABASE_ANON_KEY || env.SUPABASE_SERVICE_ROLE_KEY;
+  const userClient = createClient(env.SUPABASE_URL, anonKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  const { data: { user }, error: authError } = await userClient.auth.getUser(token);
+  if (authError || !user) {
+    res.status(401).json({ error: 'Invalid or expired token' });
+    return;
+  }
+
+  const userId = user.id;
+  const email = user.email ?? '';
+  const full_name = (user.user_metadata?.full_name as string | undefined) ?? null;
+  const avatar_url = (user.user_metadata?.avatar_url as string | undefined) ?? null;
 
   // Check how many profiles exist to determine first user
   const { count } = await supabase
@@ -33,9 +55,9 @@ router.post('/profile', authMiddleware as any, async (req: AuthenticatedRequest,
     .upsert(
       {
         id: userId,
-        email: body.data.email,
-        full_name: body.data.full_name ?? null,
-        avatar_url: body.data.avatar_url ?? null,
+        email,
+        full_name,
+        avatar_url,
         role: isFirst ? 'admin' : 'standard',
         status: isFirst ? 'approved' : 'pending',
       },
