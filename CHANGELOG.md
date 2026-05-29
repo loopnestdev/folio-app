@@ -8,6 +8,8 @@ All notable changes to Folio App are documented here.
 
 - **Cloudflare deployment serving "Hello World" / redirect loop** — `frontend/wrangler.toml` used the deprecated `[site]` format (Wrangler v3+ deploys a stub worker with this config). Migrated to `[assets]` format with `not_found_handling = "single-page-application"` for React Router deep-links. Removed `public/_redirects` (`/* /index.html 200`) — that rule is Cloudflare Pages syntax and causes error 100324 (infinite redirect loop) in Workers Assets.
 
+- **Google OAuth sign-in returning to login without a session** — The `/auth/callback` route was wired to `<Navigate to="/" replace />`, which immediately navigated away and discarded the `?code=` PKCE parameter before Supabase could exchange it for a session. Added `AuthCallbackPage.tsx` that calls `supabase.auth.exchangeCodeForSession(code)` before navigating, completing the Supabase v2 PKCE flow correctly.
+
 ---
 
 ## [0.2.0] — 2026-05-29

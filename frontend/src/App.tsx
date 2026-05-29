@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './contexts/AuthContext';
 import { PortfolioProvider } from './contexts/PortfolioContext';
@@ -29,6 +29,7 @@ import { DiversityPage } from './pages/reports/DiversityPage';
 import { DrawdownPage } from './pages/reports/DrawdownPage';
 import { AdminPage } from './pages/AdminPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { AuthCallbackPage } from './pages/AuthCallbackPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -90,7 +91,7 @@ export default function App() {
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
               <Route path="/pending" element={<PendingPage />} />
-              <Route path="/auth/callback" element={<Navigate to="/" replace />} />
+              <Route path="/auth/callback" element={<AuthCallbackPage />} />
 
               {/* Protected routes */}
               <Route path="/*" element={<ProtectedRoutes />} />
