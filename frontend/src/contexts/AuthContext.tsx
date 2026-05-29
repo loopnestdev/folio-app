@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { api } from '../lib/api';
@@ -22,28 +22,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Prevent concurrent fetchProfile calls (e.g. INITIAL_SESSION + getSession racing)
+  const fetchingRef = useRef(false);
+
   const fetchProfile = async () => {
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
     try {
       const { data } = await api.post<UserProfile>('/api/auth/profile');
       setProfile(data);
     } catch (err) {
       console.error('Failed to fetch profile:', err);
+      // Don't sign out here — let the response interceptor handle 401s.
+      // For other errors (5xx, network) we just leave profile null so
+      // ApprovedGuard shows the "Setting up your account…" spinner.
+    } finally {
+      fetchingRef.current = false;
     }
   };
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
-      setSession(s);
-      setUser(s?.user ?? null);
-      if (s?.user) {
-        fetchProfile().finally(() => setLoading(false));
-      } else {
-        setLoading(false);
-      }
-    });
-
-    // Subscribe to auth changes
+    // Supabase v2: onAuthStateChange fires INITIAL_SESSION on subscribe with
+    // the current state. That's all we need — no separate getSession() call
+    // (which would cause a second concurrent fetchProfile request).
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, s) => {
         setSession(s);
@@ -58,7 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const signInWithGoogle = async () => {
     await supabase.auth.signInWithOAuth({

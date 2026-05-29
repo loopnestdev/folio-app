@@ -24,7 +24,12 @@ api.interceptors.request.use(async (config) => {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401) {
+    const url: string = error.config?.url ?? '';
+    const status: number = error.response?.status;
+    // Sign out on 401 only for routes OTHER than /api/auth/profile.
+    // The profile bootstrap endpoint can return 401 for transient JWT issues;
+    // silently signing out there would send new users to /login in a loop.
+    if (status === 401 && !url.includes('/auth/profile')) {
       await supabase.auth.signOut();
       window.location.href = '/login';
     }
