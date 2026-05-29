@@ -61,6 +61,14 @@ app.get('/health/db', async (_req, res) => {
   }
 });
 
+// JWT config diagnostic — confirms SUPABASE_JWT_SECRET is loaded on Railway
+app.get('/health/jwt', (_req, res) => {
+  res.json({
+    jwt_configured: !!env.SUPABASE_JWT_SECRET,
+    jwt_secret_length: env.SUPABASE_JWT_SECRET?.length ?? 0,
+  });
+});
+
 // Routes
 setupRoutes(app);
 
