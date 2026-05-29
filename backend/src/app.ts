@@ -49,6 +49,18 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// DB connectivity check — measures Railway→Supabase latency
+app.get('/health/db', async (_req, res) => {
+  const { supabase } = await import('./lib/supabase');
+  const t = Date.now();
+  try {
+    const { error } = await supabase.from('profiles').select('id').limit(1);
+    res.json({ status: error ? 'error' : 'ok', db_ms: Date.now() - t, error: error?.message });
+  } catch (err: any) {
+    res.json({ status: 'exception', db_ms: Date.now() - t, error: err.message });
+  }
+});
+
 // Routes
 setupRoutes(app);
 
