@@ -31,7 +31,7 @@ A portfolio tracking web application for self-directed investors. Track trades, 
 | Auth | Supabase Auth + Google OAuth |
 | PDF Parsing | pdf-parse |
 | Market Data | yahoo-finance2 |
-| Frontend Hosting | Cloudflare Workers Sites (`wrangler deploy`) |
+| Frontend Hosting | Cloudflare Workers + Assets (`wrangler deploy`) |
 | Backend Hosting | Railway |
 
 ## Getting Started
@@ -149,29 +149,34 @@ Upload via **Portfolio → Import** in the app. Review the parsed trades before 
    - `FRONTEND_URL=https://folio.ailab.build`
    - `NODE_ENV=production`
 
-### Frontend (Cloudflare Workers Sites)
+### Frontend (Cloudflare Workers + Assets)
 
+`frontend/wrangler.toml` uses the Wrangler v3+ `[assets]` format with SPA fallback:
+
+```toml
+name = "folio-app"
+compatibility_date = "2024-01-01"
+
+[assets]
+directory = "./dist"
+not_found_handling = "single-page-application"
+```
+
+Deploy:
 ```bash
 cd frontend
-
-# Set the Railway backend URL before building (baked in at build time)
-VITE_API_URL=https://your-backend.up.railway.app npm run build
-
-# Deploy
+npm run build   # VITE_* vars are already in frontend/.env
 npx wrangler deploy
 ```
 
-Set the following in Cloudflare Dashboard → Workers → folio-app → Settings → Variables (for future builds):
-- `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_ANON_KEY`
-- `VITE_API_URL`
+> **Note:** `VITE_*` env vars are baked into the JS bundle at build time. They are set in `frontend/.env` (not Cloudflare Dashboard variables). Keep `frontend/.env` up to date with the correct Railway backend URL before every deploy.
 
-Add custom domain `folio.ailab.build` via Workers → folio-app → Triggers → Custom Domains.
+Add custom domain `folio.ailab.build` via Cloudflare Dashboard → Workers → folio-app → Triggers → Custom Domains.
 
 ## Architecture
 
 ```text
-Browser → Cloudflare Workers Sites (React SPA — folio.ailab.build)
+Browser → Cloudflare Workers + Assets (React SPA — folio.ailab.build)
                 ↓ API calls (Bearer JWT)
          Railway (Express API — backend)
                 ↓ service-role key

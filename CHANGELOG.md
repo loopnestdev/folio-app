@@ -2,6 +2,14 @@
 
 All notable changes to Folio App are documented here.
 
+## [0.2.1] — 2026-05-29
+
+### Fixed
+
+- **Cloudflare deployment serving "Hello World"** — `frontend/wrangler.toml` used the deprecated `[site]` format, which causes Wrangler v3+ to deploy a default stub worker instead of the static assets. Migrated to the Wrangler v3+ `[assets]` format with `not_found_handling = "single-page-application"` so React Router deep-links work correctly.
+
+---
+
 ## [0.2.0] — 2026-05-29
 
 ### Added

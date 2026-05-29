@@ -298,8 +298,14 @@ The Moomoo parser (`backend/src/services/pdf-parser/moomoo.ts`) processes Moomoo
 - Healthcheck: `GET /health` (returns `{ status: 'ok' }`)
 - Node version: pinned to 22 via `backend/.nvmrc` (Nixpacks reads this)
 
-### Cloudflare Workers Sites (frontend)
-- `frontend/wrangler.toml` — `name = "folio-app"`, `[site] bucket = "./dist"`
-- Deploy: `VITE_API_URL=<railway-url> npm run build && npx wrangler deploy`
-- `VITE_*` vars are baked into the bundle at build time
+### Cloudflare Workers + Assets (frontend)
+- `frontend/wrangler.toml` uses Wrangler v3+ `[assets]` format (NOT the deprecated `[site]` format):
+  ```toml
+  [assets]
+  directory = "./dist"
+  not_found_handling = "single-page-application"
+  ```
+- Deploy: `npm run build && npx wrangler deploy` (run from `frontend/`)
+- `VITE_*` vars are baked into the bundle at build time from `frontend/.env`
 - Custom domain: `folio.ailab.build`
+- **Do NOT use `[site]` format** — Wrangler v3+ serves a default "Hello World" worker with that config
