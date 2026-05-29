@@ -25,6 +25,7 @@ vendor/
 *.test
 *.prof
 coverage.out
+coverage/
 
 # Log files
 logs/
