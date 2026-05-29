@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { authMiddleware } from '../middleware/auth';
 import { supabase } from '../lib/supabase';
 import { env } from '../config/env';
+import { verifyJwt } from '../lib/verifyJwt';
 import type { AuthenticatedRequest } from '../types';
 
 const router = Router();
@@ -27,21 +28,42 @@ router.post('/profile', async (req: any, res: any) => {
   }
   const token = authHeader.slice(7);
 
-  // Verify the JWT without requiring an existing profile
-  const anonKey = env.SUPABASE_ANON_KEY || env.SUPABASE_SERVICE_ROLE_KEY;
-  const userClient = createClient(env.SUPABASE_URL, anonKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-  const { data: { user }, error: authError } = await userClient.auth.getUser(token);
-  if (authError || !user) {
+  // Prefer local JWT verification (no network round-trip).
+  // Falls back to Supabase network call when SUPABASE_JWT_SECRET is absent.
+  let userId: string;
+  let email: string;
+  let full_name: string | null;
+  let avatar_url: string | null;
+
+  let localPayload;
+  try {
+    localPayload = verifyJwt(token);
+  } catch {
     res.status(401).json({ error: 'Invalid or expired token' });
     return;
   }
 
-  const userId = user.id;
-  const email = user.email ?? '';
-  const full_name = (user.user_metadata?.full_name as string | undefined) ?? null;
-  const avatar_url = (user.user_metadata?.avatar_url as string | undefined) ?? null;
+  if (localPayload) {
+    userId = localPayload.sub;
+    email = localPayload.email ?? '';
+    full_name = (localPayload.user_metadata?.full_name as string | undefined) ?? null;
+    avatar_url = (localPayload.user_metadata?.avatar_url as string | undefined) ?? null;
+  } else {
+    // SUPABASE_JWT_SECRET not configured — fall back to network verification.
+    const anonKey = env.SUPABASE_ANON_KEY || env.SUPABASE_SERVICE_ROLE_KEY;
+    const userClient = createClient(env.SUPABASE_URL, anonKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const { data: { user }, error: authError } = await userClient.auth.getUser(token);
+    if (authError || !user) {
+      res.status(401).json({ error: 'Invalid or expired token' });
+      return;
+    }
+    userId = user.id;
+    email = user.email ?? '';
+    full_name = (user.user_metadata?.full_name as string | undefined) ?? null;
+    avatar_url = (user.user_metadata?.avatar_url as string | undefined) ?? null;
+  }
 
   // Check if profile already exists to avoid overwriting role/status on re-login.
   const { data: existing } = await supabase
