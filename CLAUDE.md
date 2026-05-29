@@ -25,7 +25,7 @@ This file is for AI coding assistants. It documents the project architecture, co
 | Auth | Supabase Auth + Google OAuth |
 | PDF Parsing | pdf-parse |
 | Market Data | yahoo-finance2 |
-| Frontend Hosting | Cloudflare Workers Sites (`wrangler deploy`) |
+| Frontend Hosting | Cloudflare Workers + Assets (`wrangler deploy`) |
 | Backend Hosting | Railway (Nixpacks, `backend/railway.json`) |
 
 ---
@@ -67,7 +67,7 @@ folio-app/
 │   │   │   ├── api.ts                 # Axios instance with JWT interceptor
 │   │   │   └── supabase.ts            # Supabase client (folio schema)
 │   │   └── types/                     # Shared TypeScript types
-│   ├── wrangler.toml                  # Cloudflare Workers Sites config
+│   ├── wrangler.toml                  # Cloudflare Workers + Assets config
 │   └── package.json
 │
 ├── backend/
