@@ -33,12 +33,15 @@ export function useActivePortfolioSummary() {
 }
 
 // Fetch holdings for a portfolio
+// Backend returns { holdings: Holding[], summary: {...} } — extract the array.
 export function useHoldings(portfolioId?: string) {
   return useQuery({
     queryKey: ['holdings', portfolioId],
     queryFn: async () => {
-      const { data } = await api.get<Holding[]>(`/api/portfolios/${portfolioId}/holdings`);
-      return data;
+      const { data } = await api.get<{ holdings: Holding[]; summary: unknown }>(
+        `/api/portfolios/${portfolioId}/holdings`,
+      );
+      return data.holdings ?? [];
     },
     enabled: !!portfolioId,
   });

@@ -97,25 +97,40 @@ export function DashboardPage() {
 
   const tradeColumns = [
     { key: 'trade_date', label: 'Date', sortable: true, render: (v: unknown) => formatDate(String(v), 'short') },
-    { key: 'symbol', label: 'Symbol', render: (v: unknown) => <span className="font-semibold">{String(v)}</span> },
     {
-      key: 'direction',
-      label: 'Direction',
+      key: 'security',
+      label: 'Symbol',
+      render: (_v: unknown, row: Trade) => (
+        <span className="font-semibold text-[var(--c-primary)]">{row.security?.symbol ?? '—'}</span>
+      ),
+    },
+    {
+      key: 'trade_type',
+      label: 'Type',
       render: (v: unknown) => {
-        const isBuy = v === 'BUY';
+        const isBuy = v === 'buy' || v === 'drp';
         return (
           <span className="inline-flex items-center gap-1" style={{ color: isBuy ? 'var(--c-bull)' : 'var(--c-bear)' }}>
             {isBuy ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-            {String(v)}
+            {String(v).toUpperCase()}
           </span>
         );
       },
     },
-    { key: 'quantity', label: 'Qty', align: 'right' as const },
-    { key: 'price', label: 'Price', align: 'right' as const,
-      render: (v: unknown) => formatCurrency(Number(v), activePortfolio.currency) },
-    { key: 'amount', label: 'Total', align: 'right' as const,
-      render: (v: unknown) => formatCurrency(Number(v), activePortfolio.currency) },
+    { key: 'quantity', label: 'Qty', align: 'right' as const, render: (v: unknown) => Number(v).toLocaleString() },
+    {
+      key: 'price',
+      label: 'Price',
+      align: 'right' as const,
+      render: (_v: unknown, row: Trade) => formatCurrency(row.price, row.currency),
+    },
+    {
+      key: 'brokerage',
+      label: 'Total',
+      align: 'right' as const,
+      render: (_v: unknown, row: Trade) =>
+        formatCurrency(row.price * row.quantity + (row.brokerage ?? 0), row.currency),
+    },
   ];
 
   return (
