@@ -46,7 +46,7 @@ app.use('/api/portfolios/:id/import', importLimiter);
 
 // Health check
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({ status: 'ok', timestamp: new Date().toISOString(), version: '0.3.6-rc' });
 });
 
 // DB connectivity check — measures Railway→Supabase latency
