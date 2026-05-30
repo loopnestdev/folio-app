@@ -6,6 +6,8 @@ All notable changes to Folio App are documented here.
 
 ### Added
 
+- **ASX .XA fallback for Yahoo Finance** — Some ASX-listed securities trade on Cboe/Chi-X Australia and use `.XA` suffix on Yahoo Finance instead of `.AX` (e.g. `IBTC.XA`). `getCurrentPrice` and `getHistoricalPrices` now try `.AX` first, then fall back to `.XA` automatically. (`backend/src/services/market-data/yahoo.ts`)
+
 - **Holdings show — instead of -100% when price data unavailable** — When Yahoo Finance has no data for a security (e.g. newly-listed ETFs like IBTC.AX), holdings now show `—` for Current Price, Market Value, Unrealized Gain, and Gain % rather than misleading $0.00 / -100%. Total row excludes unpriced holdings from the gain calculation. (`backend/src/services/calculations/holdings.ts`, `backend/src/types/index.ts`, `backend/src/routes/reports.ts`, `frontend/src/pages/HoldingsPage.tsx`)
 
 - **Edit & delete trade routes fixed** — PUT and DELETE were registered as `/trade/:id` but the frontend called `/:portfolioId/trades/:id`. Both backend routes now use the consistent `/:portfolioId/trades/:id` pattern matching GET/POST. (`backend/src/routes/trades.ts`)

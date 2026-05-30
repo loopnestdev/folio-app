@@ -49,22 +49,30 @@ export async function getHistoricalPrices(
     }
   }
 
-  try {
-    const yahooSym = toYahooTicker(symbol, exchange);
+  const fetchChart = async (ticker: string): Promise<{ date: string; close: number }[]> => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result: any = await yahooFinance.chart(yahooSym, {
+    const result: any = await yahooFinance.chart(ticker, {
       period1: fromDate,
       period2: toDate,
       interval: '1d',
     });
-
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const prices = ((result.quotes ?? []) as any[])
+    return ((result.quotes ?? []) as any[])
       .filter((q) => q.close != null)
       .map((q) => ({
         date: format(new Date(q.date as string), 'yyyy-MM-dd'),
         close: q.close as number,
       }));
+  };
+
+  try {
+    const yahooSym = toYahooTicker(symbol, exchange);
+    let prices = await fetchChart(yahooSym).catch(() => [] as { date: string; close: number }[]);
+
+    // Some ASX-listed securities (Cboe/Chi-X) use .XA instead of .AX on Yahoo Finance
+    if (!prices.length && (exchange ?? '').toUpperCase() === 'ASX') {
+      prices = await fetchChart(`${symbol}.XA`).catch(() => []);
+    }
 
     if (securityId && prices.length > 0) {
       await supabase.from('price_history').upsert(
@@ -197,14 +205,25 @@ export async function getForexRate(
 }
 
 export async function getCurrentPrice(symbol: string, exchange?: string | null): Promise<number | null> {
-  try {
-    const yahooSym = toYahooTicker(symbol, exchange);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result: any = await yahooFinance.quoteSummary(yahooSym, { modules: ['price'] });
-    return (result.price?.regularMarketPrice as number) ?? null;
-  } catch {
-    return null;
+  const tryQuote = async (ticker: string): Promise<number | null> => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result: any = await yahooFinance.quoteSummary(ticker, { modules: ['price'] });
+      return (result.price?.regularMarketPrice as number) ?? null;
+    } catch {
+      return null;
+    }
+  };
+
+  const yahooSym = toYahooTicker(symbol, exchange);
+  const price = await tryQuote(yahooSym);
+  if (price != null) return price;
+
+  // Some ASX-listed securities (Cboe/Chi-X) use .XA instead of .AX on Yahoo Finance
+  if ((exchange ?? '').toUpperCase() === 'ASX') {
+    return tryQuote(`${symbol}.XA`);
   }
+  return null;
 }
 
 /** Fetch current prices for a list of securities.
