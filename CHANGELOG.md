@@ -4,6 +4,10 @@ All notable changes to Folio App are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **PDF trade parsing broken by pdf-parse v2** — `parseTradesSection` was written for pdf-parse v1's newline-per-field output. v2 renders PDF table cells tab-separated on the same line. Rewrote the function for the new 3-line-per-trade format (`Direction<TAB>Name` / `Symbol<TAB>Exchange<TAB>Currency<TAB>Date` / `Time<TAB>Price<TAB>Qty<TAB>Amount`). Also handles grouped trades sharing one subtotal and page-break lines between a trade and its subtotal. (`backend/src/services/pdf-parser/moomoo.ts`)
+
 ### Added
 
 - **Gift Share import** — The PDF parser now captures Moomoo promotional "Gift Share" transfers from the `Movement - Securities` section. Multiple +1 entries for the same symbol on the same date are aggregated into one trade row, imported as `trade_type='buy'` at `price=0` with `notes='Gift Share from Moomoo'`. (`backend/src/services/pdf-parser/moomoo.ts`)
