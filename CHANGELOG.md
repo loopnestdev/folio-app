@@ -6,6 +6,8 @@ All notable changes to Folio App are documented here.
 
 ### Fixed
 
+- **Holdings Total row shows A$NaN for Unrealized Gain** — `calculateHoldings()` returns `cost_base` but the frontend `Holding` type and `HoldingsPage.tsx` expected `total_cost`. Since `total_cost` was `undefined`, the reduce sum became `NaN`. Backend now maps `cost_base → total_cost` in the API response; frontend also adds `?? 0` null guard as defence. (`backend/src/routes/reports.ts`, `frontend/src/pages/HoldingsPage.tsx`)
+
 - **Holdings showing $0.00 price / -100% gain for ASX stocks** — Yahoo Finance requires an `.AX` suffix for ASX-listed tickers (`FANG` → `FANG.AX`). Without it, price lookups return nothing (or the wrong US stock). Added `toYahooTicker(symbol, exchange)` helper; all current-price and historical-price calls now pass the exchange so the correct Yahoo ticker is constructed. (`backend/src/services/market-data/yahoo.ts`, `reports.ts`, `groups.ts`)
 - **yahoo-finance2 v3 API break** — Package updated from v2 (singleton default export) to v3 (class-based, requires `new YahooFinance()`). Fixed the import to instantiate the class. (`backend/src/services/market-data/yahoo.ts`)
 

@@ -60,11 +60,13 @@ router.get('/:id/holdings', async (req: AuthenticatedRequest, res: any) => {
     const securitiesMap = new Map<string, string>();
     trades.filter(t => t.security).forEach(t => securitiesMap.set(t.security!.symbol, t.security!.exchange ?? ''));
     const currentPrices = await getCurrentPrices(Array.from(securitiesMap.entries()).map(([symbol, exchange]) => ({ symbol, exchange })));
-    const holdings = calculateHoldings(trades as any, currentPrices);
+    const rawHoldings = calculateHoldings(trades as any, currentPrices);
+    // Map cost_base → total_cost to match the frontend Holding interface
+    const holdings = rawHoldings.map((h) => ({ ...h, total_cost: h.cost_base }));
 
-    const totalValue = holdings.reduce((s, h) => s + h.market_value, 0);
-    const totalCost = holdings.reduce((s, h) => s + h.cost_base, 0);
-    const totalGain = totalValue - totalCost;
+    const totalValue = holdings.reduce((s, h) => s + (h.market_value ?? 0), 0);
+    const totalCost  = holdings.reduce((s, h) => s + (h.total_cost ?? 0), 0);
+    const totalGain  = totalValue - totalCost;
 
     res.json({ holdings, summary: { total_value: totalValue, total_cost: totalCost, total_gain: totalGain, total_gain_pct: totalCost > 0 ? (totalGain / totalCost) * 100 : 0 } });
   } catch (err: any) {

@@ -18,7 +18,7 @@ export function HoldingsPage() {
   if (isLoading) return <PageLoader />;
 
   const totalValue = holdings.reduce((sum, h) => sum + (h.market_value ?? 0), 0);
-  const totalCost = holdings.reduce((sum, h) => sum + h.total_cost, 0);
+  const totalCost  = holdings.reduce((sum, h) => sum + (h.total_cost ?? 0), 0);
   const totalGain = totalValue - totalCost;
   const totalGainPct = totalCost > 0 ? (totalGain / totalCost) * 100 : 0;
 
