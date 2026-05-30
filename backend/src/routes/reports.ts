@@ -57,8 +57,9 @@ router.get('/:id/holdings', async (req: AuthenticatedRequest, res: any) => {
 
   try {
     const trades = await getPortfolioTrades(id);
-    const heldSymbols = [...new Set(trades.filter(t => t.security).map(t => t.security!.symbol))];
-    const currentPrices = await getCurrentPrices(heldSymbols);
+    const securitiesMap = new Map<string, string>();
+    trades.filter(t => t.security).forEach(t => securitiesMap.set(t.security!.symbol, t.security!.exchange ?? ''));
+    const currentPrices = await getCurrentPrices(Array.from(securitiesMap.entries()).map(([symbol, exchange]) => ({ symbol, exchange })));
     const holdings = calculateHoldings(trades as any, currentPrices);
 
     const totalValue = holdings.reduce((s, h) => s + h.market_value, 0);
@@ -84,8 +85,9 @@ router.get('/:id/summary', async (req: AuthenticatedRequest, res: any) => {
       return;
     }
 
-    const heldSymbols = [...new Set(trades.filter(t => t.security).map(t => t.security!.symbol))];
-    const currentPrices = await getCurrentPrices(heldSymbols);
+    const securitiesMap = new Map<string, string>();
+    trades.filter(t => t.security).forEach(t => securitiesMap.set(t.security!.symbol, t.security!.exchange ?? ''));
+    const currentPrices = await getCurrentPrices(Array.from(securitiesMap.entries()).map(([symbol, exchange]) => ({ symbol, exchange })));
     const holdings = calculateHoldings(trades as any, currentPrices);
 
     const totalValue = holdings.reduce((s, h) => s + h.market_value, 0);
@@ -138,7 +140,7 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
     const pricesBySymbol = await Promise.all(
       symbols.map(async (sym) => {
         const sec = trades.find(t => t.security?.symbol === sym)?.security;
-        const prices = await getHistoricalPrices(sym, fromDate, toDate, sec?.id);
+        const prices = await getHistoricalPrices(sym, fromDate, toDate, sec?.id, sec?.exchange);
         return { symbol: sym, prices };
       })
     );
@@ -208,7 +210,7 @@ router.get('/:id/statistics', async (req: AuthenticatedRequest, res: any) => {
     const pricesBySymbol = await Promise.all(
       symbols.map(async (sym) => {
         const sec = trades.find(t => t.security?.symbol === sym)?.security;
-        return { symbol: sym, prices: await getHistoricalPrices(sym, fromDate, toDate, sec?.id) };
+        return { symbol: sym, prices: await getHistoricalPrices(sym, fromDate, toDate, sec?.id, sec?.exchange) };
       })
     );
 
@@ -345,8 +347,9 @@ router.get('/:id/diversity', async (req: AuthenticatedRequest, res: any) => {
 
   try {
     const trades = await getPortfolioTrades(id);
-    const symbols = [...new Set(trades.filter(t => t.security).map(t => t.security!.symbol))];
-    const currentPrices = await getCurrentPrices(symbols);
+    const securitiesMap = new Map<string, string>();
+    trades.filter(t => t.security).forEach(t => securitiesMap.set(t.security!.symbol, t.security!.exchange ?? ''));
+    const currentPrices = await getCurrentPrices(Array.from(securitiesMap.entries()).map(([symbol, exchange]) => ({ symbol, exchange })));
     const holdings = calculateHoldings(trades as any, currentPrices);
 
     // Group by exchange (as proxy for country/market)

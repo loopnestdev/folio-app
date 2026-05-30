@@ -193,8 +193,9 @@ router.get('/:id/summary', async (req: AuthenticatedRequest, res: any) => {
           };
         }
 
-        const symbols = [...new Set(trades.filter(t => t.security).map(t => t.security!.symbol))];
-        const currentPrices = await getCurrentPrices(symbols);
+        const securitiesMap = new Map<string, string>();
+        trades.filter(t => t.security).forEach(t => securitiesMap.set(t.security!.symbol, t.security!.exchange ?? ''));
+        const currentPrices = await getCurrentPrices(Array.from(securitiesMap.entries()).map(([symbol, exchange]) => ({ symbol, exchange })));
         const holdings = calculateHoldings(trades as any, currentPrices);
 
         const fx = fxRates[portfolio.currency] ?? 1;

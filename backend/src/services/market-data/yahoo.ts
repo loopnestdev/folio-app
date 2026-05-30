@@ -1,4 +1,10 @@
-import yahooFinance from 'yahoo-finance2';
+// yahoo-finance2 v3 exports the class as the default — create a single instance.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const YahooFinanceClass = require('yahoo-finance2').default as new () => {
+  chart:         (...args: any[]) => Promise<any>;
+  quoteSummary:  (...args: any[]) => Promise<any>;
+};
+const yahooFinance = new YahooFinanceClass();
 import { format } from 'date-fns';
 import { supabase } from '../../lib/supabase';
 
@@ -8,11 +14,26 @@ export const BENCHMARKS = {
   NASDAQ: '^IXIC',
 } as const;
 
+/**
+ * Convert a bare ticker + exchange to the Yahoo Finance symbol format.
+ *   ASX   → TICKER.AX   (e.g. FANG.AX, VAS.AX)
+ *   HK    → TICKER.HK   (e.g. 0700.HK)
+ *   US/NYSE/NASDAQ → TICKER  (no suffix needed)
+ */
+export function toYahooTicker(symbol: string, exchange?: string | null): string {
+  switch ((exchange ?? '').toUpperCase()) {
+    case 'ASX':  return `${symbol}.AX`;
+    case 'HK':   return `${symbol}.HK`;
+    default:     return symbol;
+  }
+}
+
 export async function getHistoricalPrices(
   symbol: string,
   fromDate: string,
   toDate: string,
-  securityId?: string
+  securityId?: string,
+  exchange?: string | null,
 ): Promise<{ date: string; close: number }[]> {
   if (securityId) {
     const { data: cached } = await supabase
@@ -29,8 +50,9 @@ export async function getHistoricalPrices(
   }
 
   try {
+    const yahooSym = toYahooTicker(symbol, exchange);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result: any = await yahooFinance.chart(symbol, {
+    const result: any = await yahooFinance.chart(yahooSym, {
       period1: fromDate,
       period2: toDate,
       interval: '1d',
@@ -174,23 +196,28 @@ export async function getForexRate(
   }).close;
 }
 
-export async function getCurrentPrice(symbol: string): Promise<number | null> {
+export async function getCurrentPrice(symbol: string, exchange?: string | null): Promise<number | null> {
   try {
+    const yahooSym = toYahooTicker(symbol, exchange);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result: any = await yahooFinance.quoteSummary(symbol, { modules: ['price'] });
+    const result: any = await yahooFinance.quoteSummary(yahooSym, { modules: ['price'] });
     return (result.price?.regularMarketPrice as number) ?? null;
   } catch {
     return null;
   }
 }
 
-export async function getCurrentPrices(symbols: string[]): Promise<Record<string, number>> {
+/** Fetch current prices for a list of securities.
+ *  Returns a map keyed by bare symbol (no exchange suffix). */
+export async function getCurrentPrices(
+  securities: { symbol: string; exchange: string }[],
+): Promise<Record<string, number>> {
   const prices: Record<string, number> = {};
   await Promise.all(
-    symbols.map(async (sym) => {
-      const p = await getCurrentPrice(sym);
-      if (p != null) prices[sym] = p;
-    })
+    securities.map(async ({ symbol, exchange }) => {
+      const p = await getCurrentPrice(symbol, exchange);
+      if (p != null) prices[symbol] = p;
+    }),
   );
   return prices;
 }
