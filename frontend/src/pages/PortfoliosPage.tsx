@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import {
-  Plus, Edit2, Trash2, ArrowRight, Briefcase, Layers,
+  Plus, Edit2, Trash2, ArrowRight, Briefcase, Layers, BarChart3,
 } from 'lucide-react';
 import {
   usePortfolios, useCreatePortfolio, useUpdatePortfolio, useDeletePortfolio,
@@ -191,7 +191,13 @@ export function PortfoliosPage() {
                       {gPortfolios.length} portfolio{gPortfolios.length !== 1 ? 's' : ''}
                     </span>
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-2">
+                    <Link
+                      to={`/groups/${group.id}`}
+                      className="flex items-center gap-1 text-[13px] text-[var(--c-primary)] font-medium hover:underline"
+                    >
+                      <BarChart3 size={13} /> Dashboard
+                    </Link>
                     <button
                       onClick={() => setEditGroup(group)}
                       className="p-1.5 text-[var(--c-ink-mute)] hover:text-[var(--c-ink)] rounded-lg hover:bg-[var(--c-canvas-soft)] transition-colors"

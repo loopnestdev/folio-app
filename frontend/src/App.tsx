@@ -30,6 +30,9 @@ import { DrawdownPage } from './pages/reports/DrawdownPage';
 import { AdminPage } from './pages/AdminPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { AuthCallbackPage } from './pages/AuthCallbackPage';
+import { GroupDashboardPage } from './pages/groups/GroupDashboardPage';
+import { GroupCapitalGainsPage } from './pages/groups/GroupCapitalGainsPage';
+import { GroupTaxPage } from './pages/groups/GroupTaxPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -62,6 +65,9 @@ function ProtectedRoutes() {
                 <Route path="portfolios/:id/reports/capital-gains" element={<CapitalGainsPage />} />
                 <Route path="portfolios/:id/reports/diversity" element={<DiversityPage />} />
                 <Route path="portfolios/:id/reports/drawdown" element={<DrawdownPage />} />
+                <Route path="groups/:id" element={<GroupDashboardPage />} />
+                <Route path="groups/:id/capital-gains" element={<GroupCapitalGainsPage />} />
+                <Route path="groups/:id/tax" element={<GroupTaxPage />} />
                 <Route path="settings" element={<SettingsPage />} />
                 <Route
                   path="admin"

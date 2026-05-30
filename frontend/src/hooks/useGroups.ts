@@ -17,7 +17,7 @@ export function useGroups() {
 export function useCreateGroup() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (values: { name: string; description?: string | null }) => {
+    mutationFn: async (values: { name: string; description?: string | null; base_currency?: string }) => {
       const { data } = await api.post<PortfolioGroup>('/api/groups', values);
       return data;
     },
@@ -31,7 +31,7 @@ export function useCreateGroup() {
 export function useUpdateGroup(groupId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (values: { name?: string; description?: string | null }) => {
+    mutationFn: async (values: { name?: string; description?: string | null; base_currency?: string }) => {
       const { data } = await api.patch<PortfolioGroup>(`/api/groups/${groupId}`, values);
       return data;
     },

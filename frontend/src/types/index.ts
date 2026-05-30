@@ -21,10 +21,66 @@ export interface PortfolioGroup {
   user_id: string;
   name: string;
   description: string | null;
+  /** 3-char currency code — all group-level reports are expressed in this currency. */
+  base_currency: string;
   created_at: string;
   updated_at: string;
   /** Portfolios belonging to this group — populated by GET /api/groups */
   portfolios?: Portfolio[];
+}
+
+// Group Report Types
+export interface GroupPortfolioBreakdown {
+  id: string;
+  name: string;
+  currency: string;
+  fx_rate: number;
+  total_value: number;      total_value_base: number;
+  total_cost: number;       total_cost_base: number;
+  total_gain: number;       total_gain_base: number;
+  ytd_return: number;       ytd_return_base: number;
+}
+
+export interface GroupSummary {
+  base_currency: string;
+  total_value: number;
+  total_cost: number;
+  total_gain: number;
+  total_gain_pct: number;
+  ytd_return: number;
+  ytd_return_pct: number;
+  portfolios: GroupPortfolioBreakdown[];
+}
+
+export interface GroupCapitalGain extends CapitalGain {
+  portfolio_id: string;
+  portfolio_name: string;
+  portfolio_currency: string;
+}
+
+export interface GroupPortfolioTax {
+  portfolio_id: string;
+  portfolio_name: string;
+  portfolio_currency: string;
+  fx_rate: number;
+  dividends_received: number;
+  interest_received: number;
+  capital_gains_short_term: number;
+  capital_gains_long_term: number;
+  cgt_discount_applied: number;
+  total_taxable_income: number;
+}
+
+export interface GroupTaxReport {
+  financial_year: string;
+  base_currency: string;
+  dividends_received: number;
+  interest_received: number;
+  capital_gains_short_term: number;
+  capital_gains_long_term: number;
+  cgt_discount_applied: number;
+  total_taxable_income: number;
+  portfolios: GroupPortfolioTax[];
 }
 
 // Portfolio Types
