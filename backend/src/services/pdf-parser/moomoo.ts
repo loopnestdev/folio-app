@@ -61,87 +61,93 @@ function parseFees(subtotalLine: string): { brokerage: number; gst: number } {
   return { brokerage, gst };
 }
 
+/**
+ * Parse the "Trades - Securities" section.
+ *
+ * pdf-parse v2 renders PDF tables with tab-separated columns, so each
+ * trade occupies three lines:
+ *   Line 1: "Buy to Open\tBuy to Open \tSecurity Name"
+ *   Line 2: "SYMBOL\tEXCHANGE\tCURRENCY\t2024/08/02"
+ *   Line 3: "HH:MM:SS\tPRICE\tQTY\tAMOUNT"
+ *   [optional] "Subtotal: N.NN\t...\tGST: N.NN\t..."
+ *
+ * Grouped trades (multiple fills sharing one subtotal) are handled by
+ * skipping the subtotal lookup when the next line is another trade header.
+ * Page-break content between a trade and its subtotal is also skipped.
+ */
 export function parseTradesSection(section: string): ParsedTrade[] {
   const trades: ParsedTrade[] = [];
-  const lines = section
-    .split('\n')
-    .map((l) => l.trim())
-    .filter(Boolean);
+  const lines = section.split('\n').map((l) => l.trim()).filter(Boolean);
+
+  // Helper: first tab-separated token
+  const firstToken = (s: string) => (s.split('\t')[0] ?? '').trim();
+  const isTradeLine = (s: string) => {
+    const t = firstToken(s);
+    return t === 'Buy to Open' || t.startsWith('Buy to Open ') ||
+           t === 'Sell to Close' || t.startsWith('Sell to Close ');
+  };
 
   let i = 0;
   while (i < lines.length) {
     const line = lines[i];
-    const isBuy = line === 'Buy to Open' || line.startsWith('Buy to Open ');
-    const isSell = line === 'Sell to Close' || line.startsWith('Sell to Close ');
+    const ft = firstToken(line);
+    const isBuy  = ft === 'Buy to Open'  || ft.startsWith('Buy to Open ');
+    const isSell = ft === 'Sell to Close' || ft.startsWith('Sell to Close ');
 
-    if (!isBuy && !isSell) {
-      i++;
-      continue;
+    if (!isBuy && !isSell) { i++; continue; }
+
+    const tradeType: TradeType = isBuy ? 'buy' : 'sell';
+
+    // Security name is the last non-empty tab token on the direction line
+    // e.g. ["Buy to Open", "Buy to Open ", "Global X FANG+ ETF"]
+    const dirParts = line.split('\t').map((s) => s.trim()).filter(Boolean);
+    const securityName = dirParts.length >= 3 ? dirParts[dirParts.length - 1] : '';
+
+    // Line 2: SYMBOL \t EXCHANGE \t CURRENCY \t YYYY/MM/DD
+    const line2 = lines[++i] ?? '';
+    const p2 = line2.split('\t').map((s) => s.trim()).filter(Boolean);
+    if (p2.length < 4) { i++; continue; }
+    const [symbol, exchange, currency, dateStr] = p2;
+    if (!symbol || !exchange || !currency || !/^\d{4}\/\d{2}\/\d{2}$/.test(dateStr)) { i++; continue; }
+
+    // Line 3: TIME \t PRICE \t QTY \t AMOUNT
+    const line3 = lines[++i] ?? '';
+    const p3 = line3.split('\t').map((s) => s.trim()).filter(Boolean);
+    if (p3.length < 4) { i++; continue; }
+    const price    = parseNumber(p3[1]);
+    const quantity = parseNumber(p3[2]);
+    const amount   = parseNumber(p3[3]);
+
+    // Subtotal lookup:
+    //  - When two fills share a subtotal (grouped), the next line is another
+    //    trade header — don't scan ahead, use brokerage=0.
+    //  - Otherwise scan up to 8 lines ahead (covers page-break content that
+    //    pdf-parse inserts between the trade and its subtotal).
+    let brokerage = 0;
+    let gst = 0;
+
+    if (!isTradeLine(lines[i + 1] ?? '')) {
+      for (let j = i + 1; j < Math.min(i + 8, lines.length); j++) {
+        const l = lines[j];
+        if (l.startsWith('Subtotal:')) {
+          const fees = parseFees(l);
+          brokerage = fees.brokerage;
+          gst       = fees.gst;
+          i = j; // advance i to subtotal; outer i++ will skip past it
+          break;
+        }
+        if (isTradeLine(l)) break; // hit the next trade without finding a subtotal
+      }
     }
 
-    const direction: TradeType = isBuy ? 'buy' : 'sell';
-    let securityName = '';
-    let cursor = i + 1;
-
-    // Security name may be inline after direction keyword or on the next line
-    const inlineMatch = line.match(/^(?:Buy to Open|Sell to Close)\s+(.+)$/);
-    if (inlineMatch) {
-      securityName = inlineMatch[1].trim();
-    } else {
-      securityName = lines[cursor] ?? '';
-      cursor++;
-    }
-
-    // Symbol
-    const symbol = lines[cursor] ?? '';
-    cursor++;
-
-    // "EXCHANGE CURRENCY" e.g. "ASX AUD" or "US USD"
-    const exchangeLine = lines[cursor] ?? '';
-    cursor++;
-    const [exchange, currency] = exchangeLine.split(/\s+/);
-
-    // Date: "2025/07/12"
-    const dateLine = lines[cursor] ?? '';
-    cursor++;
-    if (!/^\d{4}\/\d{2}\/\d{2}$/.test(dateLine)) {
-      i++;
-      continue;
-    }
-
-    // Time: "05:52:12"
-    cursor++; // skip time
-
-    // Price Qty Amount on one line: "43.9700 21 923.37"
-    const amountLine = lines[cursor] ?? '';
-    cursor++;
-
-    // Subtotal line
-    const subtotalLine = lines[cursor] ?? '';
-    cursor++;
-
-    // Parse amount line: three numbers
-    const numTokens = amountLine.split(/\s+/).filter((t) => /^[\d,\.]+$/.test(t));
-    if (numTokens.length < 3) {
-      i = cursor;
-      continue;
-    }
-    const price = parseNumber(numTokens[0]);
-    const quantity = parseNumber(numTokens[1]);
-    const amount = parseNumber(numTokens[2]);
-
-    const { brokerage, gst } = subtotalLine.startsWith('Subtotal:')
-      ? parseFees(subtotalLine)
-      : { brokerage: 0, gst: 0 };
-
-    if (symbol && exchange && currency && price > 0 && quantity > 0) {
+    if (symbol && exchange && currency && quantity > 0) {
       trades.push({
-        trade_date: parseDate(dateLine),
-        trade_type: direction,
-        symbol: symbol.toUpperCase(),
-        security_name: securityName,
-        exchange: exchange.trim(),
-        currency: currency.trim(),
+        trade_date:    parseDate(dateStr),
+        trade_type:    tradeType,
+        symbol:        symbol.toUpperCase(),
+        security_name: securityName || symbol.toUpperCase(),
+        exchange,
+        currency,
         quantity,
         price,
         amount,
@@ -150,7 +156,7 @@ export function parseTradesSection(section: string): ParsedTrade[] {
       });
     }
 
-    i = cursor;
+    i++;
   }
 
   return trades;
