@@ -118,8 +118,8 @@ router.post('/:portfolioId/trades', async (req: AuthenticatedRequest, res: any) 
   res.status(201).json(data);
 });
 
-// PUT /api/trades/:id
-router.put('/trade/:id', async (req: AuthenticatedRequest, res: any) => {
+// PUT /api/portfolios/:portfolioId/trades/:id
+router.put('/:portfolioId/trades/:id', async (req: AuthenticatedRequest, res: any) => {
   const body = tradeSchema.partial().safeParse(req.body);
   if (!body.success) { res.status(400).json({ error: body.error.flatten() }); return; }
 
@@ -152,8 +152,8 @@ router.put('/trade/:id', async (req: AuthenticatedRequest, res: any) => {
   res.json(data);
 });
 
-// DELETE /api/trades/:id
-router.delete('/trade/:id', async (req: AuthenticatedRequest, res: any) => {
+// DELETE /api/portfolios/:portfolioId/trades/:id
+router.delete('/:portfolioId/trades/:id', async (req: AuthenticatedRequest, res: any) => {
   const { data: trade } = await supabase.from('trades').select('portfolio_id').eq('id', req.params.id).single();
   if (!trade) { res.status(404).json({ error: 'Trade not found' }); return; }
   if (!(await verifyPortfolioOwnership(trade.portfolio_id as string, req.userId!))) {

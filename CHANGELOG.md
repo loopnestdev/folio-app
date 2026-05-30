@@ -6,6 +6,7 @@ All notable changes to Folio App are documented here.
 
 ### Added
 
+- **Edit & delete trade routes fixed** — PUT and DELETE were registered as `/trade/:id` but the frontend called `/:portfolioId/trades/:id`. Both backend routes now use the consistent `/:portfolioId/trades/:id` pattern matching GET/POST. (`backend/src/routes/trades.ts`)
 - **Edit trade** — Trades page now has a pencil icon per row that opens the trade form pre-populated with existing values. Supports editing any field including price (useful for correcting broker transfer-in cost bases). (`frontend/src/pages/TradesPage.tsx`, `frontend/src/components/forms/TradeForm.tsx`, `frontend/src/hooks/usePortfolio.ts`)
 
 ### Fixed
