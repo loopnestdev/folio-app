@@ -15,7 +15,7 @@ All notable changes to Folio App are documented here.
 
 ### Added
 
-- **Gift Share import** — The PDF parser now captures Moomoo promotional "Gift Share" transfers from the `Movement - Securities` section. Multiple +1 entries for the same symbol on the same date are aggregated into one trade row, imported as `trade_type='buy'` at `price=0` with `notes='Gift Share from Moomoo'`. (`backend/src/services/pdf-parser/moomoo.ts`)
+- **Gift Share & broker transfer-in import** — The PDF parser now captures all inbound movements from the `Movement - Securities` section, not just "Gift Share" promotions. Any `In` direction entry with a positive quantity is imported as `trade_type='buy'` at `price=0`. Gift Shares get `notes='Gift Share from Moomoo'`; broker transfers (e.g. `SI IN`) get `notes='Transfer In (SI IN) — update cost base'` as a reminder to set the correct cost base. Multiple entries for the same symbol on the same date are aggregated. (`backend/src/services/pdf-parser/moomoo.ts`)
 
 ### Fixed
 

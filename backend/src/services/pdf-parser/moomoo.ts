@@ -182,10 +182,12 @@ export function parseMovementSection(section: string): ParsedTrade[] {
     .map((l) => l.replace(/\t/g, ' ').replace(/\s+/g, ' ').trim())
     .filter(Boolean);
 
-  // Aggregate gift shares by date+symbol to avoid one-row-per-share clutter
+  // Aggregate inbound movements by date+symbol to avoid one-row-per-share clutter.
+  // Handles both "Gift Share" promotions and "SI IN" broker transfers (and any other
+  // incoming security movement with a positive quantity).
   const giftMap = new Map<string, {
     date: string; symbol: string; name: string;
-    currency: string; exchange: string; qty: number;
+    currency: string; exchange: string; qty: number; notes: string;
   }>();
 
   let currentDate = '';
@@ -207,8 +209,16 @@ export function parseMovementSection(section: string): ParsedTrade[] {
       continue;
     }
 
-    // Gift Share line — must contain "+N" and the literal text "Gift Share"
-    if (line.includes('Gift Share') && currentDate) {
+    // Inbound movement line: starts with a ticker symbol, contains a positive
+    // quantity (+N), and represents an "In" transfer (Gift Share, SI IN, etc.)
+    // Format (after tab→space normalization):
+    //   "SYMBOL CURRENCY In +QTY COMMENT"
+    const isInbound =
+      /^[A-Z]{1,6}\b/.test(line) &&     // starts with a ticker
+      /\+\d+/.test(line) &&             // has a positive quantity
+      (/\bIn\b/.test(line) || line.includes('Gift Share')); // direction is In
+
+    if (isInbound && currentDate) {
       const qtyMatch = line.match(/\+(\d+)/);
       if (!qtyMatch) continue;
       const qty = parseInt(qtyMatch[1], 10);
@@ -220,6 +230,15 @@ export function parseMovementSection(section: string): ParsedTrade[] {
       const symMatch = line.match(/^([A-Z]{1,6})\b/);
       if (!symMatch) continue;
       const symbol = symMatch[1];
+
+      // Comment: everything after the "+QTY " token
+      const commentMatch = line.match(/\+\d+\s+(.*)/);
+      const comment = commentMatch ? commentMatch[1].trim() : '';
+      const notes = comment === 'Gift Share'
+        ? 'Gift Share from Moomoo'
+        : comment
+          ? `Transfer In (${comment}) — update cost base`
+          : 'Transfer In — update cost base';
 
       // Extract exchange + security name from the preceding time line
       let securityName = symbol;
@@ -238,7 +257,7 @@ export function parseMovementSection(section: string): ParsedTrade[] {
       if (existing) {
         existing.qty += qty;
       } else {
-        giftMap.set(key, { date: currentDate, symbol, name: securityName, currency, exchange, qty });
+        giftMap.set(key, { date: currentDate, symbol, name: securityName, currency, exchange, qty, notes });
       }
     }
   }
@@ -256,7 +275,7 @@ export function parseMovementSection(section: string): ParsedTrade[] {
     brokerage:     0,
     gst:           0,
     exchange_rate: 1,
-    notes:         'Gift Share from Moomoo',
+    notes:         g.notes,
   }));
 }
 
