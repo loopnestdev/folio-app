@@ -2,8 +2,12 @@ import { useState, useEffect } from 'react';
 
 export function useTheme() {
   const [dark, setDark] = useState<boolean>(() => {
-    try { return localStorage.getItem('folio-theme') === 'dark'; }
-    catch { return false; }
+    try {
+      const saved = localStorage.getItem('folio-theme');
+      // Default to dark when no preference has been saved yet
+      return saved === null ? true : saved === 'dark';
+    }
+    catch { return true; }
   });
 
   useEffect(() => {
