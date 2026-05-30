@@ -41,24 +41,24 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f5f7] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-[var(--c-canvas-soft)] flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         {/* Logo / Brand */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-[#0066cc] rounded-2xl mb-5">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-[var(--c-primary)] rounded-2xl mb-5">
             <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M4 24L12 14L18 20L26 8" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
               <path d="M26 8H20M26 8V14" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           </div>
-          <h1 className="text-[34px] font-semibold tracking-tight text-[#1d1d1f]">Folio</h1>
-          <p className="text-[17px] text-[#7a7a7a] mt-2">Your portfolio, beautifully tracked.</p>
+          <h1 className="text-[34px] font-semibold tracking-tight text-[var(--c-ink)]">Folio</h1>
+          <p className="text-[17px] text-[var(--c-ink-mute)] mt-2">Your portfolio, beautifully tracked.</p>
         </div>
 
         {/* Sign in card */}
-        <div className="bg-white rounded-[22px] border border-[#e0e0e0] p-8">
-          <h2 className="text-[22px] font-semibold text-[#1d1d1f] mb-1">Sign in</h2>
-          <p className="text-[15px] text-[#7a7a7a] mb-7">
+        <div className="bg-[var(--c-canvas)] rounded-[22px] border border-[var(--c-border)] p-8">
+          <h2 className="text-[22px] font-semibold text-[var(--c-ink)] mb-1">Sign in</h2>
+          <p className="text-[15px] text-[var(--c-ink-mute)] mb-7">
             Use your Google account to continue.
           </p>
 
@@ -72,14 +72,14 @@ export function LoginPage() {
             Sign in with Google
           </Button>
 
-          <div className="mt-6 pt-5 border-t border-[#e0e0e0]">
-            <p className="text-[13px] text-[#7a7a7a] text-center">
+          <div className="mt-6 pt-5 border-t border-[var(--c-border)]">
+            <p className="text-[13px] text-[var(--c-ink-mute)] text-center">
               New users require admin approval before accessing the app.
             </p>
           </div>
         </div>
 
-        <p className="text-center text-[13px] text-[#7a7a7a] mt-8">
+        <p className="text-center text-[13px] text-[var(--c-ink-mute)] mt-8">
           &copy; {new Date().getFullYear()} Folio. All rights reserved.
         </p>
       </div>

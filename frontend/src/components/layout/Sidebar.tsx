@@ -43,8 +43,8 @@ function NavItemLink({ item, onClick }: { item: NavItem; onClick?: () => void })
         cn(
           'flex items-center gap-3 px-3 py-2 rounded-xl text-[15px] transition-colors',
           isActive
-            ? 'bg-[#0066cc]/10 text-[#0066cc] font-semibold'
-            : 'text-[#1d1d1f] hover:bg-[#f5f5f7] font-medium',
+            ? 'bg-[var(--c-primary-bg)] text-[var(--c-primary)] font-semibold'
+            : 'text-[var(--c-ink)] hover:bg-[var(--c-canvas-soft)] font-medium',
         )
       }
     >
@@ -141,13 +141,13 @@ export function Sidebar({ open, onClose }: SidebarProps) {
   ];
 
   const sidebarContent = (
-    <div className="flex flex-col h-full bg-white border-r border-[#e0e0e0]">
+    <div className="flex flex-col h-full bg-[var(--c-canvas)] border-r border-[var(--c-border)]">
       {/* Mobile close button */}
-      <div className="flex items-center justify-between px-4 py-3 lg:hidden border-b border-[#e0e0e0]">
-        <span className="font-semibold text-[17px]">Navigation</span>
+      <div className="flex items-center justify-between px-4 py-3 lg:hidden border-b border-[var(--c-border)]">
+        <span className="font-semibold text-[17px] text-[var(--c-ink)]">Navigation</span>
         <button
           onClick={onClose}
-          className="text-[#7a7a7a] hover:text-[#1d1d1f] transition-colors"
+          className="text-[var(--c-ink-mute)] hover:text-[var(--c-ink)] transition-colors"
           aria-label="Close menu"
         >
           <X size={20} />
@@ -164,7 +164,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         {portfolioItems.length > 0 && (
           <>
             <div className="pt-4 pb-1 px-3">
-              <p className="text-[11px] font-semibold text-[#7a7a7a] uppercase tracking-widest">
+              <p className="text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-widest">
                 Portfolio
               </p>
             </div>
@@ -178,7 +178,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         {reportItems.length > 0 && (
           <>
             <div className="pt-4 pb-1 px-3">
-              <p className="text-[11px] font-semibold text-[#7a7a7a] uppercase tracking-widest">
+              <p className="text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-widest">
                 Reports
               </p>
             </div>
@@ -189,14 +189,14 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         )}
 
         {!portfolioId && (
-          <div className="mt-4 mx-2 p-3 bg-[#f5f5f7] rounded-xl text-[13px] text-[#7a7a7a]">
+          <div className="mt-4 mx-2 p-3 bg-[var(--c-canvas-soft)] rounded-xl text-[13px] text-[var(--c-ink-mute)]">
             Select a portfolio to see reports and details
           </div>
         )}
       </nav>
 
       {/* Bottom items */}
-      <div className="p-3 border-t border-[#e0e0e0] space-y-1">
+      <div className="p-3 border-t border-[var(--c-border)] space-y-1">
         {bottomItems.map((item) => (
           <NavItemLink key={item.to} item={item} onClick={onClose} />
         ))}

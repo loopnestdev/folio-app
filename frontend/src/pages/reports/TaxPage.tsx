@@ -49,8 +49,8 @@ export function TaxPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-[28px] font-semibold tracking-tight text-[#1d1d1f]">Tax Report</h1>
-        <p className="text-[15px] text-[#7a7a7a] mt-1">Income and capital gains for tax purposes</p>
+        <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Tax Report</h1>
+        <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">Income and capital gains for tax purposes</p>
       </div>
 
       {/* Filters */}
@@ -82,7 +82,7 @@ export function TaxPage() {
         <PageLoader />
       ) : !taxData ? (
         <Card>
-          <p className="text-[15px] text-[#7a7a7a] text-center py-12">
+          <p className="text-[15px] text-[var(--c-ink-mute)] text-center py-12">
             No tax data available for the selected period.
           </p>
         </Card>
@@ -130,16 +130,16 @@ export function TaxPage() {
                 { label: 'Long-term capital gains', value: taxData.capital_gains_long_term },
                 { label: 'Less: CGT discount (50%)', value: -taxData.cgt_discount_applied },
               ].map(({ label, value }) => (
-                <div key={label} className="flex items-center justify-between py-2 border-b border-[#f0f0f0] last:border-0">
-                  <span className="text-[15px] text-[#1d1d1f]">{label}</span>
-                  <span className={`text-[15px] font-medium ${value >= 0 ? 'text-[#1d1d1f]' : 'text-[#34c759]'}`}>
+                <div key={label} className="flex items-center justify-between py-2 border-b border-[var(--c-border)] last:border-0">
+                  <span className="text-[15px] text-[var(--c-ink)]">{label}</span>
+                  <span className={`text-[15px] font-medium ${value >= 0 ? 'text-[var(--c-ink)]' : 'text-[var(--c-bull)]'}`}>
                     {value >= 0 ? '' : '('}{formatCurrency(Math.abs(value), currency)}{value < 0 ? ')' : ''}
                   </span>
                 </div>
               ))}
-              <div className="flex items-center justify-between py-3 border-t-2 border-[#e0e0e0]">
-                <span className="text-[17px] font-semibold text-[#1d1d1f]">Total taxable income</span>
-                <span className="text-[17px] font-semibold text-[#1d1d1f]">
+              <div className="flex items-center justify-between py-3 border-t-2 border-[var(--c-border)]">
+                <span className="text-[17px] font-semibold text-[var(--c-ink)]">Total taxable income</span>
+                <span className="text-[17px] font-semibold text-[var(--c-ink)]">
                   {formatCurrency(taxData.total_taxable_income, currency)}
                 </span>
               </div>

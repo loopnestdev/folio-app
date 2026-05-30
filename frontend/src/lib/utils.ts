@@ -78,9 +78,9 @@ export function getValueColorClass(value: number): string {
 
 // Get color style based on positive/negative value
 export function getValueColor(value: number): string {
-  if (value > 0) return 'var(--color-success)';
-  if (value < 0) return 'var(--color-danger)';
-  return 'var(--color-muted)';
+  if (value > 0) return 'var(--c-bull)';
+  if (value < 0) return 'var(--c-bear)';
+  return 'var(--c-ink-mute)';
 }
 
 // Calculate date range
@@ -161,18 +161,18 @@ export function debounce<TArgs extends unknown[]>(
   };
 }
 
-// Generate chart colors
+// Generate chart colors — Stripe palette
 export const CHART_COLORS = [
-  '#0066cc',
-  '#34c759',
-  '#ff9500',
-  '#ff3b30',
+  '#533afd',
+  '#059669',
+  '#d97706',
+  '#ea2261',
   '#5856d6',
-  '#ff2d55',
-  '#00c7be',
-  '#ffcc00',
-  '#af52de',
-  '#30b0c7',
+  '#0891b2',
+  '#7c3aed',
+  '#db2777',
+  '#16a34a',
+  '#b45309',
 ];
 
 // Month names

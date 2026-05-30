@@ -45,8 +45,8 @@ export function DrawdownPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-[28px] font-semibold tracking-tight text-[#1d1d1f]">Drawdown Analysis</h1>
-          <p className="text-[15px] text-[#7a7a7a] mt-1">Rolling maximum drawdown from peak</p>
+          <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Drawdown Analysis</h1>
+          <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">Rolling maximum drawdown from peak</p>
         </div>
         <DateRangePicker value={range} customStart={customStart} customEnd={customEnd} onChange={handleRangeChange} />
       </div>

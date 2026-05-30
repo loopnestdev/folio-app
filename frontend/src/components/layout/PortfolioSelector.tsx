@@ -47,7 +47,7 @@ export function PortfolioSelector() {
         onClick={() => setOpen((o) => !o)}
         className={cn(
           'flex items-center gap-2 px-3 py-1.5 rounded-full text-[15px] font-medium transition-colors',
-          'text-white/90 hover:bg-white/10',
+          'text-[var(--c-ink-mute)] hover:bg-[var(--c-canvas-soft)] hover:text-[var(--c-ink)]',
         )}
       >
         <Briefcase size={16} />
@@ -58,9 +58,9 @@ export function PortfolioSelector() {
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-2 w-64 bg-white border border-[#e0e0e0] rounded-[14px] shadow-lg overflow-hidden z-50">
+        <div className="absolute top-full left-0 mt-2 w-64 bg-[var(--c-canvas)] border border-[var(--c-border)] rounded-[14px] shadow-lg overflow-hidden z-50">
           {portfolios.length === 0 ? (
-            <div className="px-4 py-6 text-center text-[13px] text-[#7a7a7a]">
+            <div className="px-4 py-6 text-center text-[13px] text-[var(--c-ink-mute)]">
               No portfolios yet
             </div>
           ) : (
@@ -70,25 +70,25 @@ export function PortfolioSelector() {
                   key={p.id}
                   onClick={() => { setActivePortfolio(p); setOpen(false); }}
                   className={cn(
-                    'w-full text-left px-4 py-3 text-[15px] hover:bg-[#f5f5f7] transition-colors',
-                    activePortfolio?.id === p.id && 'text-[#0066cc] font-medium',
+                    'w-full text-left px-4 py-3 text-[15px] hover:bg-[var(--c-canvas-soft)] transition-colors',
+                    activePortfolio?.id === p.id && 'text-[var(--c-primary)] font-medium',
                   )}
                 >
                   <div className="font-medium">{p.name}</div>
                   {p.description && (
-                    <div className="text-[13px] text-[#7a7a7a] mt-0.5 truncate">{p.description}</div>
+                    <div className="text-[13px] text-[var(--c-ink-mute)] mt-0.5 truncate">{p.description}</div>
                   )}
                 </button>
               ))}
             </div>
           )}
-          <div className="border-t border-[#e0e0e0]">
+          <div className="border-t border-[var(--c-border)]">
             <button
               onClick={() => {
                 setOpen(false);
                 navigate('/portfolios');
               }}
-              className="w-full flex items-center gap-2 px-4 py-3 text-[15px] text-[#0066cc] hover:bg-[#f5f5f7] font-medium"
+              className="w-full flex items-center gap-2 px-4 py-3 text-[15px] text-[var(--c-primary)] hover:bg-[var(--c-canvas-soft)] font-medium"
             >
               <Plus size={16} />
               Manage Portfolios

@@ -18,19 +18,19 @@ export function LoadingSpinner({ size = 'md', className, fullPage, label }: Load
     <div className={cn('flex flex-col items-center gap-3', className)}>
       <div
         className={cn(
-          'rounded-full border-[#e0e0e0] border-t-[#0066cc] animate-spin',
+          'rounded-full border-[var(--c-border)] border-t-[var(--c-primary)] animate-spin',
           sizeMap[size],
         )}
         role="status"
         aria-label={label || 'Loading'}
       />
-      {label && <p className="text-[15px] text-[#7a7a7a]">{label}</p>}
+      {label && <p className="text-[15px] text-[var(--c-ink-mute)]">{label}</p>}
     </div>
   );
 
   if (fullPage) {
     return (
-      <div className="fixed inset-0 flex items-center justify-center bg-[#f5f5f7]/80 z-50">
+      <div className="fixed inset-0 flex items-center justify-center bg-[var(--c-canvas-soft)]/80 z-50">
         {spinner}
       </div>
     );

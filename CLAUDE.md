@@ -283,6 +283,61 @@ All tests must pass before committing. Generate new tests when new logic is intr
 
 ---
 
+## Design System
+
+The frontend uses a **Stripe-inspired design system** with full dark/light mode support.
+
+### Design tokens
+
+All colors live in `frontend/src/index.css` as CSS custom properties. **Never use hardcoded hex values in components** — always reference the tokens.
+
+```css
+/* Light mode (:root) → Dark mode ([data-theme="dark"]) */
+--c-ink          /* primary text */
+--c-ink-sec      /* secondary text */
+--c-ink-mute     /* muted labels */
+--c-canvas       /* page/card background */
+--c-canvas-soft  /* page shell background */
+--c-canvas-cream /* accent tint */
+--c-border       /* hairline borders */
+--c-primary      /* indigo #533afd / dark #7c6dff */
+--c-primary-deep /* darker indigo */
+--c-primary-bg   /* indigo tint background */
+--c-bull         /* green for gains */
+--c-bear         /* ruby for losses */
+--c-warn         /* amber for caution */
+--c-s1, --c-s2   /* box shadows */
+```
+
+For **inline styles and chart configs**, use the typed constants in `frontend/src/lib/colors.ts`:
+
+```typescript
+import { C, gainColor } from '../lib/colors';
+// C.ink, C.primary, C.bull, C.bear, C.canvasSoft, ...
+// gainColor(pct) → C.bull | C.bear | C.inkMute
+```
+
+For **Tailwind class strings**, use the arbitrary CSS var syntax:
+
+```tsx
+<div className="bg-[var(--c-canvas)] text-[var(--c-ink)] border-[var(--c-border)]" />
+```
+
+### Theme toggle (dark / light mode)
+
+- `useTheme()` hook — `frontend/src/hooks/useTheme.ts` — returns `{ dark: boolean, toggle: () => void }`
+- Theme is set via `data-theme="dark"` on `<html>`; preference persists in `localStorage` key `folio-theme`
+- An inline `<script>` in `index.html` applies the saved theme before first paint (no flicker)
+- The toggle button (Sun/Moon icon) is in the right side of `Topnav.tsx`
+
+### Typography
+
+- Body font: `Plus Jakarta Sans` (weight 300 default, 600 headings), loaded via Google Fonts
+- Mono font: `JetBrains Mono` for numeric/code cells
+- Numeric cells: add `font-feature-settings: "tnum"` (`.tnum` CSS class) for tabular figures
+
+---
+
 ## Key Conventions
 
 ### API pattern

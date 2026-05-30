@@ -19,21 +19,21 @@ interface StatRowProps {
 function StatRow({ label, value, description, positive }: StatRowProps) {
   const [showTip, setShowTip] = useState(false);
   return (
-    <div className="flex items-center justify-between py-4 border-b border-[#f0f0f0] last:border-0">
+    <div className="flex items-center justify-between py-4 border-b border-[var(--c-border)] last:border-0">
       <div className="flex items-center gap-2">
-        <span className="text-[15px] text-[#1d1d1f]">{label}</span>
+        <span className="text-[15px] text-[var(--c-ink)]">{label}</span>
         {description && (
           <div className="relative">
             <button
               onMouseEnter={() => setShowTip(true)}
               onMouseLeave={() => setShowTip(false)}
-              className="text-[#7a7a7a] hover:text-[#1d1d1f]"
+              className="text-[var(--c-ink-mute)] hover:text-[var(--c-ink)]"
               aria-label="More info"
             >
               <Info size={15} />
             </button>
             {showTip && (
-              <div className="absolute left-0 bottom-full mb-2 w-64 bg-[#1d1d1f] text-white text-[13px] rounded-xl p-3 z-10 shadow-lg">
+              <div className="absolute left-0 bottom-full mb-2 w-64 bg-[var(--c-ink)] text-white text-[13px] rounded-xl p-3 z-10 shadow-lg">
                 {description}
               </div>
             )}
@@ -45,10 +45,10 @@ function StatRow({ label, value, description, positive }: StatRowProps) {
         style={{
           color:
             positive === undefined
-              ? '#1d1d1f'
+              ? 'var(--c-ink)'
               : positive
-                ? 'var(--color-success)'
-                : 'var(--color-danger)',
+                ? 'var(--c-bull)'
+                : 'var(--c-bear)',
         }}
       >
         {value}
@@ -85,15 +85,15 @@ export function StatisticsPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-[28px] font-semibold tracking-tight text-[#1d1d1f]">Statistics</h1>
-          <p className="text-[15px] text-[#7a7a7a] mt-1">Risk and return metrics for your portfolio</p>
+          <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Statistics</h1>
+          <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">Risk and return metrics for your portfolio</p>
         </div>
         <DateRangePicker value={range} customStart={customStart} customEnd={customEnd} onChange={handleRangeChange} />
       </div>
 
       {!stats ? (
         <Card>
-          <p className="text-[15px] text-[#7a7a7a] text-center py-12">No data available for the selected period.</p>
+          <p className="text-[15px] text-[var(--c-ink-mute)] text-center py-12">No data available for the selected period.</p>
         </Card>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

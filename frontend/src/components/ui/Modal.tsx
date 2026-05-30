@@ -46,7 +46,7 @@ export function Modal({ open, onClose, title, children, size = 'md', className }
       {/* Dialog */}
       <div
         className={cn(
-          'relative w-full bg-white rounded-[18px] border border-[#e0e0e0] overflow-hidden shadow-xl',
+          'relative w-full bg-[var(--c-canvas)] rounded-[18px] border border-[var(--c-border)] overflow-hidden shadow-xl',
           sizeStyles[size],
           className,
         )}
@@ -56,13 +56,13 @@ export function Modal({ open, onClose, title, children, size = 'md', className }
       >
         {/* Header */}
         {title && (
-          <div className="flex items-center justify-between px-6 py-4 border-b border-[#e0e0e0]">
-            <h3 id="modal-title" className="text-[19px] font-semibold text-[#1d1d1f]">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--c-border)]">
+            <h3 id="modal-title" className="text-[19px] font-semibold text-[var(--c-ink)]">
               {title}
             </h3>
             <button
               onClick={onClose}
-              className="text-[#7a7a7a] hover:text-[#1d1d1f] transition-colors rounded-full p-1"
+              className="text-[var(--c-ink-mute)] hover:text-[var(--c-ink)] transition-colors rounded-full p-1"
               aria-label="Close"
             >
               <X size={20} />
@@ -79,7 +79,7 @@ export function Modal({ open, onClose, title, children, size = 'md', className }
 
 export function ModalActions({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div className={cn('flex items-center justify-end gap-3 mt-6 pt-5 border-t border-[#e0e0e0]', className)}>
+    <div className={cn('flex items-center justify-end gap-3 mt-6 pt-5 border-t border-[var(--c-border)]', className)}>
       {children}
     </div>
   );

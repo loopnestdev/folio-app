@@ -33,7 +33,7 @@ function RechartsDiversityChart({ data }: DiversityChartProps) {
         </Pie>
         <Tooltip
           formatter={(value: any, name: any) => [formatPercent(value, 1), name]}
-          contentStyle={{ borderRadius: 12, border: '1px solid #e0e0e0', fontSize: 13 }}
+          contentStyle={{ borderRadius: 12, border: '1px solid var(--c-border)', fontSize: 13 }}
         />
         <Legend wrapperStyle={{ fontSize: 13, paddingTop: 8 }} />
       </PieChart>
@@ -49,7 +49,7 @@ function EChartsDiversityChart({ data }: DiversityChartProps) {
     },
     legend: {
       bottom: 0,
-      textStyle: { fontSize: 13, color: '#7a7a7a' },
+      textStyle: { fontSize: 13, color: 'var(--c-ink-mute)' },
     },
     series: [
       {
@@ -79,14 +79,14 @@ export function DiversityChart(props: DiversityChartProps) {
   if (props.loading) {
     return (
       <div className="h-[300px] flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-[#0066cc] border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-[var(--c-border)] border-t-[var(--c-primary)] rounded-full animate-spin" />
       </div>
     );
   }
 
   if (props.data.length === 0) {
     return (
-      <div className="h-[300px] flex items-center justify-center text-[#7a7a7a]">
+      <div className="h-[300px] flex items-center justify-center text-[var(--c-ink-mute)]">
         No allocation data available
       </div>
     );

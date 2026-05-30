@@ -64,8 +64,8 @@ export function PortfoliosPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-[28px] font-semibold tracking-tight text-[#1d1d1f]">Portfolios</h1>
-          <p className="text-[15px] text-[#7a7a7a] mt-1">Manage your investment portfolios</p>
+          <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Portfolios</h1>
+          <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">Manage your investment portfolios</p>
         </div>
         <Button
           variant="primary"
@@ -78,12 +78,12 @@ export function PortfoliosPage() {
 
       {portfolios.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 gap-4">
-          <div className="w-16 h-16 bg-[#0066cc]/10 rounded-full flex items-center justify-center">
-            <Briefcase size={28} className="text-[#0066cc]" />
+          <div className="w-16 h-16 bg-[var(--c-primary-bg)] rounded-full flex items-center justify-center">
+            <Briefcase size={28} className="text-[var(--c-primary)]" />
           </div>
           <div className="text-center">
-            <h2 className="text-[20px] font-semibold text-[#1d1d1f] mb-2">No portfolios yet</h2>
-            <p className="text-[15px] text-[#7a7a7a]">Create your first portfolio to get started.</p>
+            <h2 className="text-[20px] font-semibold text-[var(--c-ink)] mb-2">No portfolios yet</h2>
+            <p className="text-[15px] text-[var(--c-ink-mute)]">Create your first portfolio to get started.</p>
           </div>
           <Button variant="primary" icon={<Plus size={18} />} onClick={() => setCreateOpen(true)}>
             Create Portfolio
@@ -94,8 +94,8 @@ export function PortfoliosPage() {
           {portfolios.map((portfolio) => (
             <Card
               key={portfolio.id}
-              className={`cursor-pointer transition-all hover:border-[#0066cc]/30 ${
-                activePortfolio?.id === portfolio.id ? 'border-[#0066cc]' : ''
+              className={`cursor-pointer transition-all hover:border-[var(--c-primary-border)] ${
+                activePortfolio?.id === portfolio.id ? 'border-[var(--c-primary)]' : ''
               }`}
             >
               <div className="flex items-start justify-between mb-4">
@@ -106,9 +106,9 @@ export function PortfoliosPage() {
                     navigate('/');
                   }}
                 >
-                  <h3 className="text-[17px] font-semibold text-[#1d1d1f]">{portfolio.name}</h3>
+                  <h3 className="text-[17px] font-semibold text-[var(--c-ink)]">{portfolio.name}</h3>
                   {portfolio.description && (
-                    <p className="text-[14px] text-[#7a7a7a] mt-1 line-clamp-2">
+                    <p className="text-[14px] text-[var(--c-ink-mute)] mt-1 line-clamp-2">
                       {portfolio.description}
                     </p>
                   )}
@@ -116,14 +116,14 @@ export function PortfoliosPage() {
                 <div className="flex items-center gap-1 ml-3">
                   <button
                     onClick={() => setEditTarget(portfolio)}
-                    className="p-1.5 text-[#7a7a7a] hover:text-[#1d1d1f] rounded-lg hover:bg-[#f5f5f7] transition-colors"
+                    className="p-1.5 text-[var(--c-ink-mute)] hover:text-[var(--c-ink)] rounded-lg hover:bg-[var(--c-canvas-soft)] transition-colors"
                     aria-label="Edit"
                   >
                     <Edit2 size={15} />
                   </button>
                   <button
                     onClick={() => setDeleteTarget(portfolio)}
-                    className="p-1.5 text-[#7a7a7a] hover:text-[#ff3b30] rounded-lg hover:bg-[#fff0ef] transition-colors"
+                    className="p-1.5 text-[var(--c-ink-mute)] hover:text-[var(--c-bear)] rounded-lg hover:bg-[var(--c-bear-bg)] transition-colors"
                     aria-label="Delete"
                   >
                     <Trash2 size={15} />
@@ -131,14 +131,14 @@ export function PortfoliosPage() {
                 </div>
               </div>
 
-              <div className="space-y-2 text-[13px] text-[#7a7a7a]">
+              <div className="space-y-2 text-[13px] text-[var(--c-ink-mute)]">
                 <div className="flex justify-between">
                   <span>Currency</span>
-                  <span className="font-medium text-[#1d1d1f]">{portfolio.currency}</span>
+                  <span className="font-medium text-[var(--c-ink)]">{portfolio.currency}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Created</span>
-                  <span className="font-medium text-[#1d1d1f]">{formatDate(portfolio.created_at, 'short')}</span>
+                  <span className="font-medium text-[var(--c-ink)]">{formatDate(portfolio.created_at, 'short')}</span>
                 </div>
               </div>
 
@@ -147,7 +147,7 @@ export function PortfoliosPage() {
                   setActivePortfolio(portfolio);
                   navigate(`/portfolios/${portfolio.id}/holdings`);
                 }}
-                className="mt-4 w-full flex items-center justify-center gap-1.5 text-[15px] text-[#0066cc] font-medium py-2 rounded-xl hover:bg-[#f0f6ff] transition-colors"
+                className="mt-4 w-full flex items-center justify-center gap-1.5 text-[15px] text-[var(--c-primary)] font-medium py-2 rounded-xl hover:bg-[var(--c-primary-bg)] transition-colors"
               >
                 Open Portfolio <ArrowRight size={16} />
               </button>
@@ -182,7 +182,7 @@ export function PortfoliosPage() {
         title="Delete Portfolio"
         size="sm"
       >
-        <p className="text-[15px] text-[#1d1d1f]">
+        <p className="text-[15px] text-[var(--c-ink)]">
           Are you sure you want to delete{' '}
           <strong>"{deleteTarget?.name}"</strong>? This will permanently delete all trades and data
           associated with this portfolio.

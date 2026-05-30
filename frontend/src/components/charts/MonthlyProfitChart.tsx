@@ -23,28 +23,28 @@ function RechartsMonthlyProfitChart({ data, currency = 'USD' }: MonthlyProfitCha
   return (
     <ResponsiveContainer width="100%" height={300}>
       <BarChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--c-border)" vertical={false} />
         <XAxis
           dataKey="month_label"
-          tick={{ fontSize: 12, fill: '#7a7a7a' }}
+          tick={{ fontSize: 12, fill: 'var(--c-ink-mute)' }}
           tickLine={false}
           axisLine={false}
         />
         <YAxis
-          tick={{ fontSize: 12, fill: '#7a7a7a' }}
+          tick={{ fontSize: 12, fill: 'var(--c-ink-mute)' }}
           tickLine={false}
           axisLine={false}
           tickFormatter={(v: number) => formatCurrency(v, currency, { notation: 'compact' })}
         />
         <Tooltip
           formatter={(value: any) => [formatCurrency(value, currency), 'P&L']}
-          contentStyle={{ borderRadius: 12, border: '1px solid #e0e0e0', fontSize: 13 }}
+          contentStyle={{ borderRadius: 12, border: '1px solid var(--c-border)', fontSize: 13 }}
         />
         <Bar dataKey="profit" radius={[4, 4, 0, 0]}>
           {data.map((entry, idx) => (
             <Cell
               key={`cell-${idx}`}
-              fill={entry.profit >= 0 ? '#34c759' : '#ff3b30'}
+              fill={entry.profit >= 0 ? '#059669' : '#ea2261'}
             />
           ))}
         </Bar>
@@ -68,7 +68,7 @@ function EChartsMonthlyProfitChart({ data, currency = 'USD' }: MonthlyProfitChar
       data: data.map((d) => d.month_label),
       axisLine: { show: false },
       axisTick: { show: false },
-      axisLabel: { fontSize: 12, color: '#7a7a7a' },
+      axisLabel: { fontSize: 12, color: 'var(--c-ink-mute)' },
     },
     yAxis: {
       type: 'value',
@@ -76,17 +76,17 @@ function EChartsMonthlyProfitChart({ data, currency = 'USD' }: MonthlyProfitChar
       axisTick: { show: false },
       axisLabel: {
         fontSize: 12,
-        color: '#7a7a7a',
+        color: 'var(--c-ink-mute)',
         formatter: (v: number) => formatCurrency(v, currency, { notation: 'compact' }),
       },
-      splitLine: { lineStyle: { color: '#f0f0f0' } },
+      splitLine: { lineStyle: { color: 'var(--c-border)' } },
     },
     series: [
       {
         type: 'bar',
         data: data.map((d) => ({
           value: d.profit,
-          itemStyle: { color: d.profit >= 0 ? '#34c759' : '#ff3b30', borderRadius: [4, 4, 0, 0] },
+          itemStyle: { color: d.profit >= 0 ? '#059669' : '#ea2261', borderRadius: [4, 4, 0, 0] },
         })),
       },
     ],
@@ -101,14 +101,14 @@ export function MonthlyProfitChart(props: MonthlyProfitChartProps) {
   if (props.loading) {
     return (
       <div className="h-[300px] flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-[#0066cc] border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-[var(--c-border)] border-t-[var(--c-primary)] rounded-full animate-spin" />
       </div>
     );
   }
 
   if (props.data.length === 0) {
     return (
-      <div className="h-[300px] flex items-center justify-center text-[#7a7a7a]">
+      <div className="h-[300px] flex items-center justify-center text-[var(--c-ink-mute)]">
         No monthly data available
       </div>
     );

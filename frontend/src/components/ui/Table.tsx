@@ -76,14 +76,14 @@ export function Table<T extends Record<string, any>>({
     <div className={cn('overflow-x-auto w-full', className)}>
       <table className="w-full border-collapse">
         <thead className={cn(stickyHeader && 'sticky top-0 z-10')}>
-          <tr className="border-b border-[#e0e0e0]">
+          <tr className="border-b border-[var(--c-border)]">
             {columns.map((col) => (
               <th
                 key={String(col.key)}
                 className={cn(
-                  'bg-white px-4 py-3 text-[13px] font-semibold text-[#7a7a7a] uppercase tracking-wide',
+                  'bg-[var(--c-canvas)] px-4 py-3 text-[13px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-wide',
                   col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left',
-                  col.sortable && 'cursor-pointer select-none hover:text-[#1d1d1f]',
+                  col.sortable && 'cursor-pointer select-none hover:text-[var(--c-ink)]',
                   col.className,
                 )}
                 onClick={col.sortable ? () => handleSort(String(col.key)) : undefined}
@@ -101,16 +101,16 @@ export function Table<T extends Record<string, any>>({
         <tbody>
           {loading ? (
             <tr>
-              <td colSpan={columns.length} className="py-12 text-center text-[#7a7a7a]">
+              <td colSpan={columns.length} className="py-12 text-center text-[var(--c-ink-mute)]">
                 <div className="flex items-center justify-center gap-2">
-                  <div className="w-5 h-5 border-2 border-[#0066cc] border-t-transparent rounded-full animate-spin" />
+                  <div className="w-5 h-5 border-2 border-[var(--c-primary)] border-t-transparent rounded-full animate-spin" />
                   <span>Loading...</span>
                 </div>
               </td>
             </tr>
           ) : sortedData.length === 0 ? (
             <tr>
-              <td colSpan={columns.length} className="py-12 text-center text-[#7a7a7a] text-[15px]">
+              <td colSpan={columns.length} className="py-12 text-center text-[var(--c-ink-mute)] text-[15px]">
                 {emptyMessage}
               </td>
             </tr>
@@ -119,9 +119,9 @@ export function Table<T extends Record<string, any>>({
               <tr
                 key={keyField ? String(row[keyField]) : idx}
                 className={cn(
-                  'border-b border-[#f0f0f0] transition-colors',
-                  idx % 2 === 1 && 'bg-[#f5f5f7]/50',
-                  onRowClick && 'cursor-pointer hover:bg-[#f0f6ff]',
+                  'border-b border-[var(--c-border)] transition-colors',
+                  idx % 2 === 1 && 'bg-[var(--c-canvas-soft)]/50',
+                  onRowClick && 'cursor-pointer hover:bg-[var(--c-primary-bg)]',
                 )}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
               >
@@ -131,7 +131,7 @@ export function Table<T extends Record<string, any>>({
                     <td
                       key={String(col.key)}
                       className={cn(
-                        'px-4 py-3 text-[15px] text-[#1d1d1f]',
+                        'px-4 py-3 text-[15px] text-[var(--c-ink)]',
                         col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left',
                         col.className,
                       )}
@@ -146,7 +146,7 @@ export function Table<T extends Record<string, any>>({
         </tbody>
         {footer && (
           <tfoot>
-            <tr className="border-t-2 border-[#e0e0e0] font-semibold bg-[#f5f5f7]">
+            <tr className="border-t-2 border-[var(--c-border)] font-semibold bg-[var(--c-canvas-soft)]">
               {footer}
             </tr>
           </tfoot>

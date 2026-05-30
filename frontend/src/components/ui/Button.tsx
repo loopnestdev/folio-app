@@ -14,13 +14,13 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantStyles: Record<ButtonVariant, string> = {
   primary:
-    'bg-[#0066cc] text-white hover:bg-[#0071e3] active:bg-[#005db8] disabled:bg-[#0066cc]/50',
+    'bg-[var(--c-primary)] text-white hover:bg-[var(--c-primary-deep)] active:bg-[var(--c-primary-deep)] disabled:bg-[var(--c-primary)]/50',
   secondary:
-    'bg-white text-[#0066cc] border border-[#0066cc] hover:bg-[#f0f6ff] active:bg-[#e0eeff] disabled:opacity-50',
+    'bg-[var(--c-canvas)] text-[var(--c-primary)] border border-[var(--c-primary)] hover:bg-[var(--c-primary-bg)] active:bg-[var(--c-primary-bg)] disabled:opacity-50',
   ghost:
-    'bg-transparent text-[#0066cc] hover:bg-[#f0f6ff] active:bg-[#e0eeff] disabled:opacity-50',
+    'bg-transparent text-[var(--c-primary)] hover:bg-[var(--c-primary-bg)] active:bg-[var(--c-primary-bg)] disabled:opacity-50',
   danger:
-    'bg-[#ff3b30] text-white hover:bg-[#e0352b] active:bg-[#c02e26] disabled:bg-[#ff3b30]/50',
+    'bg-[var(--c-bear)] text-white hover:opacity-90 active:opacity-80 disabled:bg-[var(--c-bear)]/50',
 };
 
 const sizeStyles: Record<ButtonSize, string> = {
@@ -43,7 +43,7 @@ export function Button({
   return (
     <button
       className={cn(
-        'inline-flex items-center justify-center font-semibold rounded-[9999px] transition-colors duration-150 cursor-pointer select-none focus-visible:outline-2 focus-visible:outline-[#0066cc] focus-visible:outline-offset-2',
+        'inline-flex items-center justify-center font-medium rounded-[9999px] transition-colors duration-150 cursor-pointer select-none focus-visible:outline-2 focus-visible:outline-[var(--c-primary)] focus-visible:outline-offset-2',
         variantStyles[variant],
         sizeStyles[size],
         (disabled || loading) && 'cursor-not-allowed opacity-60',

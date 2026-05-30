@@ -100,16 +100,16 @@ describe('formatNumber()', () => {
 });
 
 describe('getValueColor()', () => {
-  it('returns success color for positive', () => {
-    expect(getValueColor(1)).toBe('var(--color-success)');
+  it('returns bull color for positive', () => {
+    expect(getValueColor(1)).toBe('var(--c-bull)');
   });
 
-  it('returns danger color for negative', () => {
-    expect(getValueColor(-1)).toBe('var(--color-danger)');
+  it('returns bear color for negative', () => {
+    expect(getValueColor(-1)).toBe('var(--c-bear)');
   });
 
-  it('returns muted color for zero', () => {
-    expect(getValueColor(0)).toBe('var(--color-muted)');
+  it('returns ink-mute color for zero', () => {
+    expect(getValueColor(0)).toBe('var(--c-ink-mute)');
   });
 });
 

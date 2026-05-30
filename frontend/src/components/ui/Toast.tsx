@@ -24,17 +24,17 @@ interface ToastContextValue {
 const ToastContext = createContext<ToastContextValue | null>(null);
 
 const icons: Record<ToastVariant, React.ReactNode> = {
-  success: <CheckCircle size={18} className="text-[#34c759]" />,
-  error: <AlertCircle size={18} className="text-[#ff3b30]" />,
-  info: <Info size={18} className="text-[#0066cc]" />,
-  warning: <AlertTriangle size={18} className="text-[#ff9500]" />,
+  success: <CheckCircle size={18} className="text-[var(--c-bull)]" />,
+  error:   <AlertCircle size={18} className="text-[var(--c-bear)]" />,
+  info:    <Info size={18} className="text-[var(--c-primary)]" />,
+  warning: <AlertTriangle size={18} className="text-[var(--c-warn)]" />,
 };
 
 const variantBorder: Record<ToastVariant, string> = {
-  success: 'border-l-[#34c759]',
-  error: 'border-l-[#ff3b30]',
-  info: 'border-l-[#0066cc]',
-  warning: 'border-l-[#ff9500]',
+  success: 'border-l-[var(--c-bull)]',
+  error:   'border-l-[var(--c-bear)]',
+  info:    'border-l-[var(--c-primary)]',
+  warning: 'border-l-[var(--c-warn)]',
 };
 
 function ToastItem({ item, onRemove }: { item: ToastItem; onRemove: (id: string) => void }) {
@@ -49,7 +49,7 @@ function ToastItem({ item, onRemove }: { item: ToastItem; onRemove: (id: string)
   return (
     <div
       className={cn(
-        'flex items-start gap-3 bg-white border border-[#e0e0e0] border-l-4 rounded-[14px] px-4 py-3 shadow-lg max-w-sm w-full',
+        'flex items-start gap-3 bg-[var(--c-canvas)] border border-[var(--c-border)] border-l-4 rounded-[14px] px-4 py-3 shadow-lg max-w-sm w-full',
         variantBorder[item.variant],
         'animate-[fadeInRight_0.2s_ease-out]',
       )}
@@ -57,12 +57,12 @@ function ToastItem({ item, onRemove }: { item: ToastItem; onRemove: (id: string)
     >
       <span className="shrink-0 mt-0.5">{icons[item.variant]}</span>
       <div className="flex-1 min-w-0">
-        <p className="text-[15px] font-semibold text-[#1d1d1f]">{item.title}</p>
-        {item.message && <p className="text-[13px] text-[#7a7a7a] mt-0.5">{item.message}</p>}
+        <p className="text-[15px] font-semibold text-[var(--c-ink)]">{item.title}</p>
+        {item.message && <p className="text-[13px] text-[var(--c-ink-mute)] mt-0.5">{item.message}</p>}
       </div>
       <button
         onClick={() => onRemove(item.id)}
-        className="shrink-0 text-[#7a7a7a] hover:text-[#1d1d1f] transition-colors"
+        className="shrink-0 text-[var(--c-ink-mute)] hover:text-[var(--c-ink)] transition-colors"
         aria-label="Dismiss"
       >
         <X size={16} />

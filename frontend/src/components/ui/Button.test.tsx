@@ -35,19 +35,19 @@ describe('Button', () => {
   it('applies primary variant styles', () => {
     render(<Button variant="primary">Primary</Button>);
     const btn = screen.getByText('Primary').closest('button');
-    expect(btn?.className).toContain('bg-[#0066cc]');
+    expect(btn?.className).toContain('bg-[var(--c-primary)]');
   });
 
   it('applies secondary variant styles', () => {
     render(<Button variant="secondary">Secondary</Button>);
     const btn = screen.getByText('Secondary').closest('button');
-    expect(btn?.className).toContain('bg-white');
+    expect(btn?.className).toContain('bg-[var(--c-canvas)]');
   });
 
   it('applies danger variant styles', () => {
     render(<Button variant="danger">Danger</Button>);
     const btn = screen.getByText('Danger').closest('button');
-    expect(btn?.className).toContain('bg-[#ff3b30]');
+    expect(btn?.className).toContain('bg-[var(--c-bear)]');
   });
 
   it('applies ghost variant styles', () => {

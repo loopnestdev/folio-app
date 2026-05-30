@@ -28,7 +28,7 @@ export function HoldingsPage() {
       label: 'Symbol',
       sortable: true,
       render: (v: unknown) => (
-        <span className="font-semibold text-[#0066cc]">{String(v)}</span>
+        <span className="font-semibold text-[var(--c-primary)]">{String(v)}</span>
       ),
     },
     {
@@ -38,7 +38,7 @@ export function HoldingsPage() {
         <div>
           <div>{String(v || '—')}</div>
           {row.exchange && (
-            <div className="text-[12px] text-[#7a7a7a]">{row.exchange}</div>
+            <div className="text-[12px] text-[var(--c-ink-mute)]">{row.exchange}</div>
           )}
         </div>
       ),
@@ -102,10 +102,10 @@ export function HoldingsPage() {
   ];
 
   const footerCells = [
-    <td key="label" className="px-4 py-3 text-[15px] text-[#1d1d1f]" colSpan={5}>
+    <td key="label" className="px-4 py-3 text-[15px] text-[var(--c-ink)]" colSpan={5}>
       Total
     </td>,
-    <td key="value" className="px-4 py-3 text-[15px] text-right text-[#1d1d1f]">
+    <td key="value" className="px-4 py-3 text-[15px] text-right text-[var(--c-ink)]">
       {formatCurrency(totalValue, currency)}
     </td>,
     <td key="gain" className="px-4 py-3 text-[15px] text-right" style={{ color: getValueColor(totalGain) }}>
@@ -119,8 +119,8 @@ export function HoldingsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-[28px] font-semibold tracking-tight text-[#1d1d1f]">Current Holdings</h1>
-        <p className="text-[15px] text-[#7a7a7a] mt-1">
+        <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Current Holdings</h1>
+        <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">
           {holdings.length} position{holdings.length !== 1 ? 's' : ''} &mdash; Total value:{' '}
           <strong>{formatCurrency(totalValue, currency)}</strong>
         </p>

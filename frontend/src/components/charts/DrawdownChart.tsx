@@ -21,37 +21,39 @@ interface DrawdownChartProps {
   loading?: boolean;
 }
 
+const COLOR_BEAR = '#ea2261';
+
 function RechartsDrawdownChart({ data }: DrawdownChartProps) {
   return (
     <ResponsiveContainer width="100%" height={250}>
       <AreaChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
         <defs>
           <linearGradient id="drawdownGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#ff3b30" stopOpacity={0.3} />
-            <stop offset="95%" stopColor="#ff3b30" stopOpacity={0} />
+            <stop offset="5%" stopColor={COLOR_BEAR} stopOpacity={0.3} />
+            <stop offset="95%" stopColor={COLOR_BEAR} stopOpacity={0} />
           </linearGradient>
         </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--c-border)" />
         <XAxis
           dataKey="date"
-          tick={{ fontSize: 12, fill: '#7a7a7a' }}
+          tick={{ fontSize: 12, fill: 'var(--c-ink-mute)' }}
           tickLine={false}
           axisLine={false}
         />
         <YAxis
-          tick={{ fontSize: 12, fill: '#7a7a7a' }}
+          tick={{ fontSize: 12, fill: 'var(--c-ink-mute)' }}
           tickLine={false}
           axisLine={false}
           tickFormatter={(v: number) => formatPercent(v, 1)}
         />
         <Tooltip
           formatter={(value: any) => [formatPercent(value, 2), 'Drawdown']}
-          contentStyle={{ borderRadius: 12, border: '1px solid #e0e0e0', fontSize: 13 }}
+          contentStyle={{ borderRadius: 12, border: '1px solid var(--c-border)', fontSize: 13 }}
         />
         <Area
           type="monotone"
           dataKey="drawdown"
-          stroke="#ff3b30"
+          stroke={COLOR_BEAR}
           fill="url(#drawdownGradient)"
           strokeWidth={1.5}
         />
@@ -75,7 +77,7 @@ function EChartsDrawdownChart({ data }: DrawdownChartProps) {
       data: data.map((d) => d.date),
       axisLine: { show: false },
       axisTick: { show: false },
-      axisLabel: { fontSize: 12, color: '#7a7a7a' },
+      axisLabel: { fontSize: 12, color: 'var(--c-ink-mute)' },
       boundaryGap: false,
     },
     yAxis: {
@@ -84,26 +86,26 @@ function EChartsDrawdownChart({ data }: DrawdownChartProps) {
       axisTick: { show: false },
       axisLabel: {
         fontSize: 12,
-        color: '#7a7a7a',
+        color: 'var(--c-ink-mute)',
         formatter: (v: number) => formatPercent(v, 1),
       },
-      splitLine: { lineStyle: { color: '#f0f0f0' } },
+      splitLine: { lineStyle: { color: 'var(--c-border)' } },
     },
     series: [
       {
         type: 'line',
         data: data.map((d) => d.drawdown),
         smooth: true,
-        lineStyle: { color: '#ff3b30', width: 1.5 },
-        itemStyle: { color: '#ff3b30' },
+        lineStyle: { color: COLOR_BEAR, width: 1.5 },
+        itemStyle: { color: COLOR_BEAR },
         showSymbol: false,
         areaStyle: {
           color: {
             type: 'linear',
             x: 0, y: 0, x2: 0, y2: 1,
             colorStops: [
-              { offset: 0, color: 'rgba(255,59,48,0.3)' },
-              { offset: 1, color: 'rgba(255,59,48,0)' },
+              { offset: 0, color: 'rgba(234,34,97,0.3)' },
+              { offset: 1, color: 'rgba(234,34,97,0)' },
             ],
           },
         },
@@ -120,14 +122,14 @@ export function DrawdownChart(props: DrawdownChartProps) {
   if (props.loading) {
     return (
       <div className="h-[250px] flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-[#0066cc] border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-[var(--c-border)] border-t-[var(--c-primary)] rounded-full animate-spin" />
       </div>
     );
   }
 
   if (props.data.length === 0) {
     return (
-      <div className="h-[250px] flex items-center justify-center text-[#7a7a7a]">
+      <div className="h-[250px] flex items-center justify-center text-[var(--c-ink-mute)]">
         No drawdown data available
       </div>
     );

@@ -20,6 +20,12 @@ interface PerformanceChartProps {
   loading?: boolean;
 }
 
+// Stripe-aligned chart palette
+const COLOR_PORTFOLIO = '#533afd';
+const COLOR_SP500     = '#059669';
+const COLOR_NASDAQ    = '#d97706';
+const COLOR_ASX200    = '#5856d6';
+
 function RechartsPerformanceChart({ data, benchmarks, currency = 'USD' }: PerformanceChartProps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const formatTooltipValue = (value: any) => formatCurrency(Number(value) || 0, currency);
@@ -27,15 +33,15 @@ function RechartsPerformanceChart({ data, benchmarks, currency = 'USD' }: Perfor
   return (
     <ResponsiveContainer width="100%" height={350}>
       <LineChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--c-border)" />
         <XAxis
           dataKey="date"
-          tick={{ fontSize: 12, fill: '#7a7a7a' }}
+          tick={{ fontSize: 12, fill: 'var(--c-ink-mute)' }}
           tickLine={false}
           axisLine={false}
         />
         <YAxis
-          tick={{ fontSize: 12, fill: '#7a7a7a' }}
+          tick={{ fontSize: 12, fill: 'var(--c-ink-mute)' }}
           tickLine={false}
           axisLine={false}
           tickFormatter={(v: number) => formatCurrency(v, currency, { notation: 'compact' })}
@@ -44,7 +50,7 @@ function RechartsPerformanceChart({ data, benchmarks, currency = 'USD' }: Perfor
           formatter={formatTooltipValue}
           contentStyle={{
             borderRadius: 12,
-            border: '1px solid #e0e0e0',
+            border: '1px solid var(--c-border)',
             fontSize: 13,
           }}
         />
@@ -53,7 +59,7 @@ function RechartsPerformanceChart({ data, benchmarks, currency = 'USD' }: Perfor
           type="monotone"
           dataKey="portfolio_value"
           name="Portfolio"
-          stroke="#0066cc"
+          stroke={COLOR_PORTFOLIO}
           strokeWidth={2}
           dot={false}
           activeDot={{ r: 4 }}
@@ -63,7 +69,7 @@ function RechartsPerformanceChart({ data, benchmarks, currency = 'USD' }: Perfor
             type="monotone"
             dataKey="benchmark_sp500"
             name="S&P 500"
-            stroke="#34c759"
+            stroke={COLOR_SP500}
             strokeWidth={1.5}
             dot={false}
             strokeDasharray="4 4"
@@ -75,7 +81,7 @@ function RechartsPerformanceChart({ data, benchmarks, currency = 'USD' }: Perfor
             type="monotone"
             dataKey="benchmark_nasdaq"
             name="NASDAQ"
-            stroke="#ff9500"
+            stroke={COLOR_NASDAQ}
             strokeWidth={1.5}
             dot={false}
             strokeDasharray="4 4"
@@ -87,7 +93,7 @@ function RechartsPerformanceChart({ data, benchmarks, currency = 'USD' }: Perfor
             type="monotone"
             dataKey="benchmark_asx200"
             name="ASX 200"
-            stroke="#5856d6"
+            stroke={COLOR_ASX200}
             strokeWidth={1.5}
             dot={false}
             strokeDasharray="4 4"
@@ -106,8 +112,8 @@ function EChartsPerformanceChart({ data, benchmarks, currency = 'USD' }: Perform
       type: 'line',
       data: data.map((d) => [d.date, d.portfolio_value]),
       smooth: true,
-      lineStyle: { color: '#0066cc', width: 2 },
-      itemStyle: { color: '#0066cc' },
+      lineStyle: { color: COLOR_PORTFOLIO, width: 2 },
+      itemStyle: { color: COLOR_PORTFOLIO },
       showSymbol: false,
     },
     ...(benchmarks.sp500
@@ -117,8 +123,8 @@ function EChartsPerformanceChart({ data, benchmarks, currency = 'USD' }: Perform
             type: 'line',
             data: data.map((d) => [d.date, d.benchmark_sp500]),
             smooth: true,
-            lineStyle: { color: '#34c759', width: 1.5, type: 'dashed' },
-            itemStyle: { color: '#34c759' },
+            lineStyle: { color: COLOR_SP500, width: 1.5, type: 'dashed' },
+            itemStyle: { color: COLOR_SP500 },
             showSymbol: false,
           },
         ]
@@ -130,8 +136,8 @@ function EChartsPerformanceChart({ data, benchmarks, currency = 'USD' }: Perform
             type: 'line',
             data: data.map((d) => [d.date, d.benchmark_nasdaq]),
             smooth: true,
-            lineStyle: { color: '#ff9500', width: 1.5, type: 'dashed' },
-            itemStyle: { color: '#ff9500' },
+            lineStyle: { color: COLOR_NASDAQ, width: 1.5, type: 'dashed' },
+            itemStyle: { color: COLOR_NASDAQ },
             showSymbol: false,
           },
         ]
@@ -143,8 +149,8 @@ function EChartsPerformanceChart({ data, benchmarks, currency = 'USD' }: Perform
             type: 'line',
             data: data.map((d) => [d.date, d.benchmark_asx200]),
             smooth: true,
-            lineStyle: { color: '#5856d6', width: 1.5, type: 'dashed' },
-            itemStyle: { color: '#5856d6' },
+            lineStyle: { color: COLOR_ASX200, width: 1.5, type: 'dashed' },
+            itemStyle: { color: COLOR_ASX200 },
             showSymbol: false,
           },
         ]
@@ -162,13 +168,13 @@ function EChartsPerformanceChart({ data, benchmarks, currency = 'USD' }: Perform
         return `<div style="font-size:13px"><strong>${date}</strong>${rows}</div>`;
       },
     },
-    legend: { bottom: 0, textStyle: { fontSize: 13, color: '#7a7a7a' } },
+    legend: { bottom: 0, textStyle: { fontSize: 13, color: 'var(--c-ink-mute)' } },
     grid: { top: 10, right: 20, bottom: 40, left: 60 },
     xAxis: {
       type: 'category',
       axisLine: { show: false },
       axisTick: { show: false },
-      axisLabel: { fontSize: 12, color: '#7a7a7a' },
+      axisLabel: { fontSize: 12, color: 'var(--c-ink-mute)' },
       splitLine: { show: false },
     },
     yAxis: {
@@ -177,10 +183,10 @@ function EChartsPerformanceChart({ data, benchmarks, currency = 'USD' }: Perform
       axisTick: { show: false },
       axisLabel: {
         fontSize: 12,
-        color: '#7a7a7a',
+        color: 'var(--c-ink-mute)',
         formatter: (v: number) => formatCurrency(v, currency, { notation: 'compact' }),
       },
-      splitLine: { lineStyle: { color: '#f0f0f0' } },
+      splitLine: { lineStyle: { color: 'var(--c-border)' } },
     },
     series,
   };
@@ -194,14 +200,14 @@ export function PerformanceChart(props: PerformanceChartProps) {
   if (props.loading) {
     return (
       <div className="h-[350px] flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-[#0066cc] border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-[var(--c-border)] border-t-[var(--c-primary)] rounded-full animate-spin" />
       </div>
     );
   }
 
   if (props.data.length === 0) {
     return (
-      <div className="h-[350px] flex items-center justify-center text-[#7a7a7a]">
+      <div className="h-[350px] flex items-center justify-center text-[var(--c-ink-mute)]">
         No performance data available
       </div>
     );

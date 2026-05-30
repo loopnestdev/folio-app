@@ -104,7 +104,7 @@ export function ImportPage() {
 
   const tradeColumns = [
     { key: 'trade_date', label: 'Date', render: (v: unknown) => formatDate(String(v), 'medium') },
-    { key: 'symbol', label: 'Symbol', render: (v: unknown) => <span className="font-semibold text-[#0066cc]">{String(v)}</span> },
+    { key: 'symbol', label: 'Symbol', render: (v: unknown) => <span className="font-semibold text-[var(--c-primary)]">{String(v)}</span> },
     { key: 'security_name', label: 'Security', render: (v: unknown) => String(v || '—') },
     {
       key: 'direction',
@@ -121,19 +121,19 @@ export function ImportPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-[28px] font-semibold tracking-tight text-[#1d1d1f]">Import Trades</h1>
-        <p className="text-[15px] text-[#7a7a7a] mt-1">Upload a Moomoo PDF export to import your trades</p>
+        <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Import Trades</h1>
+        <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">Upload a Moomoo PDF export to import your trades</p>
       </div>
 
       {/* Success state */}
       {confirmed && (
         <div className="flex flex-col items-center justify-center py-16 gap-4">
-          <div className="w-16 h-16 bg-[#34c759]/10 rounded-full flex items-center justify-center">
-            <CheckCircle size={32} className="text-[#34c759]" />
+          <div className="w-16 h-16 bg-[var(--c-bull-bg)] rounded-full flex items-center justify-center">
+            <CheckCircle size={32} className="text-[var(--c-bull)]" />
           </div>
           <div className="text-center">
-            <h2 className="text-[22px] font-semibold text-[#1d1d1f]">Import Successful</h2>
-            <p className="text-[15px] text-[#7a7a7a] mt-1">
+            <h2 className="text-[22px] font-semibold text-[var(--c-ink)]">Import Successful</h2>
+            <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">
               {preview?.parsed_count} trades have been imported to your portfolio.
             </p>
           </div>
@@ -148,7 +148,7 @@ export function ImportPage() {
             <div
               className={cn(
                 'border-2 border-dashed rounded-2xl p-12 text-center transition-colors',
-                dragging ? 'border-[#0066cc] bg-[#f0f6ff]' : 'border-[#e0e0e0] hover:border-[#0066cc]/50',
+                dragging ? 'border-[var(--c-primary)] bg-[var(--c-primary-bg)]' : 'border-[var(--c-border)] hover:border-[var(--c-primary-border)]',
               )}
               onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
               onDragLeave={() => setDragging(false)}
@@ -167,13 +167,13 @@ export function ImportPage() {
 
               {!file && !uploading && (
                 <>
-                  <div className="inline-flex items-center justify-center w-14 h-14 bg-[#0066cc]/10 rounded-2xl mb-4">
-                    <Upload size={24} className="text-[#0066cc]" />
+                  <div className="inline-flex items-center justify-center w-14 h-14 bg-[var(--c-primary-bg)] rounded-2xl mb-4">
+                    <Upload size={24} className="text-[var(--c-primary)]" />
                   </div>
-                  <h3 className="text-[19px] font-semibold text-[#1d1d1f] mb-2">
+                  <h3 className="text-[19px] font-semibold text-[var(--c-ink)] mb-2">
                     Drop your PDF here
                   </h3>
-                  <p className="text-[15px] text-[#7a7a7a] mb-5">
+                  <p className="text-[15px] text-[var(--c-ink-mute)] mb-5">
                     or click below to browse your files
                   </p>
                   <Button
@@ -187,29 +187,29 @@ export function ImportPage() {
 
               {file && uploading && (
                 <div className="space-y-4">
-                  <div className="inline-flex items-center justify-center w-14 h-14 bg-[#0066cc]/10 rounded-2xl">
-                    <FileText size={24} className="text-[#0066cc]" />
+                  <div className="inline-flex items-center justify-center w-14 h-14 bg-[var(--c-primary-bg)] rounded-2xl">
+                    <FileText size={24} className="text-[var(--c-primary)]" />
                   </div>
                   <div>
-                    <p className="font-semibold text-[#1d1d1f]">{file.name}</p>
-                    <p className="text-[13px] text-[#7a7a7a] mt-1">Parsing trades…</p>
+                    <p className="font-semibold text-[var(--c-ink)]">{file.name}</p>
+                    <p className="text-[13px] text-[var(--c-ink-mute)] mt-1">Parsing trades…</p>
                   </div>
-                  <div className="w-full max-w-xs mx-auto bg-[#e0e0e0] rounded-full h-1.5">
+                  <div className="w-full max-w-xs mx-auto bg-[var(--c-border)] rounded-full h-1.5">
                     <div
-                      className="bg-[#0066cc] h-1.5 rounded-full transition-all duration-300"
+                      className="bg-[var(--c-primary)] h-1.5 rounded-full transition-all duration-300"
                       style={{ width: `${uploadProgress}%` }}
                     />
                   </div>
-                  <p className="text-[13px] text-[#7a7a7a]">{uploadProgress}%</p>
+                  <p className="text-[13px] text-[var(--c-ink-mute)]">{uploadProgress}%</p>
                 </div>
               )}
 
               {file && !uploading && !preview && (
                 <div className="space-y-3">
-                  <div className="inline-flex items-center justify-center w-14 h-14 bg-[#ff3b30]/10 rounded-2xl">
-                    <AlertCircle size={24} className="text-[#ff3b30]" />
+                  <div className="inline-flex items-center justify-center w-14 h-14 bg-[var(--c-bear-bg)] rounded-2xl">
+                    <AlertCircle size={24} className="text-[var(--c-bear)]" />
                   </div>
-                  <p className="text-[15px] text-[#1d1d1f]">Failed to parse. Try again.</p>
+                  <p className="text-[15px] text-[var(--c-ink)]">Failed to parse. Try again.</p>
                   <Button variant="ghost" onClick={handleReset}>Try another file</Button>
                 </div>
               )}
@@ -225,7 +225,7 @@ export function ImportPage() {
                 action={
                   <button
                     onClick={handleReset}
-                    className="text-[#7a7a7a] hover:text-[#1d1d1f] p-1 rounded-full"
+                    className="text-[var(--c-ink-mute)] hover:text-[var(--c-ink)] p-1 rounded-full"
                     aria-label="Remove"
                   >
                     <X size={18} />
@@ -234,9 +234,9 @@ export function ImportPage() {
               />
 
               {preview.errors.length > 0 && (
-                <div className="mb-4 bg-[#ff9500]/10 border border-[#ff9500]/30 rounded-xl p-3">
-                  <p className="text-[14px] font-semibold text-[#8a5200] mb-2">Parsing Warnings</p>
-                  <ul className="text-[13px] text-[#8a5200] space-y-1">
+                <div className="mb-4 bg-[var(--c-warn-bg)] border border-[var(--c-warn-border)] rounded-xl p-3">
+                  <p className="text-[14px] font-semibold text-[var(--c-warn)] mb-2">Parsing Warnings</p>
+                  <ul className="text-[13px] text-[var(--c-warn)] space-y-1">
                     {preview.errors.map((e, i) => <li key={i}>• {e}</li>)}
                   </ul>
                 </div>

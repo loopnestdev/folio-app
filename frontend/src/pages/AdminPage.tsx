@@ -80,8 +80,8 @@ export function AdminPage() {
       sortable: true,
       render: (v: unknown, row: UserProfile) => (
         <div>
-          <div className="font-medium text-[#1d1d1f]">{String(v || '—')}</div>
-          <div className="text-[13px] text-[#7a7a7a]">{row.email}</div>
+          <div className="font-medium text-[var(--c-ink)]">{String(v || '—')}</div>
+          <div className="text-[13px] text-[var(--c-ink-mute)]">{row.email}</div>
         </div>
       ),
     },
@@ -119,19 +119,19 @@ export function AdminPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setConfirmAction({ user: row, action: 'approve' })}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#34c759]/10 text-[#1a7a2e] rounded-full text-[13px] font-medium hover:bg-[#34c759]/20 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--c-bull-bg)] text-[var(--c-bull)] rounded-full text-[13px] font-medium hover:opacity-80 transition-opacity"
             >
               <CheckCircle size={14} /> Approve
             </button>
             <button
               onClick={() => setConfirmAction({ user: row, action: 'reject' })}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#ff3b30]/10 text-[#c0302a] rounded-full text-[13px] font-medium hover:bg-[#ff3b30]/20 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--c-bear-bg)] text-[var(--c-bear)] rounded-full text-[13px] font-medium hover:opacity-80 transition-opacity"
             >
               <XCircle size={14} /> Reject
             </button>
           </div>
         ) : (
-          <span className="text-[13px] text-[#7a7a7a]">—</span>
+          <span className="text-[13px] text-[var(--c-ink-mute)]">—</span>
         ),
     },
   ];
@@ -143,15 +143,15 @@ export function AdminPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 bg-[#0066cc]/10 rounded-xl flex items-center justify-center">
-          <Shield size={20} className="text-[#0066cc]" />
+        <div className="w-10 h-10 bg-[var(--c-primary-bg)] rounded-xl flex items-center justify-center">
+          <Shield size={20} className="text-[var(--c-primary)]" />
         </div>
         <div>
-          <h1 className="text-[28px] font-semibold tracking-tight text-[#1d1d1f]">Admin Panel</h1>
-          <p className="text-[15px] text-[#7a7a7a] mt-0.5">
+          <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Admin Panel</h1>
+          <p className="text-[15px] text-[var(--c-ink-mute)] mt-0.5">
             Manage users and permissions
             {pendingCount > 0 && (
-              <span className="ml-2 inline-flex items-center justify-center w-5 h-5 bg-[#ff9500] text-white text-[11px] font-bold rounded-full">
+              <span className="ml-2 inline-flex items-center justify-center w-5 h-5 bg-[var(--c-warn)] text-white text-[11px] font-bold rounded-full">
                 {pendingCount}
               </span>
             )}
@@ -161,24 +161,24 @@ export function AdminPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
-        <div className="bg-white rounded-[18px] border border-[#e0e0e0] p-5">
-          <p className="text-[13px] text-[#7a7a7a] font-semibold uppercase tracking-wide mb-1">Total Users</p>
-          <p className="text-[28px] font-semibold text-[#1d1d1f]">{users.length}</p>
+        <div className="bg-[var(--c-canvas)] rounded-[18px] border border-[var(--c-border)] p-5">
+          <p className="text-[13px] text-[var(--c-ink-mute)] font-semibold uppercase tracking-wide mb-1">Total Users</p>
+          <p className="text-[28px] font-semibold text-[var(--c-ink)]">{users.length}</p>
         </div>
-        <div className="bg-white rounded-[18px] border border-[#e0e0e0] p-5">
-          <p className="text-[13px] text-[#7a7a7a] font-semibold uppercase tracking-wide mb-1">Pending Approval</p>
-          <p className="text-[28px] font-semibold text-[#ff9500]">{pendingCount}</p>
+        <div className="bg-[var(--c-canvas)] rounded-[18px] border border-[var(--c-border)] p-5">
+          <p className="text-[13px] text-[var(--c-ink-mute)] font-semibold uppercase tracking-wide mb-1">Pending Approval</p>
+          <p className="text-[28px] font-semibold text-[var(--c-warn)]">{pendingCount}</p>
         </div>
-        <div className="bg-white rounded-[18px] border border-[#e0e0e0] p-5">
-          <p className="text-[13px] text-[#7a7a7a] font-semibold uppercase tracking-wide mb-1">Active Users</p>
-          <p className="text-[28px] font-semibold text-[#34c759]">{users.filter((u) => u.status === 'approved').length}</p>
+        <div className="bg-[var(--c-canvas)] rounded-[18px] border border-[var(--c-border)] p-5">
+          <p className="text-[13px] text-[var(--c-ink-mute)] font-semibold uppercase tracking-wide mb-1">Active Users</p>
+          <p className="text-[28px] font-semibold text-[var(--c-bull)]">{users.filter((u) => u.status === 'approved').length}</p>
         </div>
       </div>
 
       {/* Users table */}
       <Card padding="none">
         <div className="px-6 pt-5 pb-4">
-          <h2 className="text-[19px] font-semibold text-[#1d1d1f]">All Users</h2>
+          <h2 className="text-[19px] font-semibold text-[var(--c-ink)]">All Users</h2>
         </div>
         <Table<UserProfile>
           columns={columns as Parameters<typeof Table<UserProfile>>[0]['columns']}
@@ -195,7 +195,7 @@ export function AdminPage() {
         title={confirmAction?.action === 'approve' ? 'Approve User' : 'Reject User'}
         size="sm"
       >
-        <p className="text-[15px] text-[#1d1d1f]">
+        <p className="text-[15px] text-[var(--c-ink)]">
           {confirmAction?.action === 'approve'
             ? `Allow ${confirmAction.user.full_name || confirmAction.user.email} to access the application?`
             : `Reject access for ${confirmAction?.user.full_name || confirmAction?.user.email}? They will not be able to log in.`}

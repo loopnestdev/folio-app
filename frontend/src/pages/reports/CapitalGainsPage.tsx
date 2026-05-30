@@ -40,7 +40,7 @@ export function CapitalGainsPage() {
   const longTermGains = gains.filter((g) => g.is_long_term).reduce((s, g) => s + g.net_gain, 0);
 
   const columns = [
-    { key: 'symbol', label: 'Symbol', sortable: true, render: (v: unknown) => <span className="font-semibold text-[#0066cc]">{String(v)}</span> },
+    { key: 'symbol', label: 'Symbol', sortable: true, render: (v: unknown) => <span className="font-semibold text-[var(--c-primary)]">{String(v)}</span> },
     { key: 'security_name', label: 'Security', render: (v: unknown) => String(v || '—') },
     { key: 'buy_date', label: 'Buy Date', sortable: true, render: (v: unknown) => formatDate(String(v), 'short') },
     { key: 'sell_date', label: 'Sell Date', sortable: true, render: (v: unknown) => formatDate(String(v), 'short') },
@@ -92,8 +92,8 @@ export function CapitalGainsPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-[28px] font-semibold tracking-tight text-[#1d1d1f]">Capital Gains</h1>
-          <p className="text-[15px] text-[#7a7a7a] mt-1">CGT report for sold positions</p>
+          <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Capital Gains</h1>
+          <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">CGT report for sold positions</p>
         </div>
         <DateRangePicker value={range} customStart={customStart} customEnd={customEnd} onChange={handleRangeChange} />
       </div>

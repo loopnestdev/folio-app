@@ -77,8 +77,8 @@ export function MonthlyProfitPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-[28px] font-semibold tracking-tight text-[#1d1d1f]">Monthly Profit</h1>
-          <p className="text-[15px] text-[#7a7a7a] mt-1">Month-by-month profit and loss</p>
+          <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Monthly Profit</h1>
+          <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">Month-by-month profit and loss</p>
         </div>
         <DateRangePicker value={range} customStart={customStart} customEnd={customEnd} onChange={handleRangeChange} />
       </div>
@@ -100,7 +100,7 @@ export function MonthlyProfitPage() {
       {/* Table */}
       <Card padding="none">
         <div className="px-6 pt-5 pb-4">
-          <h2 className="text-[19px] font-semibold text-[#1d1d1f]">Monthly Detail</h2>
+          <h2 className="text-[19px] font-semibold text-[var(--c-ink)]">Monthly Detail</h2>
         </div>
         <Table<MonthlyProfit>
           columns={columns as Parameters<typeof Table<MonthlyProfit>>[0]['columns']}

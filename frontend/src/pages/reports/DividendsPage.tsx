@@ -38,7 +38,7 @@ export function DividendsPage() {
 
   const dividendColumns = [
     { key: 'payment_date', label: 'Date', sortable: true, render: (v: unknown) => formatDate(String(v)) },
-    { key: 'symbol', label: 'Symbol', sortable: true, render: (v: unknown) => <span className="font-semibold text-[#0066cc]">{String(v)}</span> },
+    { key: 'symbol', label: 'Symbol', sortable: true, render: (v: unknown) => <span className="font-semibold text-[var(--c-primary)]">{String(v)}</span> },
     { key: 'security_name', label: 'Security', render: (v: unknown) => String(v || '—') },
     {
       key: 'is_reinvested',
@@ -56,7 +56,7 @@ export function DividendsPage() {
 
   const upcomingColumns = [
     { key: 'expected_date', label: 'Expected Date', render: (v: unknown) => formatDate(String(v)) },
-    { key: 'symbol', label: 'Symbol', render: (v: unknown) => <span className="font-semibold text-[#0066cc]">{String(v)}</span> },
+    { key: 'symbol', label: 'Symbol', render: (v: unknown) => <span className="font-semibold text-[var(--c-primary)]">{String(v)}</span> },
     { key: 'security_name', label: 'Security', render: (v: unknown) => String(v || '—') },
     { key: 'frequency', label: 'Frequency' },
     { key: 'estimated_amount', label: 'Est. Amount', align: 'right' as const, render: (v: unknown) => formatCurrency(Number(v), currency) },
@@ -68,8 +68,8 @@ export function DividendsPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-[28px] font-semibold tracking-tight text-[#1d1d1f]">Dividends & Interest</h1>
-          <p className="text-[15px] text-[#7a7a7a] mt-1">Income from dividends and interest payments</p>
+          <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Dividends & Interest</h1>
+          <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">Income from dividends and interest payments</p>
         </div>
         <DateRangePicker value={range} customStart={customStart} customEnd={customEnd} onChange={handleRangeChange} />
       </div>

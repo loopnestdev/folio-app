@@ -42,7 +42,7 @@ export function DateRangePicker({ value, customStart, customEnd, onChange, class
 
   return (
     <div className={cn('flex flex-wrap items-center gap-2', className)}>
-      <div className="flex items-center bg-[#f5f5f7] rounded-full p-1 gap-0.5">
+      <div className="flex items-center bg-[var(--c-canvas-soft)] rounded-full p-1 gap-0.5">
         {PRESETS.map((preset) => (
           <button
             key={preset.value}
@@ -50,8 +50,8 @@ export function DateRangePicker({ value, customStart, customEnd, onChange, class
             className={cn(
               'px-3 py-1 rounded-full text-[13px] font-medium transition-colors',
               (value === preset.value || (preset.value === 'CUSTOM' && showCustom))
-                ? 'bg-white text-[#0066cc] shadow-sm'
-                : 'text-[#7a7a7a] hover:text-[#1d1d1f]',
+                ? 'bg-[var(--c-canvas)] text-[var(--c-primary)] shadow-sm'
+                : 'text-[var(--c-ink-mute)] hover:text-[var(--c-ink)]',
             )}
           >
             {preset.label}
@@ -65,19 +65,19 @@ export function DateRangePicker({ value, customStart, customEnd, onChange, class
             type="date"
             value={localStart}
             onChange={(e) => setLocalStart(e.target.value)}
-            className="border border-[#e0e0e0] rounded-lg px-3 py-1.5 text-[14px] text-[#1d1d1f] bg-white focus:outline-none focus:border-[#0066cc]"
+            className="border border-[var(--c-border)] rounded-lg px-3 py-1.5 text-[14px] text-[var(--c-ink)] bg-[var(--c-canvas)] focus:outline-none focus:border-[var(--c-primary)]"
           />
-          <span className="text-[#7a7a7a] text-[13px]">to</span>
+          <span className="text-[var(--c-ink-mute)] text-[13px]">to</span>
           <input
             type="date"
             value={localEnd}
             onChange={(e) => setLocalEnd(e.target.value)}
-            className="border border-[#e0e0e0] rounded-lg px-3 py-1.5 text-[14px] text-[#1d1d1f] bg-white focus:outline-none focus:border-[#0066cc]"
+            className="border border-[var(--c-border)] rounded-lg px-3 py-1.5 text-[14px] text-[var(--c-ink)] bg-[var(--c-canvas)] focus:outline-none focus:border-[var(--c-primary)]"
           />
           <button
             onClick={handleCustomApply}
             disabled={!localStart || !localEnd}
-            className="px-4 py-1.5 bg-[#0066cc] text-white rounded-full text-[13px] font-semibold disabled:opacity-50 hover:bg-[#0071e3] transition-colors"
+            className="px-4 py-1.5 bg-[var(--c-primary)] text-white rounded-full text-[13px] font-semibold disabled:opacity-50 hover:bg-[var(--c-primary-deep)] transition-colors"
           >
             Apply
           </button>

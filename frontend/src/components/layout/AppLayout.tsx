@@ -11,7 +11,7 @@ export function AppLayout() {
       <Topnav onMenuClick={() => setSidebarOpen(true)} />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-        <main className="flex-1 overflow-y-auto bg-[#f5f5f7]">
+        <main className="flex-1 overflow-y-auto bg-[var(--c-canvas-soft)]">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <Outlet />
           </div>

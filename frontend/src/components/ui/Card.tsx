@@ -25,7 +25,7 @@ export function Card({ children, className, padding = 'md' }: CardProps) {
   return (
     <div
       className={cn(
-        'bg-white rounded-[18px] border border-[#e0e0e0]',
+        'bg-[var(--c-canvas)] rounded-[18px] border border-[var(--c-border)]',
         paddingMap[padding],
         className,
       )}
@@ -39,8 +39,8 @@ export function CardHeader({ title, subtitle, action, className }: CardHeaderPro
   return (
     <div className={cn('flex items-start justify-between mb-5', className)}>
       <div>
-        <h2 className="text-[22px] font-semibold text-[#1d1d1f] tracking-tight">{title}</h2>
-        {subtitle && <p className="text-[15px] text-[#7a7a7a] mt-0.5">{subtitle}</p>}
+        <h2 className="text-[22px] font-semibold text-[var(--c-ink)] tracking-tight">{title}</h2>
+        {subtitle && <p className="text-[15px] text-[var(--c-ink-mute)] mt-0.5">{subtitle}</p>}
       </div>
       {action && <div className="ml-4 shrink-0">{action}</div>}
     </div>
@@ -48,5 +48,5 @@ export function CardHeader({ title, subtitle, action, className }: CardHeaderPro
 }
 
 export function CardDivider() {
-  return <hr className="border-t border-[#e0e0e0] my-4" />;
+  return <hr className="border-t border-[var(--c-border)] my-4" />;
 }

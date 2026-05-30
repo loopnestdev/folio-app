@@ -2,6 +2,26 @@
 
 All notable changes to Folio App are documented here.
 
+## [Unreleased]
+
+### Added
+
+- **Stripe-inspired design system** — Full design overhaul replacing the Apple-inspired palette. All 44 frontend files migrated from hardcoded Apple hex values (`#0066cc`, `#1d1d1f`, `#f5f5f7`) to semantic CSS custom properties (`--c-primary`, `--c-ink`, `--c-canvas-soft`). New Stripe color tokens: indigo primary (`#533afd`), deep navy ink (`#0d253d`), cloud-white canvas (`#f6f9fc`).
+
+- **Dark / light mode toggle** — `useTheme` hook (`frontend/src/hooks/useTheme.ts`) backed by `localStorage` key `folio-theme`. Preference persists across sessions. An inline `<script>` in `index.html` applies the saved theme before first paint — no flash of wrong theme. Toggle button (Sun/Moon icon) lives in the top-right of the topnav.
+
+- **Plus Jakarta Sans font** — Replaced `system-ui / SF Pro` with `Plus Jakarta Sans` (body, headings) + `JetBrains Mono` (monospace/numeric cells), loaded via Google Fonts. Matches the moat-finder app.
+
+- **`frontend/src/lib/colors.ts`** — Typed `C.*` token constants exposing all `var(--c-*)` CSS properties for use in inline styles and ECharts/Recharts theme configs. Includes `gainColor(value)` helper.
+
+- **`frontend/src/hooks/useTheme.ts`** — `{ dark, toggle }` hook. Sets `data-theme="dark"` on `<html>`; all design tokens switch automatically via CSS custom property overrides in `[data-theme="dark"]`.
+
+### Changed
+
+- **Topnav** — Black bar replaced with white/dark-aware header with Stripe-style hairline border. Sun/Moon toggle added. All hardcoded colors replaced with CSS var tokens.
+- **All UI primitives** (Button, Card, Badge, Input, Select, Modal, Table, StatCard, Toast, DateRangePicker, LoadingSpinner) — Stripe color palette; dark mode aware.
+- **All pages and charts** — Stripe palette; chart series colors updated to Stripe green/red/amber/indigo.
+
 ## [0.3.0] — 2026-05-30
 
 ### Fixed

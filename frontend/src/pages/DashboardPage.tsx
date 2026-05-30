@@ -41,8 +41,8 @@ export function DashboardPage() {
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
         <div className="text-center">
           <div className="text-[64px] mb-4">📈</div>
-          <h1 className="text-[28px] font-semibold text-[#1d1d1f] mb-3">Welcome to Folio</h1>
-          <p className="text-[17px] text-[#7a7a7a] max-w-md">
+          <h1 className="text-[28px] font-semibold text-[var(--c-ink)] mb-3">Welcome to Folio</h1>
+          <p className="text-[17px] text-[var(--c-ink-mute)] max-w-md">
             Create your first portfolio to start tracking your investments, performance, and reports.
           </p>
         </div>
@@ -73,7 +73,7 @@ export function DashboardPage() {
 
   const holdingColumns = [
     { key: 'symbol', label: 'Symbol', sortable: true,
-      render: (v: unknown) => <span className="font-semibold text-[#0066cc]">{String(v)}</span> },
+      render: (v: unknown) => <span className="font-semibold text-[var(--c-primary)]">{String(v)}</span> },
     { key: 'security_name', label: 'Name', render: (v: unknown) => String(v || '—') },
     { key: 'quantity', label: 'Qty', align: 'right' as const, sortable: true,
       render: (v: unknown) => String(v) },
@@ -104,7 +104,7 @@ export function DashboardPage() {
       render: (v: unknown) => {
         const isBuy = v === 'BUY';
         return (
-          <span className="inline-flex items-center gap-1" style={{ color: isBuy ? 'var(--color-success)' : 'var(--color-danger)' }}>
+          <span className="inline-flex items-center gap-1" style={{ color: isBuy ? 'var(--c-bull)' : 'var(--c-bear)' }}>
             {isBuy ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
             {String(v)}
           </span>
@@ -122,10 +122,10 @@ export function DashboardPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-[28px] font-semibold tracking-tight text-[#1d1d1f]">
+        <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">
           {activePortfolio.name}
         </h1>
-        <p className="text-[15px] text-[#7a7a7a] mt-1">Portfolio overview</p>
+        <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">Portfolio overview</p>
       </div>
 
       {/* Stats row */}
@@ -171,12 +171,12 @@ export function DashboardPage() {
         <Card padding="none">
           <div className="px-6 pt-5 pb-4 flex items-center justify-between">
             <div>
-              <h2 className="text-[19px] font-semibold text-[#1d1d1f]">Top Holdings</h2>
-              <p className="text-[13px] text-[#7a7a7a] mt-0.5">By market value</p>
+              <h2 className="text-[19px] font-semibold text-[var(--c-ink)]">Top Holdings</h2>
+              <p className="text-[13px] text-[var(--c-ink-mute)] mt-0.5">By market value</p>
             </div>
             <Link
               to={`/portfolios/${activePortfolio.id}/holdings`}
-              className="text-[15px] text-[#0066cc] font-medium flex items-center gap-1 hover:underline"
+              className="text-[15px] text-[var(--c-primary)] font-medium flex items-center gap-1 hover:underline"
             >
               View all <ArrowRight size={15} />
             </Link>
@@ -193,12 +193,12 @@ export function DashboardPage() {
         <Card padding="none">
           <div className="px-6 pt-5 pb-4 flex items-center justify-between">
             <div>
-              <h2 className="text-[19px] font-semibold text-[#1d1d1f]">Recent Trades</h2>
-              <p className="text-[13px] text-[#7a7a7a] mt-0.5">Last 5 transactions</p>
+              <h2 className="text-[19px] font-semibold text-[var(--c-ink)]">Recent Trades</h2>
+              <p className="text-[13px] text-[var(--c-ink-mute)] mt-0.5">Last 5 transactions</p>
             </div>
             <Link
               to={`/portfolios/${activePortfolio.id}/trades`}
-              className="text-[15px] text-[#0066cc] font-medium flex items-center gap-1 hover:underline"
+              className="text-[15px] text-[var(--c-primary)] font-medium flex items-center gap-1 hover:underline"
             >
               View all <ArrowRight size={15} />
             </Link>

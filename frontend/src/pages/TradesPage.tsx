@@ -77,7 +77,7 @@ export function TradesPage() {
       key: 'symbol',
       label: 'Symbol',
       sortable: true,
-      render: (v: unknown) => <span className="font-semibold text-[#0066cc]">{String(v)}</span>,
+      render: (v: unknown) => <span className="font-semibold text-[var(--c-primary)]">{String(v)}</span>,
     },
     {
       key: 'security_name',
@@ -92,7 +92,7 @@ export function TradesPage() {
         return (
           <span
             className="inline-flex items-center gap-1 font-medium"
-            style={{ color: isBuy ? 'var(--color-success)' : 'var(--color-danger)' }}
+            style={{ color: isBuy ? 'var(--c-bull)' : 'var(--c-bear)' }}
           >
             {isBuy ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
             {String(v)}
@@ -146,7 +146,7 @@ export function TradesPage() {
       render: (_v: unknown, row: Trade) => (
         <button
           onClick={(e) => { e.stopPropagation(); setDeleteTarget(row); }}
-          className="p-1.5 text-[#7a7a7a] hover:text-[#ff3b30] rounded-lg hover:bg-[#fff0ef] transition-colors"
+          className="p-1.5 text-[var(--c-ink-mute)] hover:text-[var(--c-bear)] rounded-lg hover:bg-[var(--c-bear-bg)] transition-colors"
           aria-label="Delete trade"
         >
           <Trash2 size={14} />
@@ -161,8 +161,8 @@ export function TradesPage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-[28px] font-semibold tracking-tight text-[#1d1d1f]">Trades</h1>
-          <p className="text-[15px] text-[#7a7a7a] mt-1">{trades.length} transaction{trades.length !== 1 ? 's' : ''}</p>
+          <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Trades</h1>
+          <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">{trades.length} transaction{trades.length !== 1 ? 's' : ''}</p>
         </div>
         <Button variant="primary" icon={<Plus size={18} />} onClick={() => setAddOpen(true)}>
           Add Trade
@@ -225,7 +225,7 @@ export function TradesPage() {
         title="Delete Trade"
         size="sm"
       >
-        <p className="text-[15px] text-[#1d1d1f]">
+        <p className="text-[15px] text-[var(--c-ink)]">
           Delete the <strong>{deleteTarget?.direction}</strong> trade for{' '}
           <strong>{deleteTarget?.symbol}</strong> on{' '}
           {deleteTarget && formatDate(deleteTarget.trade_date, 'medium')}?

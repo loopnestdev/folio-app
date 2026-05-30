@@ -200,9 +200,9 @@ export function TradeForm({ open, onClose, onSubmit }: TradeFormProps) {
 
         {/* Total preview */}
         {totalAmount > 0 && (
-          <div className="bg-[#f5f5f7] rounded-xl p-3 text-[15px]">
-            <span className="text-[#7a7a7a]">Total amount: </span>
-            <span className="font-semibold text-[#1d1d1f]">
+          <div className="bg-[var(--c-canvas-soft)] rounded-xl p-3 text-[15px]">
+            <span className="text-[var(--c-ink-mute)]">Total amount: </span>
+            <span className="font-semibold text-[var(--c-ink)]">
               {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(totalAmount)}
             </span>
           </div>

@@ -52,16 +52,16 @@ export function PerformancePage() {
   const maxDrawdown = peakValue > 0 ? ((troughValue - peakValue) / peakValue) * 100 : 0;
 
   const benchmarkButtons: { key: keyof BenchmarkToggle; label: string; color: string }[] = [
-    { key: 'sp500', label: 'S&P 500', color: '#34c759' },
-    { key: 'nasdaq', label: 'NASDAQ', color: '#ff9500' },
+    { key: 'sp500', label: 'S&P 500', color: '#059669' },
+    { key: 'nasdaq', label: 'NASDAQ', color: '#d97706' },
     { key: 'asx200', label: 'ASX 200', color: '#5856d6' },
   ];
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-[28px] font-semibold tracking-tight text-[#1d1d1f]">Performance</h1>
-        <p className="text-[15px] text-[#7a7a7a] mt-1">Portfolio returns over time</p>
+        <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Performance</h1>
+        <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">Portfolio returns over time</p>
       </div>
 
       {/* Stats */}
@@ -94,7 +94,7 @@ export function PerformancePage() {
       <Card>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
           <div>
-            <h2 className="text-[19px] font-semibold text-[#1d1d1f]">Portfolio vs Benchmarks</h2>
+            <h2 className="text-[19px] font-semibold text-[var(--c-ink)]">Portfolio vs Benchmarks</h2>
           </div>
           <DateRangePicker
             value={range}
@@ -114,7 +114,7 @@ export function PerformancePage() {
                 'flex items-center gap-2 px-3 py-1.5 rounded-full text-[13px] font-medium border transition-all',
                 benchmarks[b.key]
                   ? 'text-white border-transparent'
-                  : 'bg-white text-[#7a7a7a] border-[#e0e0e0] hover:border-[#0066cc]/30',
+                  : 'bg-[var(--c-canvas)] text-[var(--c-ink-mute)] border-[var(--c-border)] hover:border-[var(--c-primary-border)]',
               )}
               style={benchmarks[b.key] ? { backgroundColor: b.color, borderColor: b.color } : {}}
             >

@@ -9,11 +9,11 @@ interface BadgeProps {
 }
 
 const variantStyles: Record<BadgeVariant, string> = {
-  success: 'bg-[#34c759]/15 text-[#1a7a2e]',
-  danger: 'bg-[#ff3b30]/15 text-[#c0302a]',
-  warning: 'bg-[#ff9500]/15 text-[#8a5200]',
-  info: 'bg-[#0066cc]/15 text-[#0050a0]',
-  neutral: 'bg-[#7a7a7a]/15 text-[#555555]',
+  success: 'bg-[var(--c-bull-bg)] text-[var(--c-bull)]',
+  danger:  'bg-[var(--c-bear-bg)] text-[var(--c-bear)]',
+  warning: 'bg-[var(--c-warn-bg)] text-[var(--c-warn)]',
+  info:    'bg-[var(--c-primary-bg)] text-[var(--c-primary)]',
+  neutral: 'bg-[var(--c-canvas-soft)] text-[var(--c-ink-mute)]',
 };
 
 export function Badge({ variant = 'neutral', children, className }: BadgeProps) {

@@ -20,8 +20,8 @@ function ToggleOption({ selected, onClick, children }: ToggleOptionProps) {
       className={cn(
         'flex-1 py-3 px-4 rounded-xl text-[15px] font-medium transition-all border',
         selected
-          ? 'bg-[#0066cc] text-white border-[#0066cc]'
-          : 'bg-white text-[#1d1d1f] border-[#e0e0e0] hover:border-[#0066cc]/40',
+          ? 'bg-[var(--c-primary)] text-white border-[var(--c-primary)]'
+          : 'bg-[var(--c-canvas)] text-[var(--c-ink)] border-[var(--c-border)] hover:border-[var(--c-primary-border)]',
       )}
     >
       {children}
@@ -47,8 +47,8 @@ export function SettingsPage() {
   return (
     <div className="space-y-6 max-w-2xl">
       <div>
-        <h1 className="text-[28px] font-semibold tracking-tight text-[#1d1d1f]">Settings</h1>
-        <p className="text-[15px] text-[#7a7a7a] mt-1">Customize your Folio experience</p>
+        <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Settings</h1>
+        <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">Customize your Folio experience</p>
       </div>
 
       {/* Profile */}
@@ -66,26 +66,26 @@ export function SettingsPage() {
                 className="w-14 h-14 rounded-full object-cover"
               />
             ) : (
-              <div className="w-14 h-14 rounded-full bg-[#0066cc] flex items-center justify-center">
+              <div className="w-14 h-14 rounded-full bg-[var(--c-primary)] flex items-center justify-center">
                 <User size={24} className="text-white" />
               </div>
             )}
             <div>
-              <p className="text-[17px] font-semibold text-[#1d1d1f]">
+              <p className="text-[17px] font-semibold text-[var(--c-ink)]">
                 {profile?.full_name || 'Unknown'}
               </p>
-              <p className="text-[15px] text-[#7a7a7a]">{profile?.email}</p>
+              <p className="text-[15px] text-[var(--c-ink-mute)]">{profile?.email}</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 pt-3 border-t border-[#e0e0e0]">
+          <div className="grid grid-cols-2 gap-4 pt-3 border-t border-[var(--c-border)]">
             <div>
-              <p className="text-[13px] text-[#7a7a7a] mb-1">Role</p>
-              <p className="text-[15px] font-medium text-[#1d1d1f] capitalize">{profile?.role || '—'}</p>
+              <p className="text-[13px] text-[var(--c-ink-mute)] mb-1">Role</p>
+              <p className="text-[15px] font-medium text-[var(--c-ink)] capitalize">{profile?.role || '—'}</p>
             </div>
             <div>
-              <p className="text-[13px] text-[#7a7a7a] mb-1">Status</p>
-              <p className="text-[15px] font-medium text-[#1d1d1f] capitalize">{profile?.status || '—'}</p>
+              <p className="text-[13px] text-[var(--c-ink-mute)] mb-1">Status</p>
+              <p className="text-[15px] font-medium text-[var(--c-ink)] capitalize">{profile?.status || '—'}</p>
             </div>
           </div>
         </div>
@@ -124,7 +124,7 @@ export function SettingsPage() {
               )}
             </ToggleOption>
           </div>
-          <p className="text-[13px] text-[#7a7a7a]">
+          <p className="text-[13px] text-[var(--c-ink-mute)]">
             Recharts is the default. Apache ECharts offers more customization and better performance with large datasets.
             Your preference is saved to your profile.
           </p>
@@ -158,7 +158,7 @@ export function SettingsPage() {
               </div>
             </ToggleOption>
           </div>
-          <p className="text-[13px] text-[#7a7a7a]">
+          <p className="text-[13px] text-[var(--c-ink-mute)]">
             The July–June financial year is used in Australia. This affects the Tax Report and related calculations.
           </p>
         </div>
@@ -166,8 +166,8 @@ export function SettingsPage() {
 
       {/* App info */}
       <div className="text-center py-4 space-y-1">
-        <p className="text-[13px] text-[#7a7a7a]">Folio — Portfolio Tracker</p>
-        <p className="text-[13px] text-[#7a7a7a]">Version 1.0.0</p>
+        <p className="text-[13px] text-[var(--c-ink-mute)]">Folio — Portfolio Tracker</p>
+        <p className="text-[13px] text-[var(--c-ink-mute)]">Version 1.0.0</p>
       </div>
     </div>
   );

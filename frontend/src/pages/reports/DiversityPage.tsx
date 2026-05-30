@@ -65,9 +65,9 @@ export function DiversityPage() {
       sortable: true,
       render: (v: unknown) => (
         <div className="flex items-center justify-end gap-2">
-          <div className="w-16 bg-[#f0f0f0] rounded-full h-1.5">
+          <div className="w-16 bg-[var(--c-border)] rounded-full h-1.5">
             <div
-              className="h-1.5 rounded-full bg-[#0066cc]"
+              className="h-1.5 rounded-full bg-[var(--c-primary)]"
               style={{ width: `${Math.min(Number(v), 100)}%` }}
             />
           </div>
@@ -82,20 +82,20 @@ export function DiversityPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-[28px] font-semibold tracking-tight text-[#1d1d1f]">Portfolio Diversity</h1>
-        <p className="text-[15px] text-[#7a7a7a] mt-1">Allocation breakdown across sectors, types, and geographies</p>
+        <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Portfolio Diversity</h1>
+        <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">Allocation breakdown across sectors, types, and geographies</p>
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center bg-[#f5f5f7] rounded-full p-1 gap-0.5 w-fit">
+      <div className="flex items-center bg-[var(--c-canvas-soft)] rounded-full p-1 gap-0.5 w-fit">
         {tabs.map((tab) => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key as typeof activeTab)}
             className={`px-4 py-1.5 rounded-full text-[14px] font-medium transition-colors ${
               activeTab === tab.key
-                ? 'bg-white text-[#0066cc] shadow-sm'
-                : 'text-[#7a7a7a] hover:text-[#1d1d1f]'
+                ? 'bg-[var(--c-canvas)] text-[var(--c-primary)] shadow-sm'
+                : 'text-[var(--c-ink-mute)] hover:text-[var(--c-ink)]'
             }`}
           >
             {tab.label}
@@ -113,7 +113,7 @@ export function DiversityPage() {
         {/* Table */}
         <Card padding="none">
           <div className="px-6 pt-5 pb-4">
-            <h2 className="text-[19px] font-semibold text-[#1d1d1f]">Breakdown</h2>
+            <h2 className="text-[19px] font-semibold text-[var(--c-ink)]">Breakdown</h2>
           </div>
           <Table<DiversityAllocation & { color?: string }>
             columns={allocationColumns as Parameters<typeof Table<DiversityAllocation & { color?: string }>>[0]['columns']}
