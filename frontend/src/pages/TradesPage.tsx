@@ -17,12 +17,14 @@ import { formatCurrency, formatDate } from '../lib/utils';
 import type { Trade, BackendTradeType } from '../types';
 
 const TRADE_TYPE_BADGE: Record<BackendTradeType, 'success' | 'info' | 'warning' | 'neutral'> = {
-  buy:      'info',
-  sell:     'warning',
-  dividend: 'success',
-  interest: 'success',
-  drp:      'info',
-  split:    'neutral',
+  buy:        'info',
+  sell:       'warning',
+  dividend:   'success',
+  interest:   'success',
+  drp:        'info',
+  split:      'neutral',
+  deposit:    'success',
+  withdrawal: 'warning',
 };
 
 export function TradesPage() {
@@ -217,13 +219,15 @@ export function TradesPage() {
         />
         <Select
           options={[
-            { label: 'All types',  value: '' },
-            { label: 'Buy',        value: 'buy' },
-            { label: 'Sell',       value: 'sell' },
-            { label: 'Dividend',   value: 'dividend' },
-            { label: 'Interest',   value: 'interest' },
-            { label: 'DRP',        value: 'drp' },
-            { label: 'Split',      value: 'split' },
+            { label: 'All types',   value: '' },
+            { label: 'Buy',         value: 'buy' },
+            { label: 'Sell',        value: 'sell' },
+            { label: 'Dividend',    value: 'dividend' },
+            { label: 'Interest',    value: 'interest' },
+            { label: 'DRP',         value: 'drp' },
+            { label: 'Split',       value: 'split' },
+            { label: 'Deposit',     value: 'deposit' },
+            { label: 'Withdrawal',  value: 'withdrawal' },
           ]}
           value={filterType}
           onChange={(v) => setFilterType(v as BackendTradeType | '')}

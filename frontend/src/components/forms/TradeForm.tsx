@@ -38,12 +38,14 @@ interface TradeFormProps {
 }
 
 const TRADE_TYPE_OPTIONS = [
-  { label: 'Buy',      value: 'buy' },
-  { label: 'Sell',     value: 'sell' },
-  { label: 'Dividend', value: 'dividend' },
-  { label: 'Interest', value: 'interest' },
-  { label: 'DRP',      value: 'drp' },
-  { label: 'Split',    value: 'split' },
+  { label: 'Buy',        value: 'buy' },
+  { label: 'Sell',       value: 'sell' },
+  { label: 'Dividend',   value: 'dividend' },
+  { label: 'Interest',   value: 'interest' },
+  { label: 'DRP',        value: 'drp' },
+  { label: 'Split',      value: 'split' },
+  { label: 'Deposit',    value: 'deposit' },
+  { label: 'Withdrawal', value: 'withdrawal' },
 ];
 
 const CURRENCY_OPTIONS = [

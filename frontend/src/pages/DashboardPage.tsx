@@ -148,10 +148,18 @@ export function DashboardPage() {
         <StatCard
           label="Net Asset Value"
           value={formatCurrency(summary?.total_value ?? 0, activePortfolio.currency)}
+          subtitle={`Cash: ${formatCurrency(summary?.cash_balance ?? 0, activePortfolio.currency)}`}
           loading={summaryLoading}
         />
         <StatCard
-          label="Total Return"
+          label="Overall Gain"
+          value={formatCurrency(summary?.overall_gain ?? 0, activePortfolio.currency)}
+          trend={summary?.overall_gain_pct}
+          subtitle={`Deposited: ${formatCurrency(summary?.total_deposited ?? 0, activePortfolio.currency)}`}
+          loading={summaryLoading}
+        />
+        <StatCard
+          label="Invested Return"
           value={formatCurrency(summary?.total_gain ?? 0, activePortfolio.currency)}
           trend={summary?.total_gain_pct}
           loading={summaryLoading}
@@ -160,11 +168,6 @@ export function DashboardPage() {
           label="YTD Return"
           value={formatCurrency(summary?.ytd_return ?? 0, activePortfolio.currency)}
           trend={summary?.ytd_return_pct}
-          loading={summaryLoading}
-        />
-        <StatCard
-          label="Cash Balance"
-          value={formatCurrency(summary?.cash_balance ?? 0, activePortfolio.currency)}
           loading={summaryLoading}
         />
       </div>

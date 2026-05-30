@@ -15,6 +15,59 @@ type TradeWithSecurity = Trade & {
   security?: { symbol: string; name: string | null; exchange: string | null; currency: string };
 };
 
+/**
+ * Calculate the current cash balance and deposit/withdrawal totals from a
+ * trade list. Cash = deposits − withdrawals − buy costs + sell proceeds +
+ * dividends + interest. All amounts are in the portfolio's base currency.
+ */
+export function calculateCashPosition(trades: TradeWithSecurity[]): {
+  cash_balance:    number;
+  total_deposited: number;
+  total_withdrawn: number;
+} {
+  let cash       = 0;
+  let deposited  = 0;
+  let withdrawn  = 0;
+
+  for (const t of trades) {
+    const fx  = t.exchange_rate ?? 1;
+    const amt = t.price * t.quantity;   // native currency amount
+    const aud = amt * fx;               // base-currency equivalent
+
+    switch (t.trade_type) {
+      case 'deposit':
+        cash      += aud;
+        deposited += aud;
+        break;
+      case 'withdrawal':
+        cash      -= aud;
+        withdrawn += aud;
+        break;
+      case 'buy':
+      case 'drp':
+        // Cost out: share cost + brokerage
+        cash -= (amt + (t.brokerage ?? 0)) * fx;
+        break;
+      case 'sell':
+        // Proceeds in: share proceeds − brokerage
+        cash += (amt - (t.brokerage ?? 0)) * fx;
+        break;
+      case 'dividend':
+      case 'interest':
+        cash += aud;
+        break;
+      default:
+        break;
+    }
+  }
+
+  return {
+    cash_balance:    Math.round(cash * 100)      / 100,
+    total_deposited: Math.round(deposited * 100) / 100,
+    total_withdrawn: Math.round(withdrawn * 100) / 100,
+  };
+}
+
 export function calculateHoldings(
   trades: TradeWithSecurity[],
   currentPrices: Record<string, number>

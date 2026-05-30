@@ -2,6 +2,12 @@
 
 All notable changes to Folio App are documented here.
 
+## [Unreleased]
+
+### Added
+
+- **Cash position & deposit tracking** — PDF parser now captures `Cash In Out` entries as `deposit`/`withdrawal` trade types. `calculateCashPosition()` computes running cash balance from all trades. Holdings API injects a synthetic CASH row so cash appears in the Holdings table and future pie charts. Portfolio summary now includes `cash_balance`, `total_deposited`, `total_withdrawn`, `net_deposited`, `overall_gain`, `overall_gain_pct`. Dashboard shows "Overall Gain" (market value + cash vs total deposited) and "Invested Return" (unrealised gain on securities). New trade types `deposit` and `withdrawal` added throughout (DB migration 008, backend schema, frontend types, TradeForm, filter dropdown). (`supabase-central/migrations/008_cash_trades.sql`, `backend/src/services/calculations/holdings.ts`, `backend/src/services/pdf-parser/moomoo.ts`, `backend/src/routes/reports.ts`, `frontend/src/pages/DashboardPage.tsx`)
+
 ## [v0.3.8] — 2026-05-30
 
 ### Added

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth';
 import { requireApproved } from '../middleware/requireApproved';
 import { supabase } from '../lib/supabase';
-import { calculateHoldings, calculateCapitalGains } from '../services/calculations/holdings';
+import { calculateHoldings, calculateCapitalGains, calculateCashPosition } from '../services/calculations/holdings';
 import { computeStatistics, computeMonthlyReturns } from '../services/calculations/statistics';
 import { getHistoricalPrices, getBenchmarkPrices, getCurrentPrices, BENCHMARKS } from '../services/market-data/yahoo';
 import { format, subYears, startOfYear } from 'date-fns';
@@ -62,16 +62,57 @@ router.get('/:id/holdings', async (req: AuthenticatedRequest, res: any) => {
     const currentPrices = await getCurrentPrices(Array.from(securitiesMap.entries()).map(([symbol, exchange]) => ({ symbol, exchange })));
     const rawHoldings = calculateHoldings(trades as any, currentPrices);
     // Map cost_base → total_cost to match the frontend Holding interface
-    const holdings = rawHoldings.map((h) => ({ ...h, total_cost: h.cost_base }));
+    const equityHoldings = rawHoldings.map((h) => ({ ...h, total_cost: h.cost_base }));
+
+    // Cash position — synthetic CASH row so it appears in Holdings + pie charts
+    const { cash_balance, total_deposited, total_withdrawn } = calculateCashPosition(trades as any);
+    const { data: portfolio } = await supabase.from('portfolios').select('currency').eq('id', id).single();
+    const portfolioCurrency = (portfolio as any)?.currency ?? 'AUD';
+
+    const cashHolding = cash_balance !== 0 ? [{
+      security_id:        'cash',
+      symbol:             'CASH',
+      security_name:      'Cash',
+      exchange:           '',
+      currency:           portfolioCurrency,
+      quantity:           cash_balance,
+      avg_cost:           1,
+      cost_base:          cash_balance,
+      total_cost:         cash_balance,
+      current_price:      1,
+      market_value:       cash_balance,
+      unrealized_gain:    0,
+      unrealized_gain_pct: 0,
+    }] : [];
+
+    const holdings = [...equityHoldings, ...cashHolding];
 
     // Only include holdings with a known price in the gain totals to avoid
     // distorting the summary when Yahoo Finance has no data for a security.
     const pricedHoldings = holdings.filter((h) => h.market_value != null);
     const totalValue = pricedHoldings.reduce((s, h) => s + (h.market_value ?? 0), 0);
-    const totalCost  = pricedHoldings.reduce((s, h) => s + (h.total_cost ?? 0), 0);
-    const totalGain  = totalValue - totalCost;
+    const totalCost  = equityHoldings.filter(h => h.market_value != null).reduce((s, h) => s + (h.total_cost ?? 0), 0);
+    const totalGain  = totalValue - totalCost - cash_balance; // gain on invested portion only
 
-    res.json({ holdings, summary: { total_value: totalValue, total_cost: totalCost, total_gain: totalGain, total_gain_pct: totalCost > 0 ? (totalGain / totalCost) * 100 : 0 } });
+    const netDeposited   = total_deposited - total_withdrawn;
+    const overallGain    = totalValue - netDeposited;
+    const overallGainPct = netDeposited > 0 ? (overallGain / netDeposited) * 100 : 0;
+
+    res.json({
+      holdings,
+      summary: {
+        total_value:      totalValue,
+        total_cost:       totalCost,
+        total_gain:       totalGain,
+        total_gain_pct:   totalCost > 0 ? (totalGain / totalCost) * 100 : 0,
+        cash_balance,
+        total_deposited,
+        total_withdrawn,
+        net_deposited:    netDeposited,
+        overall_gain:     overallGain,
+        overall_gain_pct: overallGainPct,
+      },
+    });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -95,25 +136,38 @@ router.get('/:id/summary', async (req: AuthenticatedRequest, res: any) => {
     const currentPrices = await getCurrentPrices(Array.from(securitiesMap.entries()).map(([symbol, exchange]) => ({ symbol, exchange })));
     const holdings = calculateHoldings(trades as any, currentPrices);
 
-    const totalValue = holdings.reduce((s, h) => s + (h.market_value ?? 0), 0);
-    const totalCost  = holdings.reduce((s, h) => s + h.cost_base, 0);
-    const totalGain  = totalValue - totalCost;
+    const { cash_balance, total_deposited, total_withdrawn } = calculateCashPosition(trades as any);
+
+    const investedValue  = holdings.reduce((s, h) => s + (h.market_value ?? 0), 0);
+    const totalValue     = investedValue + cash_balance;
+    const totalCost      = holdings.reduce((s, h) => s + h.cost_base, 0);
+    const totalGain      = investedValue - totalCost;
+    const netDeposited   = total_deposited - total_withdrawn;
+    const overallGain    = totalValue - netDeposited;
+    const overallGainPct = netDeposited > 0 ? (overallGain / netDeposited) * 100 : 0;
 
     // YTD: compare current value against portfolio value at the start of this year
     const ytdStartDate = format(startOfYear(new Date()), 'yyyy-MM-dd');
     const tradesBeforeYTD = trades.filter(t => t.trade_date < ytdStartDate);
     const holdingsAtYTDStart = calculateHoldings(tradesBeforeYTD as any, currentPrices);
-    const valueAtYTDStart = holdingsAtYTDStart.reduce((s, h) => s + (h.market_value ?? 0), 0);
+    const { cash_balance: cashAtYTDStart } = calculateCashPosition(tradesBeforeYTD as any);
+    const valueAtYTDStart = holdingsAtYTDStart.reduce((s, h) => s + (h.market_value ?? 0), 0) + cashAtYTDStart;
     const ytdReturn = totalValue - valueAtYTDStart;
 
     res.json({
-      total_value:    totalValue,
-      total_cost:     totalCost,
-      total_gain:     totalGain,
-      total_gain_pct: totalCost > 0 ? (totalGain / totalCost) * 100 : 0,
-      cash_balance:   0, // placeholder — deposit/withdrawal tracking not yet implemented
-      ytd_return:     ytdReturn,
-      ytd_return_pct: valueAtYTDStart > 0 ? (ytdReturn / valueAtYTDStart) * 100 : 0,
+      total_value:      totalValue,
+      invested_value:   investedValue,
+      total_cost:       totalCost,
+      total_gain:       totalGain,
+      total_gain_pct:   totalCost > 0 ? (totalGain / totalCost) * 100 : 0,
+      cash_balance,
+      total_deposited,
+      total_withdrawn,
+      net_deposited:    netDeposited,
+      overall_gain:     overallGain,
+      overall_gain_pct: overallGainPct,
+      ytd_return:       ytdReturn,
+      ytd_return_pct:   valueAtYTDStart > 0 ? (ytdReturn / valueAtYTDStart) * 100 : 0,
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

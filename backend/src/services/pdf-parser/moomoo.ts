@@ -286,44 +286,66 @@ export function parseCashSection(section: string): ParsedTrade[] {
     .map((l) => l.trim())
     .filter(Boolean);
 
-  // "2025/07/17 18:43:59 Asset Adjustment +8.98 FANG CASH DIVIDEND"
+  // Track currency context as we move through AUD / USD / HKD subsections
+  let currentCurrency = 'AUD';
+  const CURRENCY_HEADERS = new Set(['AUD', 'USD', 'HKD', 'SGD', 'EUR', 'GBP']);
+
+  // Matches dated cash-flow lines:
+  //   "2025/07/17 18:43:59  Asset Adjustment  +8.98  FANG CASH DIVIDEND"
+  //   "2024/09/30 13:41:14  Cash In Out       +515.30  ZEPTO_PR.2m3pdi"
   const pattern =
-    /^(\d{4}\/\d{2}\/\d{2})\s+\d{2}:\d{2}:\d{2}\s+(Asset Adjustment|Coupon)\s+([+-][\d,\.]+)\s+(.+)$/;
+    /^(\d{4}\/\d{2}\/\d{2})\s+\d{2}:\d{2}:\d{2}\s+(Asset Adjustment|Coupon|Cash In Out)\s+([+-][\d,\.]+)\s*(.*)$/;
 
   for (const line of lines) {
+    // Detect currency section headers (bare "AUD", "USD", etc.)
+    if (CURRENCY_HEADERS.has(line)) {
+      currentCurrency = line;
+      continue;
+    }
+
     const match = line.match(pattern);
     if (!match) continue;
 
     const [, dateStr, type, amountStr, comment] = match;
     const amount = parseNumber(amountStr);
-    if (amount <= 0) continue;
 
     let trade_type: TradeType;
     let symbol: string;
+    let notes: string;
 
     if (type === 'Asset Adjustment' && /dividend/i.test(comment)) {
+      if (amount <= 0) continue;
       trade_type = 'dividend';
       symbol = comment.split(/\s+/)[0].toUpperCase();
+      notes = comment.trim();
     } else if (type === 'Coupon') {
+      if (amount <= 0) continue;
       trade_type = 'interest';
       symbol = 'CASH';
+      notes = comment.trim() || 'Moomoo Cash Coupon';
+    } else if (type === 'Cash In Out') {
+      // Skip zero-amount lines
+      if (amount === 0) continue;
+      trade_type = amount > 0 ? 'deposit' : 'withdrawal';
+      symbol = 'CASH';
+      notes = comment.trim() || type;
     } else {
       continue;
     }
 
     trades.push({
-      trade_date: parseDate(dateStr),
+      trade_date:    parseDate(dateStr),
       trade_type,
       symbol,
-      security_name: comment.trim(),
-      exchange: 'ASX',
-      currency: 'AUD',
-      quantity: 1,
-      price: amount,
-      amount,
-      brokerage: 0,
-      gst: 0,
-      notes: comment.trim(),
+      security_name: trade_type === 'deposit' ? 'Cash Deposit' : trade_type === 'withdrawal' ? 'Cash Withdrawal' : notes,
+      exchange:      currentCurrency,   // re-used to carry currency context
+      currency:      currentCurrency,
+      quantity:      1,
+      price:         Math.abs(amount),
+      amount:        Math.abs(amount),
+      brokerage:     0,
+      gst:           0,
+      notes,
     });
   }
 

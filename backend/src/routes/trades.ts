@@ -46,7 +46,7 @@ async function upsertSecurity(symbol: string, name: string, exchange: string, cu
 
 const tradeSchema = z.object({
   trade_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  trade_type: z.enum(['buy', 'sell', 'dividend', 'interest', 'drp', 'split']),
+  trade_type: z.enum(['buy', 'sell', 'dividend', 'interest', 'drp', 'split', 'deposit', 'withdrawal']),
   symbol: z.string().min(1).max(20),
   security_name: z.string().optional(),
   exchange: z.string().optional().default('ASX'),
@@ -265,7 +265,7 @@ router.post('/:portfolioId/import/confirm', async (req: AuthenticatedRequest, re
   const schema = z.object({
     trades: z.array(z.object({
       trade_date: z.string(),
-      trade_type: z.enum(['buy', 'sell', 'dividend', 'interest', 'drp', 'split']),
+      trade_type: z.enum(['buy', 'sell', 'dividend', 'interest', 'drp', 'split', 'deposit', 'withdrawal']),
       symbol: z.string(),
       security_name: z.string(),
       exchange: z.string(),
