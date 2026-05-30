@@ -13,6 +13,7 @@ All notable changes to Folio App are documented here.
 - **Import response shape** — `POST /api/portfolios/:id/import/parse` was returning `{ trades, count }` but the frontend `ImportPreview` type expects `{ filename, parsed_count, trades, errors }`. The backend now returns the correct shape, fixing undefined `parsed_count` and `errors` in the preview. (`backend/src/routes/trades.ts`)
 - **Trade deduplication on confirm** — `POST /api/portfolios/:id/import/confirm` now skips trades that already exist (keyed on `trade_date + security_id + trade_type + quantity + price`), preventing double-import when a monthly PDF and an overlapping annual XLSX cover the same trades.
 - **Import 0-trade UX** — Uploading a file with no importable trades (e.g. account-opening month with only cash deposits) now shows a clear explanatory banner instead of a broken Confirm button. (`frontend/src/pages/ImportPage.tsx`)
+- **pdf-parse v2 compatibility** — `pdf-parse` package updated from v1 (bare function export) to v2 (class-based `PDFParse`). Fixed `pdfParse is not a function` runtime crash that was breaking all PDF imports. (`backend/src/services/pdf-parser/moomoo.ts`)
 
 ## [v0.3.5] — 2026-05-30
 
