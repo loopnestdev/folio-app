@@ -202,9 +202,35 @@ async function handleImportParse(req: AuthenticatedRequest, res: any) {
       .single();
     const baseCurrency = (portfolio?.currency as string | null) ?? 'AUD';
 
-    // Auto-enrich each trade with an exchange_rate when currency differs from base
+    // ── Currency filter ────────────────────────────────────────────────────
+    // A single Moomoo PDF can contain both AUD (ASX) and USD (US market) trades.
+    // Only import trades whose currency matches this portfolio's base currency.
+    // The user imports the same file a second time against their other portfolio
+    // to capture the remaining trades. Filtered-out trades are surfaced as a
+    // warning so the user knows to do that second import.
+    const forThisPortfolio = parsed.filter((t) => t.currency === baseCurrency);
+    const filteredOut      = parsed.filter((t) => t.currency !== baseCurrency);
+
+    // Build per-currency summary of filtered-out trades for the warning message
+    const warnings: string[] = [];
+    if (filteredOut.length > 0) {
+      const byCurrency: Record<string, number> = {};
+      for (const t of filteredOut) {
+        byCurrency[t.currency] = (byCurrency[t.currency] ?? 0) + 1;
+      }
+      const summary = Object.entries(byCurrency)
+        .map(([cur, n]) => `${n} ${cur} trade${n !== 1 ? 's' : ''}`)
+        .join(', ');
+      warnings.push(
+        `${summary} excluded — this portfolio is ${baseCurrency}. ` +
+        `Import this same file into your ${Object.keys(byCurrency).join('/')} portfolio to capture them.`,
+      );
+    }
+
+    // Auto-enrich each matching trade with an exchange_rate (always 1 here
+    // since trade.currency === baseCurrency, but kept for consistency)
     const enriched = await Promise.all(
-      parsed.map(async (t) => {
+      forThisPortfolio.map(async (t) => {
         if (t.currency === baseCurrency) return { ...t, exchange_rate: 1 };
         const rate = await getForexRate(t.currency, baseCurrency, t.trade_date);
         return { ...t, exchange_rate: rate };
@@ -216,7 +242,7 @@ async function handleImportParse(req: AuthenticatedRequest, res: any) {
       filename:     req.file.originalname,
       parsed_count: enriched.length,
       trades:       enriched,
-      errors:       [],
+      errors:       warnings,
     });
   } catch (err: any) {
     res.status(422).json({ error: 'Failed to parse file: ' + (err.message as string) });
