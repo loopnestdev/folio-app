@@ -37,12 +37,16 @@ router.post('/profile', async (req: any, res: any) => {
   let full_name: string | null;
   let avatar_url: string | null;
 
+  // Try local JWT verification first (no network round-trip).
+  // Falls back to Supabase getUser() if secret is absent OR if signature fails
+  // (e.g. wrong secret value configured). Now that the frontend deadlock is
+  // fixed, getUser() from Railway is fast (<500ms) so the fallback is fine.
   let localPayload;
   try {
     localPayload = verifyJwt(token);
-  } catch {
-    res.status(401).json({ error: 'Invalid or expired token' });
-    return;
+  } catch (e: any) {
+    console.log(`[profile] local JWT failed (${e?.message}) — falling back to getUser()`);
+    localPayload = null; // fall through to network verification below
   }
 
   if (localPayload) {
@@ -52,17 +56,18 @@ router.post('/profile', async (req: any, res: any) => {
     full_name = (localPayload.user_metadata?.full_name as string | undefined) ?? null;
     avatar_url = (localPayload.user_metadata?.avatar_url as string | undefined) ?? null;
   } else {
-    console.log(`[profile] falling back to network getUser() — SUPABASE_JWT_SECRET not set`);
-    // SUPABASE_JWT_SECRET not configured — fall back to network verification.
+    console.log(`[profile] using network getUser() at ${Date.now()-t0}ms`);
     const anonKey = env.SUPABASE_ANON_KEY || env.SUPABASE_SERVICE_ROLE_KEY;
     const userClient = createClient(env.SUPABASE_URL, anonKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
     const { data: { user }, error: authError } = await userClient.auth.getUser(token);
     if (authError || !user) {
+      console.log(`[profile] getUser() rejected at ${Date.now()-t0}ms:`, authError?.message);
       res.status(401).json({ error: 'Invalid or expired token' });
       return;
     }
+    console.log(`[profile] getUser() ok at ${Date.now()-t0}ms`);
     userId = user.id;
     email = user.email ?? '';
     full_name = (user.user_metadata?.full_name as string | undefined) ?? null;

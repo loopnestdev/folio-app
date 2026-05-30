@@ -19,10 +19,15 @@ export async function authMiddleware(
   const token = authHeader.slice(7);
 
   try {
-    // Prefer local JWT verification (no network round-trip).
-    // Falls back to Supabase network call when SUPABASE_JWT_SECRET is absent.
+    // Try local JWT verification first; fall back to network if secret is
+    // missing or wrong (the frontend deadlock is fixed so getUser() is fast).
     let userId: string;
-    const localPayload = verifyJwt(token);
+    let localPayload;
+    try {
+      localPayload = verifyJwt(token);
+    } catch {
+      localPayload = null;
+    }
 
     if (localPayload) {
       userId = localPayload.sub;
