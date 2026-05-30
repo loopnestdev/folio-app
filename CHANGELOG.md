@@ -2,6 +2,16 @@
 
 All notable changes to Folio App are documented here.
 
+## [Unreleased]
+
+### Added
+
+- **Gift Share import** — The PDF parser now captures Moomoo promotional "Gift Share" transfers from the `Movement - Securities` section. Multiple +1 entries for the same symbol on the same date are aggregated into one trade row, imported as `trade_type='buy'` at `price=0` with `notes='Gift Share from Moomoo'`. (`backend/src/services/pdf-parser/moomoo.ts`)
+
+### Fixed
+
+- **XLSX exchange mapping** — The XLSX annual summary parser was mapping US market → `"NYSE"` and HK market → `"HKEX"`, which diverged from the PDF parser (which uses `"US"` and `"HK"` respectively). Both parsers now use the same codes, preventing duplicate security records when the same stock is imported from both file types. (`backend/src/services/pdf-parser/moomoo-xlsx.ts`)
+
 ## [v0.3.7] — 2026-05-30
 
 ### Added
