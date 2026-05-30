@@ -14,6 +14,10 @@ All notable changes to Folio App are documented here.
 
 ### Fixed
 
+- **Blank page after portfolio creation / on dashboard load** — `useHoldings` returned the full `{ holdings, summary }` response object instead of the array. Both `DashboardPage` and `HoldingsPage` called `.filter()` / `.reduce()` on it immediately, throwing `r.filter is not a function` and crashing the render tree. Fixed by extracting `data.holdings` in the hook. (`frontend/src/hooks/usePortfolio.ts`)
+
+- **Dashboard recent-trades columns showing stale field names** — `DashboardPage` still referenced pre-refactor Trade fields (`direction`, `symbol`, `amount`). Updated to `trade_type`, `security?.symbol`, and computed total (`price × quantity + brokerage`). (`frontend/src/pages/DashboardPage.tsx`)
+
 - **CGT calculation ignoring exchange rates** — `calculateCapitalGains` and `calculateHoldings` now apply `exchange_rate` to compute AUD-equivalent cost bases (buy side) and proceeds (sell side), matching ATO requirements: cost base uses the exchange rate at the time of purchase; proceeds use the rate at the time of sale. (`backend/src/services/calculations/holdings.ts`)
 
 - **Import parse URL mismatch** — Frontend called `/import/parse` but the backend only had `/import`. Added `/import/parse` as the canonical route with `/import` as a legacy alias. (`backend/src/routes/trades.ts`)
