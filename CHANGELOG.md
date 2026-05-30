@@ -6,6 +6,9 @@ All notable changes to Folio App are documented here.
 
 ### Fixed
 
+- **Holdings showing $0.00 price / -100% gain for ASX stocks** — Yahoo Finance requires an `.AX` suffix for ASX-listed tickers (`FANG` → `FANG.AX`). Without it, price lookups return nothing (or the wrong US stock). Added `toYahooTicker(symbol, exchange)` helper; all current-price and historical-price calls now pass the exchange so the correct Yahoo ticker is constructed. (`backend/src/services/market-data/yahoo.ts`, `reports.ts`, `groups.ts`)
+- **yahoo-finance2 v3 API break** — Package updated from v2 (singleton default export) to v3 (class-based, requires `new YahooFinance()`). Fixed the import to instantiate the class. (`backend/src/services/market-data/yahoo.ts`)
+
 - **PDF trade parsing broken by pdf-parse v2** — `parseTradesSection` was written for pdf-parse v1's newline-per-field output. v2 renders PDF table cells tab-separated on the same line. Rewrote the function for the new 3-line-per-trade format (`Direction<TAB>Name` / `Symbol<TAB>Exchange<TAB>Currency<TAB>Date` / `Time<TAB>Price<TAB>Qty<TAB>Amount`). Also handles grouped trades sharing one subtotal and page-break lines between a trade and its subtotal. (`backend/src/services/pdf-parser/moomoo.ts`)
 
 ### Added
