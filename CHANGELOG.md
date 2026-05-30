@@ -2,6 +2,12 @@
 
 All notable changes to Folio App are documented here.
 
+## [Unreleased]
+
+### Added
+
+- **Per-portfolio currency filter on import** — When parsing a Moomoo PDF or XLSX that contains both AUD and USD trades, the backend now filters to only trades matching the portfolio's base currency. Filtered-out trades appear as a yellow warning banner with instructions to import the same file to the other portfolio. (`backend/src/routes/trades.ts`)
+
 ## [v0.3.6] — 2026-05-30
 
 ### Added
