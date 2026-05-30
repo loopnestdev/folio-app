@@ -2,6 +2,24 @@
 
 All notable changes to Folio App are documented here.
 
+## [Unreleased]
+
+### Added
+
+- **Group-level consolidated reports (Step 3)** — Each portfolio group now has a full reporting suite that aggregates data across all member portfolios and converts non-base currencies at current forex rates.
+
+  - **DB migration `007_group_base_currency.sql`** — Adds `base_currency` (3-char, default `AUD`) to `folio.portfolio_groups`. All group-level reports are expressed in this currency.
+  - **`GET /api/groups/:id/summary`** — Consolidated NAV, total return, YTD return, and a per-portfolio breakdown with FX rates applied. (`backend/src/routes/groups.ts`)
+  - **`GET /api/groups/:id/performance`** — Consolidated daily performance time series, normalised to 100, with S&P 500 / ASX 200 / NASDAQ benchmarks. Each portfolio's values are converted to the group's base currency at the current forex rate; a carry-forward approach fills dates where one portfolio has no price data. (`backend/src/routes/groups.ts`)
+  - **`GET /api/groups/:id/capital-gains`** — All CGT disposal lots from every portfolio in the group, combined into a single list labelled with their source portfolio. Cost base and proceeds use the trade-date exchange rate already stored on each trade. (`backend/src/routes/groups.ts`)
+  - **`GET /api/groups/:id/tax`** — Consolidated tax report (dividends, interest, short/long-term CGT, 50% CGT discount) across all portfolios, expressed in base currency. Includes a per-portfolio breakdown. (`backend/src/routes/groups.ts`)
+  - **`GroupForm` base currency selector** — Group create/edit modal now includes a base currency dropdown (defaults to AUD). (`frontend/src/components/forms/GroupForm.tsx`)
+  - **`useGroupReports` hooks** — `useGroupSummary`, `useGroupPerformance`, `useGroupCapitalGains`, `useGroupTax`. (`frontend/src/hooks/useGroupReports.ts`)
+  - **Group Dashboard** (`/groups/:id`) — Consolidated stat cards, performance chart with date range picker, and portfolio breakdown table with FX rates and per-portfolio contributions. (`frontend/src/pages/groups/GroupDashboardPage.tsx`)
+  - **Group Capital Gains** (`/groups/:id/capital-gains`) — Combined CGT table with portfolio labels, summary stat cards, FY type/year selector. (`frontend/src/pages/groups/GroupCapitalGainsPage.tsx`)
+  - **Group Tax Report** (`/groups/:id/tax`) — Consolidated tax waterfall plus per-portfolio breakdown cards. FY type/year selector. (`frontend/src/pages/groups/GroupTaxPage.tsx`)
+  - **PortfoliosPage group header** — Each group section now has a "Dashboard" quick-link that navigates to `/groups/:id`. (`frontend/src/pages/PortfoliosPage.tsx`)
+
 ## [v0.3.4] — 2026-05-30
 
 ### Added
