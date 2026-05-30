@@ -26,7 +26,7 @@ export interface Portfolio {
   updated_at: string;
 }
 
-export interface PortfolioSummary extends Portfolio {
+export interface PortfolioSummary {
   total_value: number;
   total_cost: number;
   total_gain: number;

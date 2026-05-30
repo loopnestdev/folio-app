@@ -71,6 +71,48 @@ router.get('/:id/holdings', async (req: AuthenticatedRequest, res: any) => {
   }
 });
 
+// GET /api/portfolios/:id/summary
+router.get('/:id/summary', async (req: AuthenticatedRequest, res: any) => {
+  const id = req.params.id as string;
+  if (!(await verifyOwner(id, req.userId!))) { res.status(404).json({ error: 'Portfolio not found' }); return; }
+
+  try {
+    const trades = await getPortfolioTrades(id);
+
+    if (!trades.length) {
+      res.json({ total_value: 0, total_cost: 0, total_gain: 0, total_gain_pct: 0, cash_balance: 0, ytd_return: 0, ytd_return_pct: 0 });
+      return;
+    }
+
+    const heldSymbols = [...new Set(trades.filter(t => t.security).map(t => t.security!.symbol))];
+    const currentPrices = await getCurrentPrices(heldSymbols);
+    const holdings = calculateHoldings(trades as any, currentPrices);
+
+    const totalValue = holdings.reduce((s, h) => s + h.market_value, 0);
+    const totalCost  = holdings.reduce((s, h) => s + h.cost_base, 0);
+    const totalGain  = totalValue - totalCost;
+
+    // YTD: compare current value against portfolio value at the start of this year
+    const ytdStartDate = format(startOfYear(new Date()), 'yyyy-MM-dd');
+    const tradesBeforeYTD = trades.filter(t => t.trade_date < ytdStartDate);
+    const holdingsAtYTDStart = calculateHoldings(tradesBeforeYTD as any, currentPrices);
+    const valueAtYTDStart = holdingsAtYTDStart.reduce((s, h) => s + h.market_value, 0);
+    const ytdReturn = totalValue - valueAtYTDStart;
+
+    res.json({
+      total_value:    totalValue,
+      total_cost:     totalCost,
+      total_gain:     totalGain,
+      total_gain_pct: totalCost > 0 ? (totalGain / totalCost) * 100 : 0,
+      cash_balance:   0, // placeholder — deposit/withdrawal tracking not yet implemented
+      ytd_return:     ytdReturn,
+      ytd_return_pct: valueAtYTDStart > 0 ? (ytdReturn / valueAtYTDStart) * 100 : 0,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/portfolios/:id/performance
 router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
   const id = req.params.id as string;
@@ -81,7 +123,8 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
 
   try {
     const trades = await getPortfolioTrades(id);
-    if (!trades.length) { res.json({ portfolio: [], asx200: [], sp500: [], nasdaq: [] }); return; }
+    // Empty portfolio — return empty array so the chart renders the "no data" state
+    if (!trades.length) { res.json([]); return; }
 
     const symbols = [...new Set(trades.filter(t => t.security).map(t => t.security!.symbol))];
 
@@ -109,28 +152,42 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
     }
 
     const portfolioValues = Object.keys(priceMap).sort().map((date) => {
-      const currentPrices = priceMap[date];
-      const holdings = calculateHoldings(
+      const dayPrices = priceMap[date];
+      const dayHoldings = calculateHoldings(
         trades.filter(t => t.trade_date <= date) as any,
-        currentPrices
+        dayPrices
       );
-      const value = holdings.reduce((s, h) => s + h.market_value, 0);
+      const value = dayHoldings.reduce((s, h) => s + h.market_value, 0);
       return { date, value };
     });
 
-    // Normalize to base 100 for comparison
+    // Normalize to base 100 for comparison — all series start at 100
     const normalize = (arr: { date: string; close?: number; value?: number }[], key: 'close' | 'value') => {
       if (!arr.length) return [];
       const base = (arr[0] as any)[key] as number;
       return arr.map(d => ({ date: d.date, value: base > 0 ? (((d as any)[key] as number) / base) * 100 : 100 }));
     };
 
-    res.json({
-      portfolio: normalize(portfolioValues, 'value'),
-      asx200: normalize(asx200, 'close'),
-      sp500: normalize(sp500, 'close'),
-      nasdaq: normalize(nasdaq, 'close'),
-    });
+    const normPortfolio = normalize(portfolioValues, 'value');
+    const normSP500    = normalize(sp500, 'close');
+    const normNASDAQ   = normalize(nasdaq, 'close');
+    const normASX200   = normalize(asx200, 'close');
+
+    // Build lookup maps so we can join benchmarks onto each portfolio date
+    const sp500Map:  Record<string, number> = Object.fromEntries(normSP500.map(d => [d.date, d.value]));
+    const nasdaqMap: Record<string, number> = Object.fromEntries(normNASDAQ.map(d => [d.date, d.value]));
+    const asx200Map: Record<string, number> = Object.fromEntries(normASX200.map(d => [d.date, d.value]));
+
+    // Return flat array — one entry per trading day — matching PerformancePoint type
+    const merged = normPortfolio.map(d => ({
+      date:              d.date,
+      portfolio_value:   d.value,
+      benchmark_sp500:   sp500Map[d.date]  ?? null,
+      benchmark_nasdaq:  nasdaqMap[d.date] ?? null,
+      benchmark_asx200:  asx200Map[d.date] ?? null,
+    }));
+
+    res.json(merged);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
