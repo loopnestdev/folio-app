@@ -45,8 +45,10 @@ export function verifyJwt(token: string): SupabaseJWTPayload | null {
 
   const [header, payload, signature] = parts;
 
-  // Re-compute expected HMAC-SHA256 signature over "header.payload"
-  const expected = createHmac('sha256', env.SUPABASE_JWT_SECRET)
+  // Supabase displays the JWT secret as a base64url-encoded string in the
+  // dashboard, but GoTrue signs JWTs using the decoded bytes as the key.
+  const secretBytes = Buffer.from(env.SUPABASE_JWT_SECRET, 'base64url');
+  const expected = createHmac('sha256', secretBytes)
     .update(`${header}.${payload}`)
     .digest('base64url');
 
