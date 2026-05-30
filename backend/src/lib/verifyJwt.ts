@@ -21,21 +21,23 @@ export interface SupabaseJWTPayload {
 }
 
 /**
- * Verify a Supabase-issued JWT locally using HMAC-SHA256.
+ * Verify a Supabase-issued JWT locally — HS256 tokens only.
  *
- * Avoids the ~500ms–30s network round-trip to Supabase's /auth/v1/user
- * endpoint that previously happened on every request.
+ * Supabase projects that have migrated to the new JWT Signing Keys (ES256
+ * asymmetric) will get null here, causing callers to fall back to
+ * supabase.auth.getUser() over the network. That's fine — the frontend
+ * circular deadlock has been eliminated so getUser() is now fast (<500ms).
  *
- * Returns the decoded payload on success.
- * Returns null if SUPABASE_JWT_SECRET is not configured (caller should
- * fall back to network verification).
- * Throws if the token is malformed, has an invalid signature, is
- * expired, or has an unexpected audience.
+ * Returns null (no error, use network fallback) when:
+ *   - SUPABASE_JWT_SECRET is not configured
+ *   - Token uses a non-HS256 algorithm (ES256, RS256, etc.)
+ *
+ * Throws when the token is malformed, HS256 signature is wrong, expired,
+ * or has an unexpected audience — these are hard auth failures.
  */
 export function verifyJwt(token: string): SupabaseJWTPayload | null {
   if (!env.SUPABASE_JWT_SECRET) {
-    // Secret not yet configured — caller should use network verification.
-    return null;
+    return null; // no secret — caller uses network verification
   }
 
   const parts = token.split('.');
@@ -45,8 +47,22 @@ export function verifyJwt(token: string): SupabaseJWTPayload | null {
 
   const [header, payload, signature] = parts;
 
+  // Check the algorithm before attempting HMAC — asymmetric tokens (ES256
+  // etc.) can't be verified with the HS256 secret; return null so the caller
+  // falls back to getUser() rather than throwing a misleading signature error.
+  let headerJson: { alg?: string };
+  try {
+    headerJson = JSON.parse(Buffer.from(header, 'base64url').toString('utf8'));
+  } catch {
+    throw new Error('Malformed JWT header');
+  }
+
+  if (headerJson.alg !== 'HS256') {
+    return null; // asymmetric token — caller uses network verification
+  }
+
   // Supabase displays the JWT secret as a base64url-encoded string in the
-  // dashboard, but GoTrue signs JWTs using the decoded bytes as the key.
+  // dashboard, but GoTrue signs tokens using the decoded bytes as the HMAC key.
   const secretBytes = Buffer.from(env.SUPABASE_JWT_SECRET, 'base64url');
   const expected = createHmac('sha256', secretBytes)
     .update(`${header}.${payload}`)
