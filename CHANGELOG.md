@@ -2,6 +2,28 @@
 
 All notable changes to Folio App are documented here.
 
+## [Unreleased]
+
+### Added
+
+- **Forex rate lookup** — `GET /api/forex?from=USD&to=AUD&date=YYYY-MM-DD` endpoint returns the historical exchange rate for any currency pair using Yahoo Finance. Searches a ±5-day window so weekends and market-close days are handled. Falls back to the inverse pair (`USDAUD=X` → `AUDUSD=X` inverted) if the direct symbol is unavailable. (`backend/src/routes/forex.ts`, `backend/src/services/market-data/yahoo.ts`)
+
+- **TradeForm forex section** — When a trade's currency differs from the portfolio's base currency, the Add Trade form now shows an FX Conversion panel. The exchange rate is auto-fetched for the selected trade date and pre-filled. Users can override it manually. The AUD-equivalent amount is shown live alongside a note that it is used for the CGT cost base (ATO requirement). (`frontend/src/components/forms/TradeForm.tsx`, `frontend/src/hooks/useForex.ts`)
+
+- **PDF import forex enrichment** — The `/import/parse` (and legacy `/import`) endpoint now auto-fetches historical forex rates for each foreign-currency trade in the PDF. The preview table shows an FX Rate column when the statement contains multi-currency trades. (`backend/src/routes/trades.ts`, `frontend/src/pages/ImportPage.tsx`)
+
+### Fixed
+
+- **CGT calculation ignoring exchange rates** — `calculateCapitalGains` and `calculateHoldings` now apply `exchange_rate` to compute AUD-equivalent cost bases (buy side) and proceeds (sell side), matching ATO requirements: cost base uses the exchange rate at the time of purchase; proceeds use the rate at the time of sale. (`backend/src/services/calculations/holdings.ts`)
+
+- **Import parse URL mismatch** — Frontend called `/import/parse` but the backend only had `/import`. Added `/import/parse` as the canonical route with `/import` as a legacy alias. (`backend/src/routes/trades.ts`)
+
+- **`useTrades` returning paginated object instead of array** — Backend wraps trades in `{ data, total, page, limit }` but the hook returned the whole object. Fixed to extract `data.data`. (`frontend/src/hooks/usePortfolio.ts`)
+
+- **Frontend Trade type misaligned with backend schema** — Frontend had a divergent Trade interface (with `direction`, `amount`, `fees`, old `TradeType` enum). Aligned to the exact backend schema (`trade_type: BackendTradeType`, `brokerage`, `gst`, `exchange_rate`, joined `security` object). Updated TradesPage columns accordingly. (`frontend/src/types/index.ts`, `frontend/src/pages/TradesPage.tsx`)
+
+- **ParsedTrade type misaligned with backend parser output** — Updated to match the actual Moomoo parser output (`trade_type` as backend enum, `brokerage`, `gst`, `exchange_rate`). (`frontend/src/types/index.ts`)
+
 ## [0.3.1] — 2026-05-30
 
 ### Added

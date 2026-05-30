@@ -76,7 +76,6 @@ export function ImportPage() {
     setConfirming(true);
     try {
       await api.post(`/api/portfolios/${portfolioId}/import/confirm`, {
-        filename: preview.filename,
         trades: preview.trades,
       });
       toast.success('Import complete', `${preview.parsed_count} trades imported successfully.`);
@@ -102,20 +101,48 @@ export function ImportPage() {
     if (f) handleFileSelect(f);
   }, [handleFileSelect]);
 
+  const hasFx = preview?.trades.some((t) => t.currency !== currency);
+
   const tradeColumns = [
     { key: 'trade_date', label: 'Date', render: (v: unknown) => formatDate(String(v), 'medium') },
-    { key: 'symbol', label: 'Symbol', render: (v: unknown) => <span className="font-semibold text-[var(--c-primary)]">{String(v)}</span> },
+    {
+      key: 'symbol',
+      label: 'Symbol',
+      render: (v: unknown) => <span className="font-semibold text-[var(--c-primary)]">{String(v)}</span>,
+    },
     { key: 'security_name', label: 'Security', render: (v: unknown) => String(v || '—') },
     {
-      key: 'direction',
-      label: 'Direction',
+      key: 'trade_type',
+      label: 'Type',
       render: (v: unknown) => (
-        <Badge variant={v === 'BUY' ? 'success' : 'danger'}>{String(v)}</Badge>
+        <Badge variant={v === 'buy' ? 'info' : v === 'sell' ? 'warning' : 'success'}>
+          {String(v).toUpperCase()}
+        </Badge>
       ),
     },
     { key: 'quantity', label: 'Qty', align: 'right' as const, render: (v: unknown) => Number(v).toLocaleString() },
-    { key: 'price', label: 'Price', align: 'right' as const, render: (v: unknown) => formatCurrency(Number(v), currency) },
-    { key: 'amount', label: 'Total', align: 'right' as const, render: (v: unknown) => formatCurrency(Number(v), currency) },
+    {
+      key: 'price',
+      label: 'Price',
+      align: 'right' as const,
+      render: (_v: unknown, row: ParsedTrade) => formatCurrency(row.price, row.currency),
+    },
+    {
+      key: 'amount',
+      label: 'Total',
+      align: 'right' as const,
+      render: (_v: unknown, row: ParsedTrade) => formatCurrency(row.amount + row.brokerage, row.currency),
+    },
+    // FX column — shown when PDF contains trades in a different currency
+    ...(hasFx ? [{
+      key: 'exchange_rate',
+      label: `FX (→ ${currency})`,
+      align: 'right' as const,
+      render: (_v: unknown, row: ParsedTrade) =>
+        row.currency !== currency
+          ? <span className="text-[var(--c-warn)] font-medium">{row.exchange_rate.toFixed(4)}</span>
+          : <span className="text-[var(--c-ink-mute)]">—</span>,
+    }] : []),
   ];
 
   return (

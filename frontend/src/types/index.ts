@@ -36,28 +36,42 @@ export interface PortfolioSummary {
   ytd_return_pct: number;
 }
 
-// Trade Types
+// Trade Types — match backend schema exactly
+export type BackendTradeType = 'buy' | 'sell' | 'dividend' | 'interest' | 'drp' | 'split';
+
+// Legacy aliases kept so existing UI code that renders direction labels compiles
 export type TradeDirection = 'BUY' | 'SELL';
 export type TradeType = 'TRADE' | 'DIVIDEND' | 'INTEREST' | 'FEE' | 'DEPOSIT' | 'WITHDRAWAL';
 
 export interface Trade {
   id: string;
   portfolio_id: string;
-  symbol: string;
-  security_name: string | null;
-  exchange: string | null;
-  direction: TradeDirection;
-  trade_type: TradeType;
+  security_id: string | null;
+  /** Native trade currency symbol, e.g. 'USD', 'AUD'. */
+  currency: string;
+  /**
+   * AUD units per 1 unit of `currency` at trade date.
+   * 1 when currency === portfolio base currency (same-currency trade).
+   */
+  exchange_rate: number;
+  trade_date: string;
+  trade_type: BackendTradeType;
   quantity: number;
   price: number;
-  amount: number;
-  fees: number;
-  currency: string;
-  trade_date: string;
-  settlement_date: string | null;
+  brokerage: number;
+  gst: number;
   notes: string | null;
-  imported_from: string | null;
+  source: 'manual' | 'pdf_import';
   created_at: string;
+  updated_at: string;
+  /** Joined from securities table */
+  security?: {
+    id: string;
+    symbol: string;
+    name: string | null;
+    exchange: string | null;
+    currency: string;
+  } | null;
 }
 
 // Holding Types
@@ -190,15 +204,18 @@ export interface TaxReport {
 export interface ParsedTrade {
   symbol: string;
   security_name: string | null;
-  direction: TradeDirection;
-  trade_type: TradeType;
+  trade_type: 'buy' | 'sell' | 'dividend' | 'interest' | 'drp' | 'split';
   quantity: number;
   price: number;
   amount: number;
-  fees: number;
+  brokerage: number;
+  gst: number;
   trade_date: string;
-  exchange: string | null;
+  exchange: string;
   currency: string;
+  /** AUD units per 1 unit of `currency`; 1 when currency === portfolio base currency. */
+  exchange_rate: number;
+  notes?: string;
 }
 
 export interface ImportPreview {
@@ -250,8 +267,7 @@ export interface PaginatedResponse<T> {
 // Filter types
 export interface TradeFilter {
   symbol?: string;
-  direction?: TradeDirection;
-  trade_type?: TradeType;
+  trade_type?: BackendTradeType;
   start_date?: string;
   end_date?: string;
 }

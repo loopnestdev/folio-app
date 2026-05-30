@@ -107,6 +107,53 @@ describe('Capital Gains (CGT)', () => {
   });
 });
 
+describe('Capital Gains — forex (exchange_rate)', () => {
+  it('uses AUD-equivalent cost base for USD buy', () => {
+    // Buy 10 AAPL @ USD 100, exchange_rate 1.5 (1 USD = 1.5 AUD)
+    // AUD cost base = 10 * 100 * 1.5 = 1500 AUD
+    // Sell 10 AAPL @ USD 150, same rate → AUD proceeds = 10 * 150 * 1.5 = 2250 AUD
+    // Gross gain = 750 AUD
+    // Sell date 2024-11-01 is within FY2025 (Jul 2024–Jun 2025)
+    const trades = [
+      makeTrade({ symbol: 'AAPL', trade_date: '2024-01-01', quantity: 10, price: 100, trade_type: 'buy',  currency: 'USD', exchange_rate: 1.5 }),
+      makeTrade({ symbol: 'AAPL', trade_date: '2024-11-01', quantity: 10, price: 150, trade_type: 'sell', currency: 'USD', exchange_rate: 1.5 }),
+    ];
+    const lots = calculateCapitalGains(trades as any, 'july', 2025);
+    expect(lots).toHaveLength(1);
+    expect(lots[0]!.cost_base).toBeCloseTo(1500);   // 10 * 100 * 1.5
+    expect(lots[0]!.proceeds).toBeCloseTo(2250);    // 10 * 150 * 1.5
+    expect(lots[0]!.gross_gain).toBeCloseTo(750);
+  });
+
+  it('correctly handles different buy and sell exchange rates', () => {
+    // Buy @ 1.5 AUD/USD, sell @ 1.6 AUD/USD — AUD depreciated (USD worth more)
+    // ATO: cost base uses BUY rate; proceeds use SELL rate
+    // Buy: 10 * 100 * 1.5 = 1500 AUD cost
+    // Sell: 10 * 100 * 1.6 = 1600 AUD proceeds
+    // Gain = 100 AUD even though USD price unchanged
+    const trades = [
+      makeTrade({ symbol: 'MSFT', trade_date: '2024-01-01', quantity: 10, price: 100, trade_type: 'buy',  currency: 'USD', exchange_rate: 1.5 }),
+      makeTrade({ symbol: 'MSFT', trade_date: '2024-11-01', quantity: 10, price: 100, trade_type: 'sell', currency: 'USD', exchange_rate: 1.6 }),
+    ];
+    const lots = calculateCapitalGains(trades as any, 'july', 2025);
+    expect(lots).toHaveLength(1);
+    expect(lots[0]!.cost_base).toBeCloseTo(1500);
+    expect(lots[0]!.proceeds).toBeCloseTo(1600);
+    expect(lots[0]!.gross_gain).toBeCloseTo(100);
+  });
+
+  it('AUD trades (exchange_rate=1) behave unchanged', () => {
+    const trades = [
+      makeTrade({ symbol: 'CBA', trade_date: '2024-01-01', quantity: 100, price: 100, trade_type: 'buy',  currency: 'AUD', exchange_rate: 1 }),
+      makeTrade({ symbol: 'CBA', trade_date: '2025-01-15', quantity: 100, price: 120, trade_type: 'sell', currency: 'AUD', exchange_rate: 1 }),
+    ];
+    const lots = calculateCapitalGains(trades as any, 'july', 2025);
+    expect(lots[0]!.cost_base).toBeCloseTo(10000);
+    expect(lots[0]!.proceeds).toBeCloseTo(12000);
+    expect(lots[0]!.gross_gain).toBeCloseTo(2000);
+  });
+});
+
 describe('Statistics', () => {
   const monthlyReturns = [0.05, -0.02, 0.03, 0.04, -0.01, 0.06, 0.02, -0.03, 0.04, 0.01, 0.05, 0.03];
   const benchReturns = [0.04, -0.01, 0.02, 0.03, -0.02, 0.05, 0.01, -0.02, 0.03, 0.01, 0.04, 0.02];

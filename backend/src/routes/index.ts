@@ -4,6 +4,7 @@ import portfoliosRouter from './portfolios';
 import tradesRouter from './trades';
 import reportsRouter from './reports';
 import adminRouter from './admin';
+import forexRouter from './forex';
 
 export function setupRoutes(app: Application): void {
   app.use('/api/auth', authRouter);
@@ -11,4 +12,5 @@ export function setupRoutes(app: Application): void {
   app.use('/api/portfolios', tradesRouter);
   app.use('/api/portfolios', reportsRouter);
   app.use('/api/admin', adminRouter);
+  app.use('/api/forex', forexRouter);
 }

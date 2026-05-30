@@ -105,6 +105,75 @@ export async function getBenchmarkPrices(
   }
 }
 
+/**
+ * Look up a historical forex exchange rate.
+ * Returns how many `toCurrency` units equal 1 `fromCurrency` unit.
+ * e.g. getForexRate('USD', 'AUD', '2025-01-15') → 1.58 means 1 USD = 1.58 AUD
+ *
+ * Strategy:
+ *  1. Try Yahoo symbol `{from}{to}=X` directly (e.g. USDAUD=X)
+ *  2. If that fails, try the inverse `{to}{from}=X` and invert the rate
+ *  3. Fetch a ±5-day window so weekends / market-close days are covered
+ *  4. Return the closest rate to `date`; falls back to 1 if nothing found
+ */
+export async function getForexRate(
+  fromCurrency: string,
+  toCurrency: string,
+  date: string, // YYYY-MM-DD
+): Promise<number> {
+  if (fromCurrency === toCurrency) return 1;
+
+  // Fetch a ±5-day window to cover weekends and market-close days
+  const centre = new Date(date);
+  const fromDate = format(new Date(centre.getTime() - 5 * 86_400_000), 'yyyy-MM-dd');
+  const toDate   = format(new Date(centre.getTime() + 5 * 86_400_000), 'yyyy-MM-dd');
+
+  const fetchPair = async (symbol: string, invert: boolean): Promise<{ date: string; close: number }[]> => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result: any = await yahooFinance.chart(symbol, {
+      period1: fromDate,
+      period2: toDate,
+      interval: '1d',
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return ((result.quotes ?? []) as any[])
+      .filter((q) => q.close != null && q.close > 0)
+      .map((q) => ({
+        date:  format(new Date(q.date as string), 'yyyy-MM-dd'),
+        close: invert ? 1 / (q.close as number) : (q.close as number),
+      }));
+  };
+
+  let prices: { date: string; close: number }[] = [];
+
+  try {
+    prices = await fetchPair(`${fromCurrency}${toCurrency}=X`, false);
+  } catch {
+    try {
+      prices = await fetchPair(`${toCurrency}${fromCurrency}=X`, true);
+    } catch {
+      return 1;
+    }
+  }
+
+  if (!prices.length) {
+    // Try inverse if direct returned empty
+    try {
+      prices = await fetchPair(`${toCurrency}${fromCurrency}=X`, true);
+    } catch { /* ignored */ }
+  }
+
+  if (!prices.length) return 1;
+
+  // Return the price closest to the requested date
+  const target = new Date(date).getTime();
+  return prices.reduce((best, p) => {
+    const bd = Math.abs(new Date(best.date).getTime() - target);
+    const pd = Math.abs(new Date(p.date).getTime()  - target);
+    return pd < bd ? p : best;
+  }).close;
+}
+
 export async function getCurrentPrice(symbol: string): Promise<number | null> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

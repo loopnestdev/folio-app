@@ -3,8 +3,12 @@ import type { Trade, HoldingPosition, CgtLot } from '../../types';
 interface FifoLot {
   trade_date: string;
   quantity: number;
+  /** Unit cost in the trade's native currency (e.g. USD). */
   unit_cost: number;
+  /** Unit cost converted to portfolio base currency (AUD) using exchange_rate at purchase. */
+  unit_cost_aud: number;
   currency: string;
+  exchange_rate: number;
 }
 
 type TradeWithSecurity = Trade & {
@@ -36,12 +40,15 @@ export function calculateHoldings(
     if (!fifo[sym]) fifo[sym] = [];
 
     if (trade.trade_type === 'buy' || trade.trade_type === 'drp') {
+      const rate = trade.exchange_rate ?? 1;
       const unitCost = (trade.price * trade.quantity + trade.brokerage) / trade.quantity;
       fifo[sym].push({
         trade_date: trade.trade_date,
         quantity: trade.quantity,
         unit_cost: unitCost,
+        unit_cost_aud: unitCost * rate,
         currency: trade.currency,
+        exchange_rate: rate,
       });
     } else if (trade.trade_type === 'sell') {
       let remaining = trade.quantity;
@@ -121,18 +128,30 @@ export function calculateCapitalGains(
     if (!fifo[sym]) fifo[sym] = [];
 
     if (trade.trade_type === 'buy' || trade.trade_type === 'drp') {
+      const rate = trade.exchange_rate ?? 1;
       const unitCost = (trade.price * trade.quantity + trade.brokerage) / trade.quantity;
-      fifo[sym].push({ trade_date: trade.trade_date, quantity: trade.quantity, unit_cost: unitCost, currency: trade.currency });
+      fifo[sym].push({
+        trade_date: trade.trade_date,
+        quantity: trade.quantity,
+        unit_cost: unitCost,
+        unit_cost_aud: unitCost * rate,
+        currency: trade.currency,
+        exchange_rate: rate,
+      });
     } else if (trade.trade_type === 'sell') {
       const inFy = trade.trade_date >= fyStartDate && trade.trade_date <= fyEndDate;
-      const netPricePerUnit = (trade.price * trade.quantity - trade.brokerage) / trade.quantity;
+      // Convert sell price to AUD using the sell-side exchange rate
+      const sellRate = trade.exchange_rate ?? 1;
+      const netPricePerUnitAud = ((trade.price * trade.quantity - trade.brokerage) / trade.quantity) * sellRate;
 
       let remaining = trade.quantity;
       while (remaining > 0 && fifo[sym].length > 0) {
         const lot = fifo[sym][0];
         const qtyFromLot = Math.min(lot.quantity, remaining);
-        const costBase = qtyFromLot * lot.unit_cost;
-        const proceeds = qtyFromLot * netPricePerUnit;
+        // cost_base in AUD (uses exchange rate at time of PURCHASE — ATO requirement)
+        const costBase = qtyFromLot * lot.unit_cost_aud;
+        // proceeds in AUD (uses exchange rate at time of SALE — ATO requirement)
+        const proceeds = qtyFromLot * netPricePerUnitAud;
         const grossGain = proceeds - costBase;
 
         if (inFy) {

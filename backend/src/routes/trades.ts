@@ -5,6 +5,7 @@ import { authMiddleware } from '../middleware/auth';
 import { requireApproved } from '../middleware/requireApproved';
 import { supabase } from '../lib/supabase';
 import { parseMoomooStatement } from '../services/pdf-parser/moomoo';
+import { getForexRate } from '../services/market-data/yahoo';
 import type { AuthenticatedRequest, ParsedTrade } from '../types';
 
 const router = Router();
@@ -157,8 +158,8 @@ router.delete('/trade/:id', async (req: AuthenticatedRequest, res: any) => {
   res.status(204).send();
 });
 
-// POST /api/portfolios/:portfolioId/import — parse PDF, return preview
-router.post('/:portfolioId/import', upload.single('file'), async (req: AuthenticatedRequest, res: any) => {
+// Shared handler — parse a Moomoo PDF and return trade preview with forex rates
+async function handleImportParse(req: AuthenticatedRequest, res: any) {
   const portfolioId = req.params.portfolioId as string;
   if (!(await verifyPortfolioOwnership(portfolioId, req.userId!))) {
     res.status(404).json({ error: 'Portfolio not found' });
@@ -177,11 +178,34 @@ router.post('/:portfolioId/import', upload.single('file'), async (req: Authentic
 
   try {
     const parsed = await parseMoomooStatement(req.file.buffer);
-    res.json({ trades: parsed, count: parsed.length });
+
+    // Get the portfolio's base currency so we know when to convert
+    const { data: portfolio } = await supabase
+      .from('portfolios')
+      .select('currency')
+      .eq('id', portfolioId)
+      .single();
+    const baseCurrency = (portfolio?.currency as string | null) ?? 'AUD';
+
+    // Auto-enrich each trade with an exchange_rate when currency differs from base
+    const enriched = await Promise.all(
+      parsed.map(async (t) => {
+        if (t.currency === baseCurrency) return { ...t, exchange_rate: 1 };
+        const rate = await getForexRate(t.currency, baseCurrency, t.trade_date);
+        return { ...t, exchange_rate: rate };
+      }),
+    );
+
+    res.json({ trades: enriched, count: enriched.length });
   } catch (err: any) {
     res.status(422).json({ error: 'Failed to parse PDF: ' + (err.message as string) });
   }
-});
+}
+
+// POST /api/portfolios/:portfolioId/import/parse  ← what the frontend calls
+// POST /api/portfolios/:portfolioId/import        ← legacy alias
+router.post('/:portfolioId/import/parse', upload.single('file'), handleImportParse);
+router.post('/:portfolioId/import',       upload.single('file'), handleImportParse);
 
 // POST /api/portfolios/:portfolioId/import/confirm — save parsed trades
 router.post('/:portfolioId/import/confirm', async (req: AuthenticatedRequest, res: any) => {
@@ -204,7 +228,7 @@ router.post('/:portfolioId/import/confirm', async (req: AuthenticatedRequest, re
       amount: z.number(),
       brokerage: z.number(),
       gst: z.number(),
-      exchange_rate: z.number().optional(),
+      exchange_rate: z.number().default(1),
       notes: z.string().optional(),
     })),
   });

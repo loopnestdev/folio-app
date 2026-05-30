@@ -13,40 +13,53 @@ import { Modal, ModalActions } from '../components/ui/Modal';
 import { TradeForm, type TradeFormValues } from '../components/forms/TradeForm';
 import { PageLoader } from '../components/ui/LoadingSpinner';
 import { useToast } from '../components/ui/Toast';
-import { formatCurrency, formatDate, getValueColor } from '../lib/utils';
-import type { Trade, TradeDirection, TradeType } from '../types';
+import { formatCurrency, formatDate } from '../lib/utils';
+import type { Trade, BackendTradeType } from '../types';
+
+const TRADE_TYPE_BADGE: Record<BackendTradeType, 'success' | 'info' | 'warning' | 'neutral'> = {
+  buy:      'info',
+  sell:     'warning',
+  dividend: 'success',
+  interest: 'success',
+  drp:      'info',
+  split:    'neutral',
+};
 
 export function TradesPage() {
   const { id } = useParams<{ id: string }>();
   const { activePortfolio } = usePortfolioContext();
-  const portfolioId = id || activePortfolio?.id || '';
-  const currency = activePortfolio?.currency || 'USD';
+  const portfolioId     = id || activePortfolio?.id || '';
+  const portfolioCurrency = activePortfolio?.currency || 'AUD';
 
   const [addOpen, setAddOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Trade | null>(null);
   const [filterSymbol, setFilterSymbol] = useState('');
-  const [filterDirection, setFilterDirection] = useState<TradeDirection | ''>('');
-  const [filterType, setFilterType] = useState<TradeType | ''>('');
+  const [filterType, setFilterType] = useState<BackendTradeType | ''>('');
 
   const { data: trades = [], isLoading } = useTrades(portfolioId, {
-    symbol: filterSymbol || undefined,
-    direction: filterDirection || undefined,
-    trade_type: filterType || undefined,
+    symbol:     filterSymbol || undefined,
+    trade_type: filterType   || undefined,
   });
 
-  const addTrade = useAddTrade(portfolioId);
+  const addTrade   = useAddTrade(portfolioId);
   const deleteTrade = useDeleteTrade(portfolioId);
   const toast = useToast();
 
   const handleAdd = async (values: TradeFormValues) => {
     try {
       await addTrade.mutateAsync({
-        ...values,
-        amount: values.quantity * values.price + (values.fees || 0),
-        settlement_date: null,
-        notes: values.notes || null,
-        security_name: values.security_name || null,
-        exchange: values.exchange || null,
+        trade_date:    values.trade_date,
+        trade_type:    values.trade_type,
+        symbol:        values.symbol,
+        security_name: values.security_name,
+        exchange:      values.exchange,
+        quantity:      values.quantity,
+        price:         values.price,
+        brokerage:     values.brokerage ?? 0,
+        gst:           values.gst ?? 0,
+        currency:      values.currency,
+        exchange_rate: values.exchange_rate ?? 1,
+        notes:         values.notes || null,
       });
       toast.success('Trade added');
       setAddOpen(false);
@@ -66,6 +79,9 @@ export function TradesPage() {
     }
   };
 
+  // Whether any trade in the list is in a foreign currency
+  const hasForeignTrades = trades.some((t) => t.currency !== portfolioCurrency);
+
   const columns = [
     {
       key: 'trade_date',
@@ -74,45 +90,36 @@ export function TradesPage() {
       render: (v: unknown) => formatDate(String(v), 'medium'),
     },
     {
-      key: 'symbol',
+      key: 'security',
       label: 'Symbol',
       sortable: true,
-      render: (v: unknown) => <span className="font-semibold text-[var(--c-primary)]">{String(v)}</span>,
+      render: (_v: unknown, row: Trade) => (
+        <span className="font-semibold text-[var(--c-primary)]">
+          {row.security?.symbol ?? '—'}
+        </span>
+      ),
     },
     {
       key: 'security_name',
       label: 'Security',
-      render: (v: unknown) => String(v || '—'),
-    },
-    {
-      key: 'direction',
-      label: 'Direction',
-      render: (v: unknown) => {
-        const isBuy = v === 'BUY';
-        return (
-          <span
-            className="inline-flex items-center gap-1 font-medium"
-            style={{ color: isBuy ? 'var(--c-bull)' : 'var(--c-bear)' }}
-          >
-            {isBuy ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-            {String(v)}
-          </span>
-        );
-      },
+      render: (_v: unknown, row: Trade) => String(row.security?.name ?? '—'),
     },
     {
       key: 'trade_type',
       label: 'Type',
       render: (v: unknown) => {
-        const map: Record<string, 'success' | 'info' | 'warning' | 'neutral'> = {
-          TRADE: 'info',
-          DIVIDEND: 'success',
-          INTEREST: 'success',
-          FEE: 'warning',
-          DEPOSIT: 'success',
-          WITHDRAWAL: 'warning',
-        };
-        return <Badge variant={map[String(v)] || 'neutral'}>{String(v)}</Badge>;
+        const t = v as BackendTradeType;
+        const isBuy = t === 'buy' || t === 'drp';
+        return (
+          <span
+            className="inline-flex items-center gap-1 font-medium"
+            style={{ color: isBuy ? 'var(--c-bull)' : t === 'sell' ? 'var(--c-bear)' : 'var(--c-ink-mute)' }}
+          >
+            {t === 'buy'  && <TrendingUp size={14} />}
+            {t === 'sell' && <TrendingDown size={14} />}
+            <Badge variant={TRADE_TYPE_BADGE[t] ?? 'neutral'}>{t.toUpperCase()}</Badge>
+          </span>
+        );
       },
     },
     {
@@ -127,19 +134,26 @@ export function TradesPage() {
       label: 'Price',
       align: 'right' as const,
       sortable: true,
-      render: (v: unknown) => formatCurrency(Number(v), currency),
+      render: (_v: unknown, row: Trade) =>
+        formatCurrency(row.price, row.currency),
     },
     {
-      key: 'amount',
-      label: 'Total',
+      key: 'brokerage',
+      label: 'Brokerage',
       align: 'right' as const,
-      sortable: true,
-      render: (v: unknown, row: Trade) => (
-        <span style={{ color: getValueColor(row.direction === 'BUY' ? -Number(v) : Number(v)) }}>
-          {formatCurrency(Number(v), currency)}
-        </span>
-      ),
+      render: (_v: unknown, row: Trade) =>
+        row.brokerage > 0 ? formatCurrency(row.brokerage, row.currency) : '—',
     },
+    // FX rate column — only shown when at least one trade is in a foreign currency
+    ...(hasForeignTrades ? [{
+      key: 'exchange_rate',
+      label: 'FX Rate',
+      align: 'right' as const,
+      render: (_v: unknown, row: Trade) =>
+        row.currency !== portfolioCurrency
+          ? `${row.exchange_rate.toFixed(4)} ${portfolioCurrency}/${row.currency}`
+          : '—',
+    }] : []),
     {
       key: 'id',
       label: '',
@@ -162,7 +176,9 @@ export function TradesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Trades</h1>
-          <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">{trades.length} transaction{trades.length !== 1 ? 's' : ''}</p>
+          <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">
+            {trades.length} transaction{trades.length !== 1 ? 's' : ''}
+          </p>
         </div>
         <Button variant="primary" icon={<Plus size={18} />} onClick={() => setAddOpen(true)}>
           Add Trade
@@ -179,26 +195,16 @@ export function TradesPage() {
         />
         <Select
           options={[
-            { label: 'All directions', value: '' },
-            { label: 'Buy', value: 'BUY' },
-            { label: 'Sell', value: 'SELL' },
-          ]}
-          value={filterDirection}
-          onChange={(v) => setFilterDirection(v as TradeDirection | '')}
-          containerClassName="w-44"
-        />
-        <Select
-          options={[
-            { label: 'All types', value: '' },
-            { label: 'Trade', value: 'TRADE' },
-            { label: 'Dividend', value: 'DIVIDEND' },
-            { label: 'Interest', value: 'INTEREST' },
-            { label: 'Fee', value: 'FEE' },
-            { label: 'Deposit', value: 'DEPOSIT' },
-            { label: 'Withdrawal', value: 'WITHDRAWAL' },
+            { label: 'All types',  value: '' },
+            { label: 'Buy',        value: 'buy' },
+            { label: 'Sell',       value: 'sell' },
+            { label: 'Dividend',   value: 'dividend' },
+            { label: 'Interest',   value: 'interest' },
+            { label: 'DRP',        value: 'drp' },
+            { label: 'Split',      value: 'split' },
           ]}
           value={filterType}
-          onChange={(v) => setFilterType(v as TradeType | '')}
+          onChange={(v) => setFilterType(v as BackendTradeType | '')}
           containerClassName="w-44"
         />
       </div>
@@ -217,6 +223,7 @@ export function TradesPage() {
         onClose={() => setAddOpen(false)}
         onSubmit={handleAdd}
         portfolioId={portfolioId}
+        portfolioCurrency={portfolioCurrency}
       />
 
       <Modal
@@ -226,8 +233,8 @@ export function TradesPage() {
         size="sm"
       >
         <p className="text-[15px] text-[var(--c-ink)]">
-          Delete the <strong>{deleteTarget?.direction}</strong> trade for{' '}
-          <strong>{deleteTarget?.symbol}</strong> on{' '}
+          Delete the <strong>{deleteTarget?.trade_type?.toUpperCase()}</strong> trade for{' '}
+          <strong>{deleteTarget?.security?.symbol ?? deleteTarget?.security_id}</strong> on{' '}
           {deleteTarget && formatDate(deleteTarget.trade_date, 'medium')}?
         </p>
         <ModalActions>
