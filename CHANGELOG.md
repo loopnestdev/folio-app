@@ -2,6 +2,21 @@
 
 All notable changes to Folio App are documented here.
 
+## [Unreleased]
+
+### Added
+
+- **Portfolio Groups** — Users can create named groups (e.g. "Moomoo") and bundle multiple portfolios into them (e.g. "Moomoo AUD" + "Moomoo US"). Groups enable consolidated performance and tax reporting across related accounts.
+
+  - **DB migration `006_folio_groups.sql`** — New `folio.portfolio_groups` table; nullable `group_id` FK on `folio.portfolios` (ON DELETE SET NULL so deleting a group un-groups its portfolios without touching trade data); full RLS.
+  - **`GET/POST/PATCH/DELETE /api/groups`** — Full group CRUD; `GET` nests the group's portfolios in the response. (`backend/src/routes/groups.ts`)
+  - **Portfolio PATCH route** — `PATCH /api/portfolios/:id` added (frontend uses PATCH; only PUT existed before). `group_id` added to portfolio schema. (`backend/src/routes/portfolios.ts`)
+  - **`useGroups` hook** — `useGroups`, `useCreateGroup`, `useUpdateGroup`, `useDeleteGroup`, `useAssignPortfolioToGroup`. (`frontend/src/hooks/useGroups.ts`)
+  - **`GroupForm` modal** — Create / edit a group (name + description). (`frontend/src/components/forms/GroupForm.tsx`)
+  - **`PortfolioForm` group selector** — Optional "Group" select field appears when the user has at least one group. (`frontend/src/components/forms/PortfolioForm.tsx`)
+  - **`PortfolioSelector` grouped dropdown** — Topnav portfolio picker now shows section headers per group and an "Ungrouped" section below. Flat view when no groups exist. (`frontend/src/components/layout/PortfolioSelector.tsx`)
+  - **`PortfoliosPage` grouped layout** — Groups render as labelled sections with Edit/Delete buttons; portfolios appear as cards inside. Ungrouped portfolios shown at the bottom. "New Group" button in header. (`frontend/src/pages/PortfoliosPage.tsx`)
+
 ## [v0.3.3] — 2026-05-30
 
 ### Changed
