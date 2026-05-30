@@ -5,11 +5,19 @@ import { authMiddleware } from '../middleware/auth';
 import { requireApproved } from '../middleware/requireApproved';
 import { supabase } from '../lib/supabase';
 import { parseMoomooStatement } from '../services/pdf-parser/moomoo';
+import { parseMoomooAnnualSummary } from '../services/pdf-parser/moomoo-xlsx';
 import { getForexRate } from '../services/market-data/yahoo';
 import type { AuthenticatedRequest, ParsedTrade } from '../types';
 
 const router = Router();
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ok = file.originalname.endsWith('.pdf') || file.originalname.endsWith('.xlsx');
+    cb(null, ok);
+  },
+});
 
 const use = (fn: any) => (req: any, res: any, next: any) => fn(req, res, next);
 router.use(use(authMiddleware), use(requireApproved));
@@ -171,13 +179,20 @@ async function handleImportParse(req: AuthenticatedRequest, res: any) {
     return;
   }
 
-  if (req.file.mimetype !== 'application/pdf' && !req.file.originalname.endsWith('.pdf')) {
-    res.status(400).json({ error: 'Only PDF files are accepted' });
+  const isXlsx = req.file.originalname.endsWith('.xlsx');
+  const isPdf  = req.file.originalname.endsWith('.pdf') ||
+                 req.file.mimetype === 'application/pdf';
+
+  if (!isXlsx && !isPdf) {
+    res.status(400).json({ error: 'Only PDF and XLSX files are accepted' });
     return;
   }
 
   try {
-    const parsed = await parseMoomooStatement(req.file.buffer);
+    // Parse the file using the appropriate parser
+    const parsed: ParsedTrade[] = isXlsx
+      ? parseMoomooAnnualSummary(req.file.buffer)
+      : await parseMoomooStatement(req.file.buffer);
 
     // Get the portfolio's base currency so we know when to convert
     const { data: portfolio } = await supabase
@@ -196,9 +211,15 @@ async function handleImportParse(req: AuthenticatedRequest, res: any) {
       }),
     );
 
-    res.json({ trades: enriched, count: enriched.length });
+    // Return shape matching the ImportPreview frontend type
+    res.json({
+      filename:     req.file.originalname,
+      parsed_count: enriched.length,
+      trades:       enriched,
+      errors:       [],
+    });
   } catch (err: any) {
-    res.status(422).json({ error: 'Failed to parse PDF: ' + (err.message as string) });
+    res.status(422).json({ error: 'Failed to parse file: ' + (err.message as string) });
   }
 }
 
@@ -237,24 +258,46 @@ router.post('/:portfolioId/import/confirm', async (req: AuthenticatedRequest, re
   if (!body.success) { res.status(400).json({ error: body.error.flatten() }); return; }
 
   const inserted = [];
+  const skipped  = [];
+
   for (const t of body.data.trades as ParsedTrade[]) {
     const securityId = await upsertSecurity(t.symbol, t.security_name, t.exchange, t.currency);
+
+    // Deduplicate: skip if an identical trade already exists for this portfolio.
+    // Key: trade_date + security_id + trade_type + quantity + price.
+    // This prevents double-importing the same trade from both a monthly PDF
+    // and an overlapping annual XLSX summary.
+    const { data: existing } = await supabase
+      .from('trades')
+      .select('id')
+      .eq('portfolio_id', portfolioId)
+      .eq('trade_date',   t.trade_date)
+      .eq('trade_type',   t.trade_type)
+      .eq('quantity',     t.quantity)
+      .eq('price',        t.price)
+      .eq('security_id',  securityId ?? '')
+      .maybeSingle();
+
+    if (existing) {
+      skipped.push({ trade_date: t.trade_date, symbol: t.symbol });
+      continue;
+    }
 
     const { data } = await supabase
       .from('trades')
       .insert({
         portfolio_id: portfolioId,
-        security_id: securityId ?? null,
-        trade_date: t.trade_date,
-        trade_type: t.trade_type,
-        quantity: t.quantity,
-        price: t.price,
-        brokerage: t.brokerage,
-        gst: t.gst,
-        currency: t.currency,
+        security_id:  securityId ?? null,
+        trade_date:   t.trade_date,
+        trade_type:   t.trade_type,
+        quantity:     t.quantity,
+        price:        t.price,
+        brokerage:    t.brokerage,
+        gst:          t.gst,
+        currency:     t.currency,
         exchange_rate: t.exchange_rate ?? 1,
-        notes: t.notes ?? null,
-        source: 'pdf_import',
+        notes:        t.notes ?? null,
+        source:       'pdf_import',
       })
       .select()
       .single();
@@ -262,7 +305,7 @@ router.post('/:portfolioId/import/confirm', async (req: AuthenticatedRequest, re
     if (data) inserted.push(data);
   }
 
-  res.status(201).json({ inserted: inserted.length, trades: inserted });
+  res.status(201).json({ inserted: inserted.length, skipped: skipped.length, trades: inserted });
 });
 
 export default router;

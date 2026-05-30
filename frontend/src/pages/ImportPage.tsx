@@ -29,8 +29,10 @@ export function ImportPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = useCallback(async (selectedFile: File) => {
-    if (!selectedFile.name.endsWith('.pdf')) {
-      toast.error('Invalid file type', 'Please upload a PDF file.');
+    const isPdf  = selectedFile.name.endsWith('.pdf');
+    const isXlsx = selectedFile.name.endsWith('.xlsx');
+    if (!isPdf && !isXlsx) {
+      toast.error('Invalid file type', 'Please upload a Moomoo PDF or XLSX file.');
       return;
     }
     setFile(selectedFile);
@@ -149,7 +151,9 @@ export function ImportPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Import Trades</h1>
-        <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">Upload a Moomoo PDF export to import your trades</p>
+        <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">
+          Upload a Moomoo monthly PDF statement or annual XLSX summary to import your trades
+        </p>
       </div>
 
       {/* Success state */}
@@ -184,7 +188,7 @@ export function ImportPage() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".pdf"
+                accept=".pdf,.xlsx"
                 className="hidden"
                 onChange={(e) => {
                   const f = e.target.files?.[0];
@@ -198,16 +202,19 @@ export function ImportPage() {
                     <Upload size={24} className="text-[var(--c-primary)]" />
                   </div>
                   <h3 className="text-[19px] font-semibold text-[var(--c-ink)] mb-2">
-                    Drop your PDF here
+                    Drop your file here
                   </h3>
-                  <p className="text-[15px] text-[var(--c-ink-mute)] mb-5">
+                  <p className="text-[15px] text-[var(--c-ink-mute)] mb-1">
                     or click below to browse your files
+                  </p>
+                  <p className="text-[13px] text-[var(--c-ink-mute)] mb-5">
+                    Supports Moomoo <strong>monthly PDF</strong> statements and <strong>annual XLSX</strong> summaries
                   </p>
                   <Button
                     variant="primary"
                     onClick={() => fileInputRef.current?.click()}
                   >
-                    Choose PDF File
+                    Choose PDF or XLSX
                   </Button>
                 </>
               )}
@@ -277,17 +284,25 @@ export function ImportPage() {
                 />
               </div>
 
-              <div className="mt-6 flex items-center justify-end gap-3">
-                <Button variant="ghost" onClick={handleReset}>Cancel</Button>
-                <Button
-                  variant="primary"
-                  onClick={handleConfirm}
-                  loading={confirming}
-                  icon={<CheckCircle size={18} />}
-                >
-                  Confirm Import ({preview.parsed_count} trades)
-                </Button>
-              </div>
+              {preview.parsed_count === 0 ? (
+                <div className="mt-4 bg-[var(--c-canvas-soft)] border border-[var(--c-border)] rounded-xl p-4 text-[14px] text-[var(--c-ink-mute)]">
+                  No importable trades were found in this file. Cash deposits and withdrawals
+                  are not tracked as trades. If this is a new account or a month with no
+                  trading activity, this is expected.
+                </div>
+              ) : (
+                <div className="mt-6 flex items-center justify-end gap-3">
+                  <Button variant="ghost" onClick={handleReset}>Cancel</Button>
+                  <Button
+                    variant="primary"
+                    onClick={handleConfirm}
+                    loading={confirming}
+                    icon={<CheckCircle size={18} />}
+                  >
+                    Confirm Import ({preview.parsed_count} trades)
+                  </Button>
+                </div>
+              )}
             </Card>
           )}
         </>
