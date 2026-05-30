@@ -12,9 +12,10 @@ const use = (fn: any) => (req: any, res: any, next: any) => fn(req, res, next);
 router.use(use(authMiddleware), use(requireApproved));
 
 const portfolioSchema = z.object({
-  name: z.string().min(1).max(100),
+  name:        z.string().min(1).max(100),
   description: z.string().optional().nullable(),
-  currency: z.string().length(3).default('AUD'),
+  currency:    z.string().length(3).default('AUD'),
+  group_id:    z.string().uuid().optional().nullable(),
 });
 
 router.get('/', async (req: AuthenticatedRequest, res: any) => {
@@ -54,7 +55,8 @@ router.get('/:id', async (req: AuthenticatedRequest, res: any) => {
   res.json(data);
 });
 
-router.put('/:id', async (req: AuthenticatedRequest, res: any) => {
+// PUT and PATCH are both supported (frontend uses PATCH)
+const handleUpdate = async (req: AuthenticatedRequest, res: any) => {
   const body = portfolioSchema.partial().safeParse(req.body);
   if (!body.success) { res.status(400).json({ error: body.error.flatten() }); return; }
 
@@ -68,7 +70,10 @@ router.put('/:id', async (req: AuthenticatedRequest, res: any) => {
 
   if (error || !data) { res.status(404).json({ error: 'Portfolio not found' }); return; }
   res.json(data);
-});
+};
+
+router.put('/:id', handleUpdate);
+router.patch('/:id', handleUpdate);
 
 router.delete('/:id', async (req: AuthenticatedRequest, res: any) => {
   const { error } = await supabase

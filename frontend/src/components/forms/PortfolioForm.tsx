@@ -5,25 +5,26 @@ import { Input, Textarea } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { Button } from '../ui/Button';
 import { Modal, ModalActions } from '../ui/Modal';
-import type { Portfolio } from '../../types';
+import type { Portfolio, PortfolioGroup } from '../../types';
 
 const portfolioSchema = z.object({
-  name: z.string().min(1, 'Name is required').max(100, 'Name is too long'),
+  name:        z.string().min(1, 'Name is required').max(100, 'Name is too long'),
   description: z.string().max(500, 'Description is too long').optional(),
-  currency: z.string().min(1, 'Currency is required'),
+  currency:    z.string().min(1, 'Currency is required'),
+  group_id:    z.string().nullable().optional(),
 });
 
 type PortfolioFormValues = z.infer<typeof portfolioSchema>;
 
 const CURRENCIES = [
-  { label: 'USD – US Dollar', value: 'USD' },
   { label: 'AUD – Australian Dollar', value: 'AUD' },
-  { label: 'EUR – Euro', value: 'EUR' },
-  { label: 'GBP – British Pound', value: 'GBP' },
-  { label: 'CAD – Canadian Dollar', value: 'CAD' },
-  { label: 'JPY – Japanese Yen', value: 'JPY' },
-  { label: 'SGD – Singapore Dollar', value: 'SGD' },
-  { label: 'HKD – Hong Kong Dollar', value: 'HKD' },
+  { label: 'USD – US Dollar',         value: 'USD' },
+  { label: 'EUR – Euro',              value: 'EUR' },
+  { label: 'GBP – British Pound',     value: 'GBP' },
+  { label: 'CAD – Canadian Dollar',   value: 'CAD' },
+  { label: 'JPY – Japanese Yen',      value: 'JPY' },
+  { label: 'SGD – Singapore Dollar',  value: 'SGD' },
+  { label: 'HKD – Hong Kong Dollar',  value: 'HKD' },
 ];
 
 interface PortfolioFormProps {
@@ -32,9 +33,18 @@ interface PortfolioFormProps {
   onSubmit: (values: PortfolioFormValues) => Promise<void>;
   defaultValues?: Partial<Portfolio>;
   mode?: 'create' | 'edit';
+  /** Available groups for the optional group selector. */
+  groups?: PortfolioGroup[];
 }
 
-export function PortfolioForm({ open, onClose, onSubmit, defaultValues, mode = 'create' }: PortfolioFormProps) {
+export function PortfolioForm({
+  open,
+  onClose,
+  onSubmit,
+  defaultValues,
+  mode = 'create',
+  groups = [],
+}: PortfolioFormProps) {
   const {
     register,
     handleSubmit,
@@ -45,23 +55,28 @@ export function PortfolioForm({ open, onClose, onSubmit, defaultValues, mode = '
   } = useForm<PortfolioFormValues>({
     resolver: zodResolver(portfolioSchema),
     defaultValues: {
-      name: defaultValues?.name || '',
+      name:        defaultValues?.name        || '',
       description: defaultValues?.description || '',
-      currency: defaultValues?.currency || 'USD',
+      currency:    defaultValues?.currency    || 'AUD',
+      group_id:    defaultValues?.group_id    ?? null,
     },
   });
 
   const currency = watch('currency');
+  const groupId  = watch('group_id');
 
-  const handleClose = () => {
-    reset();
-    onClose();
-  };
+  const handleClose = () => { reset(); onClose(); };
 
   const handleFormSubmit = async (values: PortfolioFormValues) => {
-    await onSubmit(values);
+    // Map empty string back to null for group_id
+    await onSubmit({ ...values, group_id: values.group_id || null });
     handleClose();
   };
+
+  const groupOptions = [
+    { label: 'No group', value: '' },
+    ...groups.map((g) => ({ label: g.name, value: g.id })),
+  ];
 
   return (
     <Modal
@@ -73,7 +88,7 @@ export function PortfolioForm({ open, onClose, onSubmit, defaultValues, mode = '
       <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
         <Input
           label="Portfolio Name"
-          placeholder="e.g., Personal Investments"
+          placeholder="e.g., Moomoo AUD"
           error={errors.name?.message}
           required
           {...register('name')}
@@ -87,6 +102,15 @@ export function PortfolioForm({ open, onClose, onSubmit, defaultValues, mode = '
           error={errors.currency?.message}
           required
         />
+
+        {groups.length > 0 && (
+          <Select
+            label="Group (optional)"
+            options={groupOptions}
+            value={groupId || ''}
+            onChange={(v) => setValue('group_id', v || null)}
+          />
+        )}
 
         <Textarea
           label="Description"

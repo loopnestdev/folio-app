@@ -60,7 +60,7 @@ export function DashboardPage() {
           onClose={() => setCreateOpen(false)}
           onSubmit={async (values) => {
             try {
-              await createPortfolio.mutateAsync({ ...values, description: values.description ?? null });
+              await createPortfolio.mutateAsync({ ...values, description: values.description ?? null, group_id: values.group_id ?? null });
               toast.success('Portfolio created', `"${values.name}" is ready.`);
             } catch {
               toast.error('Failed to create portfolio');

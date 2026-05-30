@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronDown, Plus, Briefcase } from 'lucide-react';
+import { ChevronDown, Plus, Briefcase, Layers } from 'lucide-react';
 import { usePortfolioContext } from '../../contexts/PortfolioContext';
+import { useGroups } from '../../hooks/useGroups';
 import { api } from '../../lib/api';
 import type { Portfolio } from '../../types';
 import { cn } from '../../lib/utils';
@@ -21,12 +22,13 @@ export function PortfolioSelector() {
     },
   });
 
+  const { data: groups = [] } = useGroups();
+
   useEffect(() => {
     setPortfolios(portfolios);
     if (portfolios.length > 0 && !activePortfolio) {
       setActivePortfolio(portfolios[0]);
     }
-    // Only run when portfolios changes, not on every activePortfolio change
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [portfolios]);
 
@@ -40,6 +42,19 @@ export function PortfolioSelector() {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  const selectPortfolio = (p: Portfolio) => {
+    setActivePortfolio(p);
+    setOpen(false);
+  };
+
+  // Compute grouped and ungrouped lists
+  const groupedPortfolioIds = new Set(
+    groups.flatMap((g) => (g.portfolios ?? []).map((p) => p.id)),
+  );
+  const ungrouped = portfolios.filter((p) => !p.group_id || !groupedPortfolioIds.has(p.id));
+
+  const hasGroups = groups.length > 0;
 
   return (
     <div ref={ref} className="relative">
@@ -58,44 +73,113 @@ export function PortfolioSelector() {
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-2 w-64 bg-[var(--c-canvas)] border border-[var(--c-border)] rounded-[14px] shadow-lg overflow-hidden z-50">
+        <div className="absolute top-full left-0 mt-2 w-72 bg-[var(--c-canvas)] border border-[var(--c-border)] rounded-[14px] shadow-lg overflow-hidden z-50 max-h-[70vh] overflow-y-auto">
           {portfolios.length === 0 ? (
             <div className="px-4 py-6 text-center text-[13px] text-[var(--c-ink-mute)]">
               No portfolios yet
             </div>
+          ) : hasGroups ? (
+            // ── Grouped view ──────────────────────────────
+            <div className="py-1">
+              {groups.map((group) => {
+                const gPortfolios = portfolios.filter((p) => p.group_id === group.id);
+                if (gPortfolios.length === 0) return null;
+                return (
+                  <div key={group.id}>
+                    {/* Group label */}
+                    <div className="flex items-center gap-1.5 px-4 pt-3 pb-1">
+                      <Layers size={12} className="text-[var(--c-ink-mute)]" />
+                      <span className="text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-widest">
+                        {group.name}
+                      </span>
+                    </div>
+                    {gPortfolios.map((p) => (
+                      <PortfolioOption
+                        key={p.id}
+                        portfolio={p}
+                        active={activePortfolio?.id === p.id}
+                        onSelect={selectPortfolio}
+                        indented
+                      />
+                    ))}
+                  </div>
+                );
+              })}
+
+              {/* Ungrouped portfolios */}
+              {ungrouped.length > 0 && (
+                <div>
+                  {groups.length > 0 && (
+                    <div className="flex items-center gap-1.5 px-4 pt-3 pb-1">
+                      <span className="text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-widest">
+                        Ungrouped
+                      </span>
+                    </div>
+                  )}
+                  {ungrouped.map((p) => (
+                    <PortfolioOption
+                      key={p.id}
+                      portfolio={p}
+                      active={activePortfolio?.id === p.id}
+                      onSelect={selectPortfolio}
+                      indented={groups.length > 0}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           ) : (
+            // ── Flat view (no groups) ─────────────────────
             <div className="py-1">
               {portfolios.map((p) => (
-                <button
+                <PortfolioOption
                   key={p.id}
-                  onClick={() => { setActivePortfolio(p); setOpen(false); }}
-                  className={cn(
-                    'w-full text-left px-4 py-3 text-[15px] hover:bg-[var(--c-canvas-soft)] transition-colors',
-                    activePortfolio?.id === p.id && 'text-[var(--c-primary)] font-medium',
-                  )}
-                >
-                  <div className="font-medium">{p.name}</div>
-                  {p.description && (
-                    <div className="text-[13px] text-[var(--c-ink-mute)] mt-0.5 truncate">{p.description}</div>
-                  )}
-                </button>
+                  portfolio={p}
+                  active={activePortfolio?.id === p.id}
+                  onSelect={selectPortfolio}
+                />
               ))}
             </div>
           )}
+
           <div className="border-t border-[var(--c-border)]">
             <button
-              onClick={() => {
-                setOpen(false);
-                navigate('/portfolios');
-              }}
+              onClick={() => { setOpen(false); navigate('/portfolios'); }}
               className="w-full flex items-center gap-2 px-4 py-3 text-[15px] text-[var(--c-primary)] hover:bg-[var(--c-canvas-soft)] font-medium"
             >
               <Plus size={16} />
-              Manage Portfolios
+              Manage Portfolios &amp; Groups
             </button>
           </div>
         </div>
       )}
     </div>
+  );
+}
+
+// ── Sub-component ────────────────────────────────────────────
+function PortfolioOption({
+  portfolio,
+  active,
+  onSelect,
+  indented = false,
+}: {
+  portfolio: Portfolio;
+  active: boolean;
+  onSelect: (p: Portfolio) => void;
+  indented?: boolean;
+}) {
+  return (
+    <button
+      onClick={() => onSelect(portfolio)}
+      className={cn(
+        'w-full text-left py-2.5 text-[15px] hover:bg-[var(--c-canvas-soft)] transition-colors',
+        indented ? 'pl-8 pr-4' : 'px-4',
+        active && 'text-[var(--c-primary)] font-medium',
+      )}
+    >
+      <div className="font-medium truncate">{portfolio.name}</div>
+      <div className="text-[12px] text-[var(--c-ink-mute)] mt-0.5">{portfolio.currency}</div>
+    </button>
   );
 }

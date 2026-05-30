@@ -15,6 +15,18 @@ export interface UserProfile {
   updated_at: string;
 }
 
+// Portfolio Group Types
+export interface PortfolioGroup {
+  id: string;
+  user_id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+  /** Portfolios belonging to this group — populated by GET /api/groups */
+  portfolios?: Portfolio[];
+}
+
 // Portfolio Types
 export interface Portfolio {
   id: string;
@@ -22,6 +34,8 @@ export interface Portfolio {
   name: string;
   description: string | null;
   currency: string;
+  /** ID of the PortfolioGroup this portfolio belongs to, or null if ungrouped. */
+  group_id: string | null;
   created_at: string;
   updated_at: string;
 }
