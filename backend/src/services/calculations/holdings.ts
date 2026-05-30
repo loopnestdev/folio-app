@@ -99,7 +99,7 @@ export function calculateHoldings(
     });
   }
 
-  return positions.sort((a, b) => b.market_value - a.market_value);
+  return positions.sort((a, b) => (b.market_value ?? 0) - (a.market_value ?? 0));
 }
 
 export function calculateCapitalGains(

@@ -199,13 +199,13 @@ router.get('/:id/summary', async (req: AuthenticatedRequest, res: any) => {
         const holdings = calculateHoldings(trades as any, currentPrices);
 
         const fx = fxRates[portfolio.currency] ?? 1;
-        const totalValue = holdings.reduce((s, h) => s + h.market_value, 0);
+        const totalValue = holdings.reduce((s, h) => s + (h.market_value ?? 0), 0);
         const totalCost  = holdings.reduce((s, h) => s + h.cost_base, 0);
         const totalGain  = totalValue - totalCost;
 
         const tradesBeforeYTD = trades.filter(t => t.trade_date < ytdStartDate);
         const holdingsYTD = calculateHoldings(tradesBeforeYTD as any, currentPrices);
-        const ytdStartValue = holdingsYTD.reduce((s, h) => s + h.market_value, 0);
+        const ytdStartValue = holdingsYTD.reduce((s, h) => s + (h.market_value ?? 0), 0);
         const ytdReturn = totalValue - ytdStartValue;
 
         return {
@@ -301,7 +301,7 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
           const value = calculateHoldings(
             trades.filter(t => t.trade_date <= date) as any,
             priceMap[date],
-          ).reduce((s, h) => s + h.market_value, 0);
+          ).reduce((s, h) => s + (h.market_value ?? 0), 0);
           dateValues[date] = value * fx; // converted to base_currency
         }
         return dateValues;

@@ -95,7 +95,7 @@ router.get('/:id/summary', async (req: AuthenticatedRequest, res: any) => {
     const currentPrices = await getCurrentPrices(Array.from(securitiesMap.entries()).map(([symbol, exchange]) => ({ symbol, exchange })));
     const holdings = calculateHoldings(trades as any, currentPrices);
 
-    const totalValue = holdings.reduce((s, h) => s + h.market_value, 0);
+    const totalValue = holdings.reduce((s, h) => s + (h.market_value ?? 0), 0);
     const totalCost  = holdings.reduce((s, h) => s + h.cost_base, 0);
     const totalGain  = totalValue - totalCost;
 
@@ -103,7 +103,7 @@ router.get('/:id/summary', async (req: AuthenticatedRequest, res: any) => {
     const ytdStartDate = format(startOfYear(new Date()), 'yyyy-MM-dd');
     const tradesBeforeYTD = trades.filter(t => t.trade_date < ytdStartDate);
     const holdingsAtYTDStart = calculateHoldings(tradesBeforeYTD as any, currentPrices);
-    const valueAtYTDStart = holdingsAtYTDStart.reduce((s, h) => s + h.market_value, 0);
+    const valueAtYTDStart = holdingsAtYTDStart.reduce((s, h) => s + (h.market_value ?? 0), 0);
     const ytdReturn = totalValue - valueAtYTDStart;
 
     res.json({
@@ -164,7 +164,7 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
         trades.filter(t => t.trade_date <= date) as any,
         dayPrices
       );
-      const value = dayHoldings.reduce((s, h) => s + h.market_value, 0);
+      const value = dayHoldings.reduce((s, h) => s + (h.market_value ?? 0), 0);
       return { date, value };
     });
 
@@ -229,7 +229,7 @@ router.get('/:id/statistics', async (req: AuthenticatedRequest, res: any) => {
 
     const portfolioValues = Object.keys(priceMap).sort().map((date) => ({
       date,
-      value: calculateHoldings(trades.filter(t => t.trade_date <= date) as any, priceMap[date]).reduce((s, h) => s + h.market_value, 0),
+      value: calculateHoldings(trades.filter(t => t.trade_date <= date) as any, priceMap[date]).reduce((s, h) => s + (h.market_value ?? 0), 0),
     }));
 
     const portfolioReturns = computeMonthlyReturns(portfolioValues);
@@ -362,12 +362,12 @@ router.get('/:id/diversity', async (req: AuthenticatedRequest, res: any) => {
     const byCurrency: Record<string, number> = {};
 
     for (const h of holdings) {
-      if (h.market_value <= 0) continue;
-      byExchange[h.exchange || 'Unknown'] = (byExchange[h.exchange || 'Unknown'] ?? 0) + h.market_value;
-      byCurrency[h.currency] = (byCurrency[h.currency] ?? 0) + h.market_value;
+      if ((h.market_value ?? 0) <= 0) continue;
+      byExchange[h.exchange || 'Unknown'] = (byExchange[h.exchange || 'Unknown'] ?? 0) + (h.market_value ?? 0);
+      byCurrency[h.currency] = (byCurrency[h.currency] ?? 0) + (h.market_value ?? 0);
     }
 
-    const total = holdings.reduce((s, h) => s + h.market_value, 0);
+    const total = holdings.reduce((s, h) => s + (h.market_value ?? 0), 0);
     const toSlices = (obj: Record<string, number>) =>
       Object.entries(obj).map(([name, value]) => ({ name, value, pct: total > 0 ? (value / total) * 100 : 0 })).sort((a, b) => b.value - a.value);
 
@@ -377,8 +377,8 @@ router.get('/:id/diversity', async (req: AuthenticatedRequest, res: any) => {
       by_holding: holdings.map(h => ({
         symbol: h.symbol,
         name: h.security_name,
-        value: h.market_value,
-        pct: total > 0 ? (h.market_value / total) * 100 : 0,
+        value: h.market_value ?? 0,
+        pct: total > 0 ? ((h.market_value ?? 0) / total) * 100 : 0,
       })),
       total,
     });
