@@ -34,12 +34,19 @@ function parseDate(raw: unknown): string {
   return String(raw);
 }
 
-/** Map Moomoo "Market" column → exchange code used in the rest of the app. */
+/**
+ * Map Moomoo "Market" column → exchange code used in the rest of the app.
+ * Must match what the PDF parser produces so (symbol, exchange) upserts
+ * don't create duplicate security records.
+ *  AU  → ASX   (matches PDF "ASX AUD" line)
+ *  US  → US    (matches PDF "US USD" line — NOT "NYSE", which would diverge)
+ *  HK  → HK    (matches PDF "HK HKD" line)
+ */
 function mapMarket(market: string): string {
   switch (market.toUpperCase()) {
     case 'AU':  return 'ASX';
-    case 'US':  return 'NYSE';
-    case 'HK':  return 'HKEX';
+    case 'US':  return 'US';
+    case 'HK':  return 'HK';
     default:    return market.toUpperCase();
   }
 }

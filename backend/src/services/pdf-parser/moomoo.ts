@@ -28,6 +28,12 @@ export function extractTrades(text: string): ParsedTrade[] {
     trades.push(...parseCashSection(cashSection));
   }
 
+  // Gift shares, DRP transfers, etc. live under "Movement - Securities"
+  const movementSection = extractSection(text, 'Movement - Securities', 'Changes in Cash');
+  if (movementSection) {
+    trades.push(...parseMovementSection(movementSection));
+  }
+
   return trades;
 }
 
@@ -148,6 +154,104 @@ export function parseTradesSection(section: string): ParsedTrade[] {
   }
 
   return trades;
+}
+
+/**
+ * Parse the "Movement - Securities" section for gift shares and other
+ * non-trade position changes (DRP transfers, broker promotions, etc.).
+ *
+ * Moomoo uses "Type: Other, Comment: Gift Share" for promotional free shares.
+ * These never appear in "Trades - Securities" so the buy parser misses them.
+ * We import them as trade_type='buy' at price $0 so the portfolio shows the
+ * correct position. Multiple +1 entries for the same symbol on the same date
+ * are aggregated into a single trade row.
+ *
+ * Other "Other" types (stock splits via movement, etc.) are ignored here —
+ * only "Gift Share" in the comment is captured for now.
+ */
+export function parseMovementSection(section: string): ParsedTrade[] {
+  // Normalize: tabs → spaces, collapse runs, split by line
+  const lines = section
+    .split('\n')
+    .map((l) => l.replace(/\t/g, ' ').replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+
+  // Aggregate gift shares by date+symbol to avoid one-row-per-share clutter
+  const giftMap = new Map<string, {
+    date: string; symbol: string; name: string;
+    currency: string; exchange: string; qty: number;
+  }>();
+
+  let currentDate = '';
+  let prevTimeLine = '';   // the "HH:MM:SS Other EXCHANGE SecurityName" line
+
+  for (const line of lines) {
+    // Pure date line: YYYY/MM/DD
+    if (/^\d{4}\/\d{2}\/\d{2}$/.test(line)) {
+      currentDate = line;
+      continue;
+    }
+
+    // Skip section / header lines
+    if (/^(Movement|Date\/Time|Changes in)/.test(line)) continue;
+
+    // Time + context line: HH:MM:SS ... Other ... exchange ... security_name
+    if (/^\d{2}:\d{2}:\d{2}/.test(line) && line.includes('Other')) {
+      prevTimeLine = line;
+      continue;
+    }
+
+    // Gift Share line — must contain "+N" and the literal text "Gift Share"
+    if (line.includes('Gift Share') && currentDate) {
+      const qtyMatch = line.match(/\+(\d+)/);
+      if (!qtyMatch) continue;
+      const qty = parseInt(qtyMatch[1], 10);
+
+      const currencyMatch = line.match(/\b(USD|AUD|HKD)\b/);
+      const currency = currencyMatch ? currencyMatch[1] : 'USD';
+
+      // Symbol: leading run of uppercase letters (ticker)
+      const symMatch = line.match(/^([A-Z]{1,6})\b/);
+      if (!symMatch) continue;
+      const symbol = symMatch[1];
+
+      // Extract exchange + security name from the preceding time line
+      let securityName = symbol;
+      let exchange = 'US';
+      if (prevTimeLine) {
+        // Match the exchange code, then grab everything after it as the name
+        const ctx = prevTimeLine.match(/\b(US|ASX|HK)\b\s+(.+)/i);
+        if (ctx) {
+          exchange = ctx[1].toUpperCase();
+          securityName = ctx[2].trim();
+        }
+      }
+
+      const key = `${currentDate}|${symbol}`;
+      const existing = giftMap.get(key);
+      if (existing) {
+        existing.qty += qty;
+      } else {
+        giftMap.set(key, { date: currentDate, symbol, name: securityName, currency, exchange, qty });
+      }
+    }
+  }
+
+  return Array.from(giftMap.values()).map((g) => ({
+    trade_date:    parseDate(g.date),
+    trade_type:    'buy' as TradeType,
+    symbol:        g.symbol,
+    security_name: g.name,
+    exchange:      g.exchange,
+    currency:      g.currency,
+    quantity:      g.qty,
+    price:         0,
+    amount:        0,
+    brokerage:     0,
+    gst:           0,
+    exchange_rate: 1,
+    notes:         'Gift Share from Moomoo',
+  }));
 }
 
 export function parseCashSection(section: string): ParsedTrade[] {
