@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Plus, Trash2, TrendingUp, TrendingDown } from 'lucide-react';
-import { useTrades, useAddTrade, useDeleteTrade } from '../hooks/usePortfolio';
+import { Plus, Trash2, Pencil, TrendingUp, TrendingDown } from 'lucide-react';
+import { useTrades, useAddTrade, useUpdateTrade, useDeleteTrade } from '../hooks/usePortfolio';
 import { usePortfolioContext } from '../contexts/PortfolioContext';
 import { Card } from '../components/ui/Card';
 import { Table } from '../components/ui/Table';
@@ -32,6 +32,7 @@ export function TradesPage() {
   const portfolioCurrency = activePortfolio?.currency || 'AUD';
 
   const [addOpen, setAddOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<Trade | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Trade | null>(null);
   const [filterSymbol, setFilterSymbol] = useState('');
   const [filterType, setFilterType] = useState<BackendTradeType | ''>('');
@@ -41,7 +42,8 @@ export function TradesPage() {
     trade_type: filterType   || undefined,
   });
 
-  const addTrade   = useAddTrade(portfolioId);
+  const addTrade    = useAddTrade(portfolioId);
+  const updateTrade = useUpdateTrade(portfolioId);
   const deleteTrade = useDeleteTrade(portfolioId);
   const toast = useToast();
 
@@ -65,6 +67,17 @@ export function TradesPage() {
       setAddOpen(false);
     } catch {
       toast.error('Failed to add trade');
+    }
+  };
+
+  const handleEdit = async (values: TradeFormValues) => {
+    if (!editTarget) return;
+    try {
+      await updateTrade.mutateAsync({ tradeId: editTarget.id, payload: values });
+      toast.success('Trade updated');
+      setEditTarget(null);
+    } catch {
+      toast.error('Failed to update trade');
     }
   };
 
@@ -158,13 +171,22 @@ export function TradesPage() {
       key: 'id',
       label: '',
       render: (_v: unknown, row: Trade) => (
-        <button
-          onClick={(e) => { e.stopPropagation(); setDeleteTarget(row); }}
-          className="p-1.5 text-[var(--c-ink-mute)] hover:text-[var(--c-bear)] rounded-lg hover:bg-[var(--c-bear-bg)] transition-colors"
-          aria-label="Delete trade"
-        >
-          <Trash2 size={14} />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={(e) => { e.stopPropagation(); setEditTarget(row); }}
+            className="p-1.5 text-[var(--c-ink-mute)] hover:text-[var(--c-primary)] rounded-lg hover:bg-[var(--c-primary-bg)] transition-colors"
+            aria-label="Edit trade"
+          >
+            <Pencil size={14} />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); setDeleteTarget(row); }}
+            className="p-1.5 text-[var(--c-ink-mute)] hover:text-[var(--c-bear)] rounded-lg hover:bg-[var(--c-bear-bg)] transition-colors"
+            aria-label="Delete trade"
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
       ),
     },
   ];
@@ -224,6 +246,28 @@ export function TradesPage() {
         onSubmit={handleAdd}
         portfolioId={portfolioId}
         portfolioCurrency={portfolioCurrency}
+      />
+
+      <TradeForm
+        open={!!editTarget}
+        onClose={() => setEditTarget(null)}
+        onSubmit={handleEdit}
+        portfolioId={portfolioId}
+        portfolioCurrency={portfolioCurrency}
+        initialValues={editTarget ? {
+          trade_date:    editTarget.trade_date,
+          trade_type:    editTarget.trade_type,
+          symbol:        editTarget.security?.symbol ?? '',
+          security_name: editTarget.security?.name ?? '',
+          exchange:      editTarget.security?.exchange ?? '',
+          quantity:      editTarget.quantity,
+          price:         editTarget.price,
+          brokerage:     editTarget.brokerage ?? 0,
+          gst:           editTarget.gst ?? 0,
+          currency:      editTarget.currency,
+          exchange_rate: editTarget.exchange_rate ?? 1,
+          notes:         editTarget.notes ?? '',
+        } : undefined}
       />
 
       <Modal

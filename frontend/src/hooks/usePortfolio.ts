@@ -147,6 +147,23 @@ export function useAddTrade(portfolioId: string) {
   });
 }
 
+// Update trade mutation
+export function useUpdateTrade(portfolioId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ tradeId, payload }: { tradeId: string; payload: Partial<AddTradePayload> }) => {
+      const { data } = await api.put<Trade>(`/api/portfolios/${portfolioId}/trades/${tradeId}`, payload);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['trades', portfolioId] });
+      queryClient.invalidateQueries({ queryKey: ['holdings', portfolioId] });
+      queryClient.invalidateQueries({ queryKey: ['portfolio-summary', portfolioId] });
+    },
+  });
+}
+
 // Delete trade mutation
 export function useDeleteTrade(portfolioId: string) {
   const queryClient = useQueryClient();

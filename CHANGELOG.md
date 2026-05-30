@@ -4,6 +4,10 @@ All notable changes to Folio App are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Edit trade** — Trades page now has a pencil icon per row that opens the trade form pre-populated with existing values. Supports editing any field including price (useful for correcting broker transfer-in cost bases). (`frontend/src/pages/TradesPage.tsx`, `frontend/src/components/forms/TradeForm.tsx`, `frontend/src/hooks/usePortfolio.ts`)
+
 ### Fixed
 
 - **Holdings Total row shows A$NaN for Unrealized Gain** — `calculateHoldings()` returns `cost_base` but the frontend `Holding` type and `HoldingsPage.tsx` expected `total_cost`. Since `total_cost` was `undefined`, the reduce sum became `NaN`. Backend now maps `cost_base → total_cost` in the API response; frontend also adds `?? 0` null guard as defence. (`backend/src/routes/reports.ts`, `frontend/src/pages/HoldingsPage.tsx`)

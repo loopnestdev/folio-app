@@ -33,6 +33,8 @@ interface TradeFormProps {
   portfolioId: string;
   /** Base currency of the portfolio (e.g. 'AUD'). Used to trigger forex lookup. */
   portfolioCurrency?: string;
+  /** When provided, form opens in edit mode pre-populated with these values. */
+  initialValues?: Partial<TradeFormValues>;
 }
 
 const TRADE_TYPE_OPTIONS = [
@@ -53,7 +55,9 @@ const CURRENCY_OPTIONS = [
   { label: 'SGD – Singapore Dollar',  value: 'SGD' },
 ];
 
-export function TradeForm({ open, onClose, onSubmit, portfolioCurrency = 'AUD' }: TradeFormProps) {
+export function TradeForm({ open, onClose, onSubmit, portfolioCurrency = 'AUD', initialValues }: TradeFormProps) {
+  const isEditMode = !!initialValues;
+
   const {
     register,
     handleSubmit,
@@ -74,6 +78,30 @@ export function TradeForm({ open, onClose, onSubmit, portfolioCurrency = 'AUD' }
       trade_date:    new Date().toISOString().split('T')[0],
     },
   });
+
+  // When opening in edit mode, reset the form with the trade's existing values
+  useEffect(() => {
+    if (open && initialValues) {
+      reset({
+        trade_type:    'buy',
+        currency:      portfolioCurrency,
+        brokerage:     0,
+        gst:           0,
+        exchange_rate: 1,
+        trade_date:    new Date().toISOString().split('T')[0],
+        ...initialValues,
+      });
+    } else if (!open) {
+      reset({
+        trade_type:    'buy',
+        currency:      portfolioCurrency,
+        brokerage:     0,
+        gst:           0,
+        exchange_rate: 1,
+        trade_date:    new Date().toISOString().split('T')[0],
+      });
+    }
+  }, [open, initialValues, reset, portfolioCurrency]);
 
   const currency      = watch('currency');
   const trade_date    = watch('trade_date');
@@ -117,7 +145,7 @@ export function TradeForm({ open, onClose, onSubmit, portfolioCurrency = 'AUD' }
   };
 
   return (
-    <Modal open={open} onClose={handleClose} title="Add Trade" size="lg">
+    <Modal open={open} onClose={handleClose} title={isEditMode ? 'Edit Trade' : 'Add Trade'} size="lg">
       <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
 
         {/* Symbol + Security name */}
@@ -285,7 +313,7 @@ export function TradeForm({ open, onClose, onSubmit, portfolioCurrency = 'AUD' }
             Cancel
           </Button>
           <Button variant="primary" type="submit" loading={isSubmitting}>
-            Add Trade
+            {isEditMode ? 'Save Changes' : 'Add Trade'}
           </Button>
         </ModalActions>
       </form>
