@@ -11,11 +11,30 @@ export const api = axios.create({
   },
 });
 
-// Request interceptor: attach Supabase auth token
-api.interceptors.request.use(async (config) => {
-  const { data } = await supabase.auth.getSession();
-  if (data.session?.access_token) {
-    config.headers.Authorization = `Bearer ${data.session.access_token}`;
+/**
+ * Current access token stored synchronously so the request interceptor
+ * never has to await anything.
+ *
+ * Root cause of the previous "Authenticating..." deadlock:
+ *   supabase.auth.getSession() awaits initializePromise
+ *   → initializePromise awaits _notifyAllSubscribers callbacks
+ *   → onAuthStateChange callback awaits fetchProfile()
+ *   → fetchProfile() awaits api.post()
+ *   → interceptor awaited getSession()  ← circular deadlock
+ *
+ * Fix: AuthContext calls setAuthToken() synchronously whenever the session
+ * changes. The interceptor reads the token without any await.
+ */
+let _authToken: string | null = null;
+
+export function setAuthToken(token: string | null): void {
+  _authToken = token;
+}
+
+// Request interceptor: attach Bearer token synchronously (no await)
+api.interceptors.request.use((config) => {
+  if (_authToken) {
+    config.headers.Authorization = `Bearer ${_authToken}`;
   }
   return config;
 });

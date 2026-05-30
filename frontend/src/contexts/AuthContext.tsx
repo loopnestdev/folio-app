@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
-import { api } from '../lib/api';
+import { api, setAuthToken } from '../lib/api';
 import type { UserProfile } from '../types';
 
 interface AuthContextValue {
@@ -49,6 +49,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       async (_event, s) => {
         setSession(s);
         setUser(s?.user ?? null);
+        // Set the token synchronously BEFORE awaiting fetchProfile().
+        // The Axios interceptor reads _authToken without any await, which
+        // breaks the previous circular deadlock where getSession() → waited
+        // for initializePromise → waited for this callback → waited for
+        // fetchProfile() → waited for getSession() (circular).
+        setAuthToken(s?.access_token ?? null);
         if (s?.user) {
           await fetchProfile();
         } else {
@@ -71,6 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    setAuthToken(null);
     await supabase.auth.signOut();
     setProfile(null);
   };
