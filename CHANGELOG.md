@@ -2,6 +2,41 @@
 
 All notable changes to Folio App are documented here.
 
+## [0.3.0] — 2026-05-30
+
+### Fixed
+
+- **Google OAuth login stuck on "Authenticating..." forever** — Root cause was a circular deadlock introduced by Supabase JS v2's newer `_notifyAllSubscribers` awaiting subscriber callbacks. The Axios request interceptor called `supabase.auth.getSession()`, which awaits `initializePromise`, which awaits the `onAuthStateChange` callback, which awaited `fetchProfile()`, which awaited `api.post()`, which hit the interceptor again — infinite loop. Fixed by replacing the async `getSession()` interceptor with a synchronous token store (`setAuthToken()`/`_authToken`) updated directly in the `onAuthStateChange` callback before any async work. (`frontend/src/lib/api.ts`, `frontend/src/contexts/AuthContext.tsx`)
+
+- **Profile bootstrap never completing (profiles table permanently empty)** — The Railway→Supabase auth API call (`getUser()`) was not slow by itself; it was blocked by the deadlock above, causing 30-second axios timeouts before any DB work could begin. The profiles table was always empty because the INSERT code was never reached. Fixed by resolving the deadlock. (`backend/src/routes/auth.ts`)
+
+- **Profile role/status overwritten on every re-login** — `POST /api/auth/profile` used `upsert()` with all fields including `role` and `status`, resetting the admin profile to `role=standard, status=pending` on each sign-in after the first. Fixed: existing profiles now only update metadata (`email`, `full_name`, `avatar_url`); role and status are preserved. (`backend/src/routes/auth.ts`)
+
+- **Content Security Policy blocking Supabase JS and Cloudflare Bot Management** — Added `frontend/public/_headers` to override stale Cloudflare-cached CSP. Added `'unsafe-eval'` (Supabase JS requirement) and `'unsafe-inline'` (Cloudflare Bot Management inline script injection) to `script-src`. Added `Cross-Origin-Opener-Policy: same-origin-allow-popups` for Google OAuth.
+
+- **Duplicate CSP headers from Cloudflare dashboard rule** — Two simultaneous `Content-Security-Policy` headers caused browsers to enforce the intersection (most restrictive), blocking `'unsafe-eval'` even when the `_headers` file allowed it. Resolved by updating the Cloudflare rule to match `_headers`.
+
+- **`detectSessionInUrl: false` forcing implicit OAuth flow** — Setting caused Supabase to skip PKCE and deliver `#access_token=` in URL hash instead of `?code=` query param. Removed; library now handles PKCE automatically. (`frontend/src/lib/supabase.ts`)
+
+- **Double `fetchProfile()` calls on initial load** — `getSession()` + `onAuthStateChange` both firing on subscribe caused concurrent profile requests. Removed the redundant `getSession()` call; added `fetchingRef` guard. (`frontend/src/contexts/AuthContext.tsx`)
+
+- **401 auto-signout loop on profile endpoint** — Response interceptor was signing out the user on any 401, including transient errors on `POST /api/auth/profile`. Excluded `/auth/profile` from the auto-signout path. (`frontend/src/lib/api.ts`)
+
+### Performance
+
+- **Local JWT verification for HS256 tokens** — Backend now attempts local HMAC-SHA256 verification before falling back to the Supabase `getUser()` network call. Detects ES256 tokens (migrated projects) and routes them to the network fallback automatically. Supabase displays the JWT secret as base64url; key is decoded before use. (`backend/src/lib/verifyJwt.ts`)
+
+- **Eliminated Railway→Supabase latency bottleneck** — Once the frontend deadlock was fixed, profiling confirmed the `getUser()` network call from Railway is fast (<500ms). The 30-second hangs were entirely caused by the client-side deadlock, not network latency.
+
+### Added
+
+- `backend/src/lib/verifyJwt.ts` — In-process HS256/ES256-aware JWT verifier using Node's built-in `crypto` module. No external JWT library needed.
+- `backend/src/app.ts` — `/health/db` endpoint measuring Railway→Supabase PostgREST latency (23ms); `/health/jwt` endpoint confirming `SUPABASE_JWT_SECRET` is loaded.
+- `backend/package.json` — Added `typecheck` script (`tsc --noEmit`).
+- `SUPABASE_JWT_SECRET` Railway environment variable — Required for local JWT verification fast path.
+
+---
+
 ## [0.2.1] — 2026-05-29
 
 ### Fixed

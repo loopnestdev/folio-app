@@ -215,16 +215,30 @@ After this, the user must **sign out and sign back in** to receive a JWT with th
 ## Auth Flow
 
 1. User clicks "Sign in with Google" → `supabase.auth.signInWithOAuth({ provider: 'google', redirectTo: window.location.origin + '/auth/callback' })`
-2. Supabase redirects back to `/auth/callback` with a session
-3. `AuthContext` detects session → calls `POST /api/auth/profile` with JWT
-4. Backend `authMiddleware` verifies JWT, loads/creates profile from `folio.profiles`
-5. If `isFirst` (0 existing profiles), backend sets `role=admin, status=approved` and patches `auth.users.raw_app_meta_data`
-6. `AuthContext` stores profile; `App.tsx` routes to `PendingPage` (status=pending) or main app (status=approved)
+2. Google redirects to Supabase, which exchanges the OAuth code and redirects to `/auth/callback?code=...` (PKCE)
+3. `AuthCallbackPage` subscribes to `onAuthStateChange`; Supabase auto-handles the PKCE exchange (`detectSessionInUrl: true`)
+4. On `SIGNED_IN`, `window.location.href = '/'` — hard redirect so `AuthContext` re-initialises with the persisted session
+5. `AuthContext.onAuthStateChange` fires `INITIAL_SESSION` → **synchronously** calls `setAuthToken(s.access_token)` then `fetchProfile()`
+6. `POST /api/auth/profile` uses JWT from `_authToken` (no `getSession()` call — avoids deadlock)
+7. Backend verifies JWT (local HS256 if secret set, else `getUser()` fallback) → loads/creates profile
+8. On first profile (`isFirst`), backend sets `role=admin, status=approved`, patches `app_metadata`
+9. Profile returned → `ApprovedGuard` passes → dashboard renders
+
+**CRITICAL — do NOT call `supabase.auth.getSession()` inside an `onAuthStateChange` callback (directly or via Axios interceptors)**. In Supabase JS v2, `_notifyAllSubscribers` awaits each subscriber callback; calling `getSession()` inside the callback awaits `initializePromise` which awaits the same callback → infinite deadlock. Use the synchronous `_authToken` store instead.
 
 **Middleware chain for protected routes:**
 ```
 authMiddleware → requireApproved → [requireAdmin] → route handler
 ```
+
+### JWT Verification (backend)
+
+`backend/src/lib/verifyJwt.ts` implements in-process HS256 verification:
+- Returns `null` if `SUPABASE_JWT_SECRET` is unset or token is ES256 (migrated projects) → caller uses `getUser()` network fallback
+- Supabase shows the JWT secret base64url-encoded; the code decodes it before passing to `createHmac`
+- `coredb` has migrated to ES256 signing keys; tokens are always verified via `getUser()` for this project
+
+**Environment variable:** `SUPABASE_JWT_SECRET` (Railway) — from Supabase Dashboard → Settings → JWT Keys → Legacy JWT Secret.
 
 ---
 
@@ -240,7 +254,7 @@ cd frontend && npx tsc --noEmit   # typecheck
 cd frontend && npm run build      # tsc + vite → dist/
 ```
 
-Note: `backend/package.json` does not have a `typecheck` script — use `npx tsc --noEmit` directly.
+Note: `backend/package.json` has a `typecheck` script (`tsc --noEmit`). Run `npm run typecheck` in `backend/`.
 
 ---
 
