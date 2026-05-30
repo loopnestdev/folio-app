@@ -74,10 +74,13 @@ export function calculateHoldings(
 
     const totalCost = lots.reduce((s, l) => s + l.quantity * l.unit_cost, 0);
     const avgCost = totalCost / totalQty;
-    const currentPrice = currentPrices[sym] ?? 0;
-    const marketValue = currentPrice * totalQty;
-    const unrealizedGain = marketValue - totalCost;
-    const unrealizedGainPct = totalCost > 0 ? (unrealizedGain / totalCost) * 100 : 0;
+    // Use null when no price is available so the UI can show "—" instead of
+    // a misleading $0.00 / -100% for securities Yahoo Finance doesn't cover.
+    const currentPrice = currentPrices[sym] ?? null;
+    const marketValue = currentPrice != null ? currentPrice * totalQty : null;
+    const unrealizedGain = marketValue != null ? marketValue - totalCost : null;
+    const unrealizedGainPct =
+      unrealizedGain != null && totalCost > 0 ? (unrealizedGain / totalCost) * 100 : null;
 
     const info = securityInfo[sym];
     positions.push({

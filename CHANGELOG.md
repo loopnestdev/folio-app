@@ -6,6 +6,8 @@ All notable changes to Folio App are documented here.
 
 ### Added
 
+- **Holdings show — instead of -100% when price data unavailable** — When Yahoo Finance has no data for a security (e.g. newly-listed ETFs like IBTC.AX), holdings now show `—` for Current Price, Market Value, Unrealized Gain, and Gain % rather than misleading $0.00 / -100%. Total row excludes unpriced holdings from the gain calculation. (`backend/src/services/calculations/holdings.ts`, `backend/src/types/index.ts`, `backend/src/routes/reports.ts`, `frontend/src/pages/HoldingsPage.tsx`)
+
 - **Edit & delete trade routes fixed** — PUT and DELETE were registered as `/trade/:id` but the frontend called `/:portfolioId/trades/:id`. Both backend routes now use the consistent `/:portfolioId/trades/:id` pattern matching GET/POST. (`backend/src/routes/trades.ts`)
 - **Edit trade** — Trades page now has a pencil icon per row that opens the trade form pre-populated with existing values. Supports editing any field including price (useful for correcting broker transfer-in cost bases). (`frontend/src/pages/TradesPage.tsx`, `frontend/src/components/forms/TradeForm.tsx`, `frontend/src/hooks/usePortfolio.ts`)
 

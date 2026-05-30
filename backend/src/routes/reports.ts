@@ -64,8 +64,11 @@ router.get('/:id/holdings', async (req: AuthenticatedRequest, res: any) => {
     // Map cost_base → total_cost to match the frontend Holding interface
     const holdings = rawHoldings.map((h) => ({ ...h, total_cost: h.cost_base }));
 
-    const totalValue = holdings.reduce((s, h) => s + (h.market_value ?? 0), 0);
-    const totalCost  = holdings.reduce((s, h) => s + (h.total_cost ?? 0), 0);
+    // Only include holdings with a known price in the gain totals to avoid
+    // distorting the summary when Yahoo Finance has no data for a security.
+    const pricedHoldings = holdings.filter((h) => h.market_value != null);
+    const totalValue = pricedHoldings.reduce((s, h) => s + (h.market_value ?? 0), 0);
+    const totalCost  = pricedHoldings.reduce((s, h) => s + (h.total_cost ?? 0), 0);
     const totalGain  = totalValue - totalCost;
 
     res.json({ holdings, summary: { total_value: totalValue, total_cost: totalCost, total_gain: totalGain, total_gain_pct: totalCost > 0 ? (totalGain / totalCost) * 100 : 0 } });

@@ -77,6 +77,7 @@ export function HoldingsPage() {
       align: 'right' as const,
       sortable: true,
       render: (v: unknown) => {
+        if (v == null) return <span className="text-[var(--c-ink-mute)]">—</span>;
         const val = Number(v);
         return (
           <span style={{ color: getValueColor(val) }} className="font-medium">
@@ -91,6 +92,7 @@ export function HoldingsPage() {
       align: 'right' as const,
       sortable: true,
       render: (v: unknown) => {
+        if (v == null) return <span className="text-[var(--c-ink-mute)]">—</span>;
         const val = Number(v);
         return (
           <span style={{ color: getValueColor(val) }} className="font-medium">

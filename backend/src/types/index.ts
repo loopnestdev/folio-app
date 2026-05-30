@@ -86,10 +86,10 @@ export interface HoldingPosition {
   quantity: number;
   avg_cost: number;
   cost_base: number;
-  current_price: number;
-  market_value: number;
-  unrealized_gain: number;
-  unrealized_gain_pct: number;
+  current_price: number | null;
+  market_value: number | null;
+  unrealized_gain: number | null;
+  unrealized_gain_pct: number | null;
 }
 
 export interface CgtLot {
