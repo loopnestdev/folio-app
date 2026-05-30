@@ -2,6 +2,12 @@
 
 All notable changes to Folio App are documented here.
 
+## [Unreleased]
+
+### Changed
+
+- **Dark mode is now the default** — First-time visitors (no saved preference) get dark mode instead of light. The no-flicker inline script in `index.html` and `useTheme` hook both treat a missing `folio-theme` localStorage key as `dark`. Returning users who explicitly chose light are unaffected. (`frontend/index.html`, `frontend/src/hooks/useTheme.ts`)
+
 ## [v0.3.2] — 2026-05-30
 
 ### Added
