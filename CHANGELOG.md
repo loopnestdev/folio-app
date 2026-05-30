@@ -2,6 +2,18 @@
 
 All notable changes to Folio App are documented here.
 
+## [Unreleased]
+
+### Added
+
+- **XLSX import support** — The import page now accepts Moomoo AU annual financial-year summary `.xlsx` files in addition to monthly PDFs. The new parser reads three sheets: `Transaction Overview` (buy/sell), `Estimated Dividend Overview` (dividends), and `Interest Overview` (interest), normalising Moomoo's date format and column typo (`Bokerage` → brokerage). (`backend/src/services/pdf-parser/moomoo-xlsx.ts`)
+
+### Fixed
+
+- **Import response shape** — `POST /api/portfolios/:id/import/parse` was returning `{ trades, count }` but the frontend `ImportPreview` type expects `{ filename, parsed_count, trades, errors }`. The backend now returns the correct shape, fixing undefined `parsed_count` and `errors` in the preview. (`backend/src/routes/trades.ts`)
+- **Trade deduplication on confirm** — `POST /api/portfolios/:id/import/confirm` now skips trades that already exist (keyed on `trade_date + security_id + trade_type + quantity + price`), preventing double-import when a monthly PDF and an overlapping annual XLSX cover the same trades.
+- **Import 0-trade UX** — Uploading a file with no importable trades (e.g. account-opening month with only cash deposits) now shows a clear explanatory banner instead of a broken Confirm button. (`frontend/src/pages/ImportPage.tsx`)
+
 ## [v0.3.5] — 2026-05-30
 
 ### Added
