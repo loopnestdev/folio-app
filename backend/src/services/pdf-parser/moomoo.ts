@@ -1,10 +1,18 @@
+// pdf-parse v2 uses a class-based API: new PDFParse({ data: buffer }).getText()
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParse = require('pdf-parse') as (buffer: Buffer) => Promise<{ text: string }>;
+const { PDFParse } = require('pdf-parse') as { PDFParse: new (opts: { data: Buffer }) => { getText(): Promise<{ text: string }>; destroy(): Promise<void> } };
 import type { ParsedTrade, TradeType } from '../../types';
 
 export async function parseMoomooStatement(pdfBuffer: Buffer): Promise<ParsedTrade[]> {
-  const data = await pdfParse(pdfBuffer);
-  return extractTrades(data.text);
+  const parser = new PDFParse({ data: pdfBuffer });
+  let text: string;
+  try {
+    const result = await parser.getText();
+    text = result.text;
+  } finally {
+    await parser.destroy();
+  }
+  return extractTrades(text);
 }
 
 export function extractTrades(text: string): ParsedTrade[] {
