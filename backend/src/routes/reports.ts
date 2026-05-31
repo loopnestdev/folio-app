@@ -198,8 +198,12 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
   const id = req.params.id as string;
   if (!(await verifyOwner(id, req.userId!))) { res.status(404).json({ error: 'Portfolio not found' }); return; }
 
-  const { range = 'ALL', from, to } = req.query as Record<string, string>;
-  const { fromDate, toDate } = getDateRange(range, from, to);
+  // The frontend computes the date window from the selected range and sends
+  // start_date / end_date directly (via dateRangeToParams in utils.ts).
+  const today = format(new Date(), 'yyyy-MM-dd');
+  const { start_date, end_date } = req.query as Record<string, string>;
+  const fromDate = start_date ?? '2000-01-01';
+  const toDate   = end_date   ?? today;
 
   try {
     const trades = await getPortfolioTrades(id);

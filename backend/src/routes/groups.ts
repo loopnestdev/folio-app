@@ -275,8 +275,12 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
   const group = await getGroup(req.params.id as string, req.userId!);
   if (!group) { res.status(404).json({ error: 'Group not found' }); return; }
 
-  const { range = 'ALL', from, to } = req.query as Record<string, string>;
-  const { fromDate, toDate } = getDateRange(range, from, to);
+  // The frontend computes the date window from the selected range and sends
+  // start_date / end_date directly (via dateRangeToParams in utils.ts).
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const { start_date, end_date } = req.query as Record<string, string>;
+  const fromDate = start_date ?? '2000-01-01';
+  const toDate   = end_date   ?? todayStr;
   const baseCurrency: string = group.base_currency ?? 'AUD';
 
   try {
