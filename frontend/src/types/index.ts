@@ -192,7 +192,7 @@ export interface DateRangeConfig {
 export interface PortfolioStatistics {
   total_return_annualized: number;
   winning_months_pct: number;
-  max_drawdown_monthly: number;
+  max_drawdown: number;
   std_dev_monthly: number;
   sharpe_ratio: number;
   sortino_ratio: number;

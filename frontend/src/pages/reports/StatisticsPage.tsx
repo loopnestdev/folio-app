@@ -115,9 +115,9 @@ export function StatisticsPage() {
               />
               <StatRow
                 label="Max Drawdown (Monthly)"
-                value={formatPercent(stats.max_drawdown_monthly)}
+                value={formatPercent(stats.max_drawdown ?? 0)}
                 description="Largest peak-to-trough decline based on monthly returns."
-                positive={stats.max_drawdown_monthly >= 0}
+                positive={(stats.max_drawdown ?? 0) >= 0}
               />
               <StatRow
                 label="Std Dev (Monthly)"
@@ -133,24 +133,24 @@ export function StatisticsPage() {
             <div>
               <StatRow
                 label="Sharpe Ratio"
-                value={stats.sharpe_ratio.toFixed(2)}
+                value={(stats.sharpe_ratio ?? 0).toFixed(2)}
                 description="Return per unit of risk (vs risk-free rate). Higher is better."
-                positive={stats.sharpe_ratio >= 1}
+                positive={(stats.sharpe_ratio ?? 0) >= 1}
               />
               <StatRow
                 label="Sortino Ratio"
-                value={stats.sortino_ratio.toFixed(2)}
+                value={(stats.sortino_ratio ?? 0).toFixed(2)}
                 description="Return per unit of downside risk. Penalizes only negative volatility."
-                positive={stats.sortino_ratio >= 1}
+                positive={(stats.sortino_ratio ?? 0) >= 1}
               />
               <StatRow
                 label="Beta (vs ASX 200)"
-                value={stats.beta.toFixed(2)}
+                value={(stats.beta ?? 0).toFixed(2)}
                 description="Sensitivity to market movements. Beta > 1 means more volatile than the market."
               />
               <StatRow
                 label="Correlation vs S&P 500"
-                value={stats.correlation_sp500.toFixed(2)}
+                value={(stats.correlation_sp500 ?? 0).toFixed(2)}
                 description="Correlation with S&P 500. 1 = perfectly correlated, 0 = uncorrelated."
               />
             </div>

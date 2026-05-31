@@ -264,7 +264,9 @@ router.get('/:id/statistics', async (req: AuthenticatedRequest, res: any) => {
 
   try {
     const trades = await getPortfolioTrades(id);
-    const symbols = [...new Set(trades.filter(t => t.security).map(t => t.security!.symbol))];
+    // Exclude deposit/withdrawal trades — their CASH security has no price history
+    const investmentTrades = trades.filter(t => t.trade_type !== 'deposit' && t.trade_type !== 'withdrawal');
+    const symbols = [...new Set(investmentTrades.filter(t => t.security).map(t => t.security!.symbol))];
 
     const pricesBySymbol = await Promise.all(
       symbols.map(async (sym) => {
