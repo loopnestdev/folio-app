@@ -54,7 +54,11 @@ function RechartsPerformanceChart({ data, benchmarks }: PerformanceChartProps) {
             borderRadius: 12,
             border: '1px solid var(--c-border)',
             fontSize: 13,
+            backgroundColor: 'var(--c-canvas)',
+            color: 'var(--c-ink)',
           }}
+          labelStyle={{ color: 'var(--c-ink)' }}
+          itemStyle={{ color: 'var(--c-ink)' }}
         />
         <Legend wrapperStyle={{ fontSize: 13, paddingTop: 12 }} />
         <Line
@@ -160,15 +164,25 @@ function EChartsPerformanceChart({ data, benchmarks }: PerformanceChartProps) {
       : []),
   ];
 
+  // Resolve CSS variables at render time for ECharts (it renders into a canvas/shadow
+  // context that doesn't inherit CSS custom properties from the document).
+  const style = getComputedStyle(document.documentElement);
+  const tooltipBg   = style.getPropertyValue('--c-canvas').trim()  || '#ffffff';
+  const tooltipInk  = style.getPropertyValue('--c-ink').trim()     || '#0d253d';
+  const tooltipBorder = style.getPropertyValue('--c-border').trim() || '#e3e8ee';
+
   const option = {
     tooltip: {
       trigger: 'axis',
+      backgroundColor: tooltipBg,
+      borderColor: tooltipBorder,
+      textStyle: { color: tooltipInk, fontSize: 13 },
       formatter: (params: Array<{ seriesName: string; value: [string, number] }>) => {
         const date = params[0]?.value[0];
         const rows = params
-          .map((p) => `<div>${p.seriesName}: <strong>${fmtReturn(p.value[1])}</strong></div>`)
+          .map((p) => `<div style="color:${tooltipInk}">${p.seriesName}: <strong>${fmtReturn(p.value[1])}</strong></div>`)
           .join('');
-        return `<div style="font-size:13px"><strong>${date}</strong>${rows}</div>`;
+        return `<div style="font-size:13px;color:${tooltipInk}"><strong>${date}</strong>${rows}</div>`;
       },
     },
     legend: { bottom: 0, textStyle: { fontSize: 13, color: 'var(--c-ink-mute)' } },
