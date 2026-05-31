@@ -356,6 +356,27 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
 
     const chartStart = portfolioValues[chartStartIdx].date;
 
+    // ── External-flow remapping ─────────────────────────────────────────────
+    // Deposits and withdrawals can be recorded on weekends or public holidays
+    // when markets are closed and there is no entry in portfolioValues for that
+    // date. If we look up externalFlowsByDate[priceDate] only for exact price
+    // dates, those non-trading-day flows are silently dropped: getCashAt()
+    // already reflects the updated cash balance, but the TWR denominator
+    // (adjustedBase) isn't adjusted — producing a phantom gain or loss on the
+    // following trading day.
+    //
+    // Fix: assign every flow to the NEXT available price date on or after its
+    // trade date so the denominator and the cash balance always match.
+    // Flows on or before chartStart are skipped because they are already baked
+    // into prevValue = portfolioValues[chartStartIdx].totalValue.
+    const priceDates   = portfolioValues.map(v => v.date);
+    const extFlowForTWR: Record<string, number> = {};
+    for (const [flowDate, flowAmt] of Object.entries(externalFlowsByDate)) {
+      if (flowDate <= chartStart) continue; // already absorbed into prevValue
+      const target = priceDates.find(d => d >= flowDate);
+      if (target) extFlowForTWR[target] = (extFlowForTWR[target] ?? 0) + flowAmt;
+    }
+
     // Chain daily TWR factors from chartStart.
     // When adjustedBase ≤ 0 OR totalValue ≤ 0 the formula is undefined — push null
     // (chart gap) so the line is broken rather than showing inverted/exploded values.
@@ -368,7 +389,7 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
 
     for (let i = chartStartIdx + 1; i < portfolioValues.length; i++) {
       const { date, totalValue } = portfolioValues[i];
-      const extFlow      = externalFlowsByDate[date] ?? 0;
+      const extFlow      = extFlowForTWR[date] ?? 0;
       const adjustedBase = prevValue + extFlow;
 
       if (adjustedBase > 0 && totalValue > 0) {

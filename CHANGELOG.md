@@ -4,6 +4,10 @@ All notable changes to Folio App are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **AUD portfolio chart wild +100%/−100% oscillations and −85% period return** — Root cause: deposits and withdrawals recorded on weekends or public holidays have a `trade_date` that does not exist in the price history map (no market data on those days). `getCashAt(nextTradingDay)` correctly included the weekend flow in the cash balance, but `externalFlowsByDate[nextTradingDay]` was 0 — the denominator (`adjustedBase`) never saw the adjustment. Result: a Saturday deposit of $10k would show as a fake +200% gain on Monday (cash jumped without a denominator change), and a Saturday withdrawal showed as a matching fake crash. Multiple such transactions across the AUD portfolio history created the oscillating chart shape. Fixed in both `reports.ts` and `groups.ts` by remapping every external flow to the **next available price date** on or after its trade date, so the denominator always matches the cash balance. (`backend/src/routes/reports.ts`, `backend/src/routes/groups.ts`)
+
 ### Added
 
 - **Group dashboard accessible from sidebar** — Portfolio groups now appear in the left sidebar under a "Groups" section, each linking directly to that group's consolidated dashboard. Previously the only entry point was the tiny "Dashboard" link on the Portfolios page. (`frontend/src/components/layout/Sidebar.tsx`)

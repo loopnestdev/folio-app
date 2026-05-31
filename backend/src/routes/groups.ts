@@ -378,6 +378,20 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
           return val;
         };
 
+        // ── External-flow remapping ─────────────────────────────────────────
+        // Deposits and withdrawals can be recorded on weekends or public holidays
+        // when no price data exists for that date. Without remapping,
+        // extFlowByDate[priceDate] returns 0 for those flows even though
+        // getCashAt() has already updated the cash balance — producing phantom
+        // gains/losses in the TWR denominator.
+        // Assign every flow to the NEXT available price date on or after it.
+        const sortedPriceDates = Object.keys(priceMap).sort();
+        const extFlowForDate: Record<string, number> = {};
+        for (const [flowDate, flowAmt] of Object.entries(extFlowByDate)) {
+          const target = sortedPriceDates.find(d => d >= flowDate);
+          if (target) extFlowForDate[target] = (extFlowForDate[target] ?? 0) + flowAmt;
+        }
+
         // Build per-date map
         const dateMap: Record<string, DayEntry> = {};
         for (const date of Object.keys(priceMap).sort()) {
@@ -388,7 +402,7 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
           const holdingsValue = dayHoldings.reduce((s, h) => s + (h.market_value ?? 0), 0);
           dateMap[date] = {
             totalValue: (holdingsValue + getCashAt(date)) * fx,
-            extFlow:    (extFlowByDate[date] ?? 0) * fx,
+            extFlow:    (extFlowForDate[date] ?? 0) * fx,
             netDep:     getNetDepAt(date) * fx,
           };
         }
