@@ -297,16 +297,13 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
       }),
     );
 
-    // Benchmarks — fetched in parallel with portfolio data below
-    const [asx200, sp500, nasdaq] = await Promise.all([
-      getBenchmarkPrices(BENCHMARKS.ASX200, fromDate, toDate),
-      getBenchmarkPrices(BENCHMARKS.SP500,  fromDate, toDate),
-      getBenchmarkPrices(BENCHMARKS.NASDAQ, fromDate, toDate),
-    ]);
-
     // ── Per-portfolio daily series ─────────────────────────────────────────
     // Each entry in `portfolioDateMaps` is a Record<date, {totalValue, extFlow, netDep}>
     // all amounts are already in base_currency (multiplied by fx).
+    //
+    // Price history is fetched from each portfolio's EARLIEST TRADE DATE (not fromDate)
+    // so the TWR chain can start from the portfolio's real beginning regardless of the
+    // display range the user selected. Results are filtered+re-normalised below.
     type DayEntry = { totalValue: number; extFlow: number; netDep: number };
     const portfolioDateMaps: Array<Record<string, DayEntry>> = await Promise.all(
       portfolios.map(async (portfolio) => {
@@ -314,12 +311,16 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
         if (!trades.length) return {};
 
         const fx = fxRates[portfolio.currency] ?? 1;
-        const symbols = [...new Set(trades.filter(t => t.security).map(t => t.security!.symbol))];
+        const investTrades = trades.filter(t => t.security);
+        const symbols = [...new Set(investTrades.map(t => t.security!.symbol))];
+        const portfolioEarliestDate = investTrades.length
+          ? investTrades.reduce((m, t) => t.trade_date < m ? t.trade_date : m, investTrades[0].trade_date)
+          : toDate;
 
         const pricesBySymbol = await Promise.all(
           symbols.map(async (sym) => {
             const sec = trades.find(t => t.security?.symbol === sym)?.security;
-            const prices = await getHistoricalPrices(sym, fromDate, toDate, sec?.id);
+            const prices = await getHistoricalPrices(sym, portfolioEarliestDate, toDate, sec?.id);
             return { symbol: sym, prices };
           }),
         );
@@ -447,31 +448,53 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
       }
     }
 
-    // ── Benchmarks ────────────────────────────────────────────────────────
-    // Build 0-based % gain maps from chartStartDate, then forward-fill so that
-    // ASX trading days (which have no US market price) still get a benchmark value.
-    const benchMap = (arr: { date: string; close: number }[], fromDate: string): Record<string, number> => {
-      const slice = arr.filter((d) => d.date >= fromDate);
-      if (!slice.length) return {};
-      const base = slice[0].close;
-      // Raw map: only trading days that Yahoo returned
+    // ── Display-window filtering + sub-period re-normalisation ───────────────
+    // portfolioGain was computed from chartStartDate (earliest valid deposit+value).
+    // Re-normalise to the display window [displayFrom, toDate] so the chart always
+    // starts at 0% for the selected period.
+    const displayFrom = fromDate > chartStartDate ? fromDate : chartStartDate;
+    const dispIdx = portfolioGain.findIndex(d => d.value !== null && d.date >= displayFrom);
+    if (dispIdx === -1) { res.json([]); return; }
+    const dispBase = 1 + (portfolioGain[dispIdx].value as number) / 100;
+
+    const visibleGain = portfolioGain
+      .slice(dispIdx)
+      .filter(d => d.date <= toDate)
+      .map(d => ({
+        date:  d.date,
+        value: d.value !== null ? ((1 + d.value / 100) / dispBase - 1) * 100 : null,
+      }));
+
+    // ── Benchmarks ─────────────────────────────────────────────────────────
+    // Fetched for [displayFrom, toDate] only — same window as the visible gain.
+    // Forward-filled across visibleGain dates so ASX trading days (no US price)
+    // still get a benchmark value.
+    const [asx200, sp500, nasdaq] = await Promise.all([
+      getBenchmarkPrices(BENCHMARKS.ASX200, displayFrom, toDate),
+      getBenchmarkPrices(BENCHMARKS.SP500,  displayFrom, toDate),
+      getBenchmarkPrices(BENCHMARKS.NASDAQ, displayFrom, toDate),
+    ]);
+
+    const visibleDates = visibleGain.map(d => d.date);
+    const benchFill = (arr: { date: string; close: number }[]): Record<string, number> => {
+      if (!arr.length) return {};
+      const base = arr[0].close;
       const raw: Record<string, number> = {};
-      for (const d of slice) raw[d.date] = base > 0 ? (d.close / base - 1) * 100 : 0;
-      // Forward-fill across portfolio dates so gaps (e.g. ASX vs NYSE) are bridged
+      for (const d of arr) raw[d.date] = base > 0 ? (d.close / base - 1) * 100 : 0;
       let last: number | null = null;
       const filled: Record<string, number> = {};
-      for (const date of allDates) {
+      for (const date of visibleDates) {
         if (raw[date] !== undefined) last = raw[date];
         if (last !== null) filled[date] = last;
       }
       return filled;
     };
 
-    const sp500Map  = benchMap(sp500,  chartStartDate);
-    const nasdaqMap = benchMap(nasdaq, chartStartDate);
-    const asx200Map = benchMap(asx200, chartStartDate);
+    const sp500Map  = benchFill(sp500);
+    const nasdaqMap = benchFill(nasdaq);
+    const asx200Map = benchFill(asx200);
 
-    const result = portfolioGain.map((d) => ({
+    const result = visibleGain.map((d) => ({
       date:             d.date,
       portfolio_value:  d.value,
       benchmark_sp500:  sp500Map[d.date]  ?? null,

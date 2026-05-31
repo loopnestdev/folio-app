@@ -210,28 +210,36 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
     // Empty portfolio — return empty array so the chart renders the "no data" state
     if (!trades.length) { res.json([]); return; }
 
-    // Clamp fromDate to the portfolio's earliest trade so benchmarks start at the
-    // same point as the portfolio — avoids the S&P 500 appearing at 380 when the
-    // portfolio just started (normalized from 2000 → portfolio looks flat by comparison).
+    // TWR requires price history from the very first trade, regardless of the
+    // user's selected display range. We fetch from earliestTradeDate so that
+    // chartStartIdx (first date with netDep > 0 AND totalValue > 0) is always
+    // found even when the display range starts after that date.
+    // The returned data is then filtered+re-normalised to the display window.
     const investmentTrades = trades.filter(t => t.trade_type !== 'deposit' && t.trade_type !== 'withdrawal');
     const earliestTradeDate = investmentTrades.length
       ? investmentTrades.reduce((min, t) => t.trade_date < min ? t.trade_date : min, investmentTrades[0].trade_date)
       : trades[0].trade_date;
-    const effectiveFrom = fromDate > earliestTradeDate ? fromDate : earliestTradeDate;
+
+    // displayFrom: where the user wants the chart to start (≥ earliestTrade)
+    const displayFrom = fromDate > earliestTradeDate ? fromDate : earliestTradeDate;
 
     const symbols = [...new Set(investmentTrades.filter(t => t.security).map(t => t.security!.symbol))];
 
+    // Benchmarks are fetched for the DISPLAY window only (not full history).
+    // They start at 0% at displayFrom and are compared against the portfolio
+    // sub-period TWR (also re-normalised to 0% at displayFrom below).
     const [asx200, sp500, nasdaq] = await Promise.all([
-      getBenchmarkPrices(BENCHMARKS.ASX200, effectiveFrom, toDate),
-      getBenchmarkPrices(BENCHMARKS.SP500, effectiveFrom, toDate),
-      getBenchmarkPrices(BENCHMARKS.NASDAQ, effectiveFrom, toDate),
+      getBenchmarkPrices(BENCHMARKS.ASX200, displayFrom, toDate),
+      getBenchmarkPrices(BENCHMARKS.SP500, displayFrom, toDate),
+      getBenchmarkPrices(BENCHMARKS.NASDAQ, displayFrom, toDate),
     ]);
 
-    // Build daily portfolio value
+    // Build daily portfolio value — fetch from EARLIEST TRADE DATE (not displayFrom)
+    // so the complete TWR chain can be computed from the portfolio's beginning.
     const pricesBySymbol = await Promise.all(
       symbols.map(async (sym) => {
         const sec = trades.find(t => t.security?.symbol === sym)?.security;
-        const prices = await getHistoricalPrices(sym, effectiveFrom, toDate, sec?.id, sec?.exchange);
+        const prices = await getHistoricalPrices(sym, earliestTradeDate, toDate, sec?.id, sec?.exchange);
         return { symbol: sym, prices };
       })
     );
@@ -378,25 +386,48 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
       }
     }
 
-    // Benchmarks: simple % gain from chartStart (same 0-baseline as TWR)
-    const benchPctGain = (arr: { date: string; close: number }[], fromDate: string) => {
-      const slice = arr.filter(d => d.date >= fromDate);
-      if (!slice.length) return [] as { date: string; value: number }[];
-      const base = slice[0].close;
-      return base > 0
-        ? slice.map(d => ({ date: d.date, value: (d.close / base - 1) * 100 }))
-        : slice.map(d => ({ date: d.date, value: 0 }));
+    // ── Display-window filtering + sub-period TWR re-normalisation ───────────
+    // portfolioGain was computed from chartStart (earliest valid date).
+    // The user may have selected a shorter window (e.g. 1Y). We:
+    //   1. Find the first portfolioGain date ≥ displayFrom with a non-null value.
+    //   2. Re-normalise: sub-period gain = (M_t / M_displayFrom − 1) × 100
+    //      so the chart always starts at 0% for the selected period.
+    //   3. Trim to [displayFrom, toDate].
+    const dispIdx = portfolioGain.findIndex(d => d.value !== null && d.date >= displayFrom);
+    if (dispIdx === -1) { res.json([]); return; }
+    const dispBase = 1 + (portfolioGain[dispIdx].value as number) / 100;
+
+    const visibleGain = portfolioGain
+      .slice(dispIdx)
+      .filter(d => d.date <= toDate)
+      .map(d => ({
+        date:  d.date,
+        value: d.value !== null ? ((1 + d.value / 100) / dispBase - 1) * 100 : null,
+      }));
+
+    // Benchmarks: 0-based from displayFrom, forward-filled across portfolio dates
+    // so ASX trading days (no US market price) still get a value.
+    const allGainDates = visibleGain.map(d => d.date);
+    const benchMap = (arr: { date: string; close: number }[]) => {
+      if (!arr.length) return {} as Record<string, number>;
+      const base = arr[0].close;
+      const raw: Record<string, number> = {};
+      for (const d of arr) raw[d.date] = base > 0 ? (d.close / base - 1) * 100 : 0;
+      // Forward-fill so gap days (weekends, ASX vs NYSE mismatches) still have a value
+      let last: number | null = null;
+      const filled: Record<string, number> = {};
+      for (const date of allGainDates) {
+        if (raw[date] !== undefined) last = raw[date];
+        if (last !== null) filled[date] = last;
+      }
+      return filled;
     };
 
-    const normSP500  = benchPctGain(sp500,  chartStart);
-    const normNASDAQ = benchPctGain(nasdaq, chartStart);
-    const normASX200 = benchPctGain(asx200, chartStart);
+    const sp500Map  = benchMap(sp500);
+    const nasdaqMap = benchMap(nasdaq);
+    const asx200Map = benchMap(asx200);
 
-    const sp500Map:  Record<string, number> = Object.fromEntries(normSP500.map(d => [d.date, d.value]));
-    const nasdaqMap: Record<string, number> = Object.fromEntries(normNASDAQ.map(d => [d.date, d.value]));
-    const asx200Map: Record<string, number> = Object.fromEntries(normASX200.map(d => [d.date, d.value]));
-
-    const merged = portfolioGain.map(d => ({
+    const merged = visibleGain.map(d => ({
       date:             d.date,
       portfolio_value:  d.value,
       benchmark_sp500:  sp500Map[d.date]  ?? null,

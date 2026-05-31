@@ -102,7 +102,17 @@ export async function getBenchmarkPrices(
     .order('date', { ascending: true });
 
   if (cached && cached.length > 5) {
-    return cached.map((r) => ({ date: r.date as string, close: r.close_price as number }));
+    // Only use cache if it actually covers the requested fromDate.
+    // A previous query for a shorter range (e.g. 1Y) may have populated the cache
+    // but its earliest row could be months after fromDate — causing the benchmark
+    // line to start too late and appear invisible on the chart.
+    const firstCached = new Date(cached[0].date as string);
+    const reqFrom     = new Date(fromDate);
+    const daysDiff    = (firstCached.getTime() - reqFrom.getTime()) / 86_400_000;
+    if (daysDiff <= 7) {
+      return cached.map((r) => ({ date: r.date as string, close: r.close_price as number }));
+    }
+    // Cache starts too late — fall through to fresh Yahoo fetch
   }
 
   try {
