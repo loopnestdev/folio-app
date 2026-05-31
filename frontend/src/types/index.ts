@@ -174,7 +174,8 @@ export interface Holding {
 // Performance Types
 export interface PerformancePoint {
   date: string;
-  portfolio_value: number;
+  /** null = gap in chart (portfolio value non-positive, TWR undefined for that day) */
+  portfolio_value: number | null;
   benchmark_sp500: number | null;
   benchmark_nasdaq: number | null;
   benchmark_asx200: number | null;

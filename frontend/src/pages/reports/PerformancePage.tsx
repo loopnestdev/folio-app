@@ -41,25 +41,24 @@ export function PerformancePage() {
     setBenchmarks((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  // portfolio_value is now P&L gain % with 0 as baseline (0 = breakeven).
-  // e.g. 58.0 means +58% gain on invested capital.
-  const lastValue      = performanceData[performanceData.length - 1]?.portfolio_value ?? 0;
+  // portfolio_value is TWR % gain (0 = start, null = gap/undefined period).
+  // Filter nulls for stats.
+  const validPortfolio = performanceData.filter((d) => d.portfolio_value != null);
+  const lastValue      = validPortfolio[validPortfolio.length - 1]?.portfolio_value ?? 0;
   const totalReturnPct = lastValue;
 
-  const peakValue      = Math.max(...performanceData.map((d) => d.portfolio_value), 0);
+  const peakValue      = Math.max(...validPortfolio.map((d) => d.portfolio_value as number), 0);
   const peakReturnPct  = peakValue;
 
-  // Max drawdown: largest peak-to-trough drop expressed as % of portfolio value at peak
-  // (peak_portfolio_value = (1 + peak/100) × base; drawdown% uses that as denominator)
   const troughValue = Math.min(
-    ...performanceData.filter((d) => d.portfolio_value > -100).map((d) => d.portfolio_value),
+    ...validPortfolio.map((d) => d.portfolio_value as number).filter((v) => v > -100),
     peakValue
   );
   const maxDrawdown = peakValue > -100
     ? ((troughValue - peakValue) / (100 + peakValue)) * 100
     : 0;
 
-  // Benchmark returns for the period (already 0-based % gain)
+  // Benchmark returns for the period (0-based % gain)
   const lastSP500Pct  = performanceData.findLast((d) => d.benchmark_sp500  != null)?.benchmark_sp500  ?? 0;
   const lastNasdaqPct = performanceData.findLast((d) => d.benchmark_nasdaq != null)?.benchmark_nasdaq ?? 0;
   const lastAsx200Pct = performanceData.findLast((d) => d.benchmark_asx200 != null)?.benchmark_asx200 ?? 0;

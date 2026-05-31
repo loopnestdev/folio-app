@@ -65,6 +65,7 @@ function RechartsPerformanceChart({ data, benchmarks }: PerformanceChartProps) {
           strokeWidth={2}
           dot={false}
           activeDot={{ r: 4 }}
+          connectNulls={false}
         />
         {benchmarks.sp500 && (
           <Line

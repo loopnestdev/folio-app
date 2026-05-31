@@ -311,23 +311,64 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
       return { date, totalValue: investedValue + getCashAt(date) };
     });
 
-    // Chain daily factors → TWR
-    let multiplier  = 1.0;
-    let prevValue: number | null = null;
+    // ── TWR start: find first price-date with BOTH positive net deposits AND
+    //    positive total portfolio value.
+    //
+    //    TWR is mathematically undefined (or inverted) when portfolio value is ≤ 0:
+    //      - negative / negative  = "positive" factor even when portfolio worsened
+    //      - positive / negative  = negative factor (explodes the chain)
+    //    Skipping the pre-deposit / temporarily-negative period ensures the chain
+    //    starts on a meaningful, stable baseline.
 
-    const portfolioGain = portfolioValues.map(({ date, totalValue }) => {
-      const extFlow = externalFlowsByDate[date] ?? 0;
-      if (prevValue === null) { prevValue = totalValue; return { date, value: 0.0 }; }
+    const runningNetDep: [string, number][] = (() => {
+      let net = 0;
+      return sortedTrades
+        .filter(t => t.trade_type === 'deposit' || t.trade_type === 'withdrawal')
+        .map(t => {
+          const qty = Number(t.quantity) || 0;
+          const price = Number(t.price) || 0;
+          net += t.trade_type === 'deposit' ? price * qty : -(price * qty);
+          return [t.trade_date, net] as [string, number];
+        });
+    })();
+    const getNetDepAt = (date: string): number => {
+      let val = 0;
+      for (const [d, v] of runningNetDep) { if (d <= date) val = v; else break; }
+      return val;
+    };
+
+    const chartStartIdx = portfolioValues.findIndex(
+      ({ date, totalValue }) => getNetDepAt(date) > 0 && totalValue > 0
+    );
+    if (chartStartIdx === -1) { res.json([]); return; }
+
+    const chartStart = portfolioValues[chartStartIdx].date;
+
+    // Chain daily TWR factors from chartStart.
+    // When adjustedBase ≤ 0 OR totalValue ≤ 0 the formula is undefined — push null
+    // (chart gap) so the line is broken rather than showing inverted/exploded values.
+    let multiplier = 1.0;
+    let prevValue  = portfolioValues[chartStartIdx].totalValue;
+
+    const portfolioGain: { date: string; value: number | null }[] = [
+      { date: chartStart, value: 0.0 },
+    ];
+
+    for (let i = chartStartIdx + 1; i < portfolioValues.length; i++) {
+      const { date, totalValue } = portfolioValues[i];
+      const extFlow      = externalFlowsByDate[date] ?? 0;
       const adjustedBase = prevValue + extFlow;
-      if (Math.abs(adjustedBase) > 0.001) {
-        const factor = totalValue / adjustedBase;
-        if (isFinite(factor)) multiplier *= factor;
+
+      if (adjustedBase > 0 && totalValue > 0) {
+        multiplier *= totalValue / adjustedBase;
+        portfolioGain.push({ date, value: (multiplier - 1) * 100 });
+      } else {
+        // Portfolio temporarily non-positive (large buy exceeded cash, or FX drain) —
+        // show a gap rather than an inverted/undefined data point.
+        portfolioGain.push({ date, value: null });
       }
       prevValue = totalValue;
-      return { date, value: (multiplier - 1) * 100 };
-    });
-
-    const chartStart = portfolioGain[0]?.date ?? effectiveFrom;
+    }
 
     // Benchmarks: simple % gain from chartStart (same 0-baseline as TWR)
     const benchPctGain = (arr: { date: string; close: number }[], fromDate: string) => {
