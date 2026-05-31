@@ -362,12 +362,16 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
       if (adjustedBase > 0 && totalValue > 0) {
         multiplier *= totalValue / adjustedBase;
         portfolioGain.push({ date, value: (multiplier - 1) * 100 });
+        // Only advance prevValue on valid calculations.
+        // Leaving it unchanged during null gaps means adjustedBase on recovery is
+        // computed from the last-valid portfolio value — not from a transient negative
+        // value — so the chain resumes correctly without exploded or inverted factors.
+        prevValue = totalValue;
       } else {
         // Portfolio temporarily non-positive (large buy exceeded cash, or FX drain) —
         // show a gap rather than an inverted/undefined data point.
         portfolioGain.push({ date, value: null });
       }
-      prevValue = totalValue;
     }
 
     // Benchmarks: simple % gain from chartStart (same 0-baseline as TWR)
