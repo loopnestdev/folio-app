@@ -157,7 +157,7 @@ export function DashboardPage() {
         <StatCard
           label="Overall Gain"
           value={formatCurrency(summary?.overall_gain ?? 0, activePortfolio.currency)}
-          trend={summary?.overall_gain_pct}
+          trend={summary?.overall_gain_pct ?? undefined}
           subtitle={`Deposited: ${formatCurrency(summary?.total_deposited ?? 0, activePortfolio.currency)}`}
           loading={summaryLoading}
         />
@@ -168,9 +168,9 @@ export function DashboardPage() {
           loading={summaryLoading}
         />
         <StatCard
-          label="YTD Return"
+          label={`YTD Return (${new Date().getFullYear()})`}
           value={formatCurrency(summary?.ytd_return ?? 0, activePortfolio.currency)}
-          trend={summary?.ytd_return_pct}
+          trend={summary?.ytd_return_pct ?? undefined}
           loading={summaryLoading}
         />
       </div>

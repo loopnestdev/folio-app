@@ -96,7 +96,9 @@ router.get('/:id/holdings', async (req: AuthenticatedRequest, res: any) => {
 
     const netDeposited   = total_deposited - total_withdrawn;
     const overallGain    = totalValue - netDeposited;
-    const overallGainPct = netDeposited > 0 ? (overallGain / netDeposited) * 100 : 0;
+    // When net_deposited ≤ 0 the % is meaningless (division by non-positive base). Return null
+    // so the frontend can render "—" instead of a misleading 0.00%.
+    const overallGainPct = netDeposited > 0 ? (overallGain / netDeposited) * 100 : null;
 
     res.json({
       holdings,
@@ -144,7 +146,7 @@ router.get('/:id/summary', async (req: AuthenticatedRequest, res: any) => {
     const totalGain      = investedValue - totalCost;
     const netDeposited   = total_deposited - total_withdrawn;
     const overallGain    = totalValue - netDeposited;
-    const overallGainPct = netDeposited > 0 ? (overallGain / netDeposited) * 100 : 0;
+    const overallGainPct = netDeposited > 0 ? (overallGain / netDeposited) * 100 : null;
 
     // YTD: compare current value against portfolio value at the start of this year.
     // Must use HISTORICAL prices at Jan 1 (not today's prices) for the start valuation —
@@ -183,7 +185,8 @@ router.get('/:id/summary', async (req: AuthenticatedRequest, res: any) => {
       overall_gain:     overallGain,
       overall_gain_pct: overallGainPct,
       ytd_return:       ytdReturn,
-      ytd_return_pct:   valueAtYTDStart > 0 ? (ytdReturn / valueAtYTDStart) * 100 : 0,
+      // null when YTD start value ≤ 0 (e.g. portfolio funded by FX transfers) — "—" in UI
+      ytd_return_pct:   valueAtYTDStart > 0 ? (ytdReturn / valueAtYTDStart) * 100 : null,
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
