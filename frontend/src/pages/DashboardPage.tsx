@@ -5,7 +5,7 @@ import { usePortfolioContext } from '../contexts/PortfolioContext';
 import { useActivePortfolioSummary, useHoldings, useTrades } from '../hooks/usePortfolio';
 import { usePerformance } from '../hooks/usePerformance';
 import { StatCard } from '../components/ui/StatCard';
-import { Card, CardHeader } from '../components/ui/Card';
+import { Card } from '../components/ui/Card';
 import { Table } from '../components/ui/Table';
 import { Button } from '../components/ui/Button';
 import { PerformanceChart } from '../components/charts/PerformanceChart';

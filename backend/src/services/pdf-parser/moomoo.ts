@@ -312,10 +312,13 @@ export function parseCashSection(section: string): ParsedTrade[] {
   // Matches dated cash-flow lines:
   //   "2025/07/17 18:43:59  Asset Adjustment  +8.98  FANG CASH DIVIDEND"
   //   "2024/09/30 13:41:14  Cash In Out       +515.30  ZEPTO_PR.2m3pdi"
+  //   "2025/04/07 22:37:15  Currency Exchange -1,354.00"  (comment on next lines)
   const pattern =
-    /^(\d{4}\/\d{2}\/\d{2})\s+\d{2}:\d{2}:\d{2}\s+(Asset Adjustment|Coupon|Cash In Out)\s+([+-][\d,\.]+)\s*(.*)$/;
+    /^(\d{4}\/\d{2}\/\d{2})\s+\d{2}:\d{2}:\d{2}\s+(Asset Adjustment|Coupon|Cash In Out|Currency Exchange)\s+([+-][\d,\.]+)\s*(.*)$/;
 
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
     // Detect currency section headers (bare "AUD", "USD", etc.)
     if (CURRENCY_HEADERS.has(line)) {
       currentCurrency = line;
@@ -325,8 +328,22 @@ export function parseCashSection(section: string): ParsedTrade[] {
     const match = line.match(pattern);
     if (!match) continue;
 
-    const [, dateStr, type, amountStr, comment] = match;
+    const [, dateStr, type, amountStr, inlineComment] = match;
     const amount = parseNumber(amountStr);
+
+    // For Currency Exchange the FX detail often wraps across the next 1-3 lines.
+    // Always collect continuation lines (no tab = not a structured row; stop at
+    // dated lines, currency headers, or tab-separated table rows).
+    let comment = inlineComment.trim();
+    if (type === 'Currency Exchange') {
+      const extra: string[] = comment ? [comment] : [];
+      for (let j = i + 1; j < Math.min(i + 6, lines.length); j++) {
+        const next = lines[j];
+        if (/^\d{4}\//.test(next) || CURRENCY_HEADERS.has(next) || next.includes('\t')) break;
+        extra.push(next);
+      }
+      comment = extra.join(' ').replace(/\s+/g, ' ').trim();
+    }
 
     let trade_type: TradeType;
     let symbol: string;
@@ -343,11 +360,24 @@ export function parseCashSection(section: string): ParsedTrade[] {
       symbol = 'CASH';
       notes = comment.trim() || 'Moomoo Cash Coupon';
     } else if (type === 'Cash In Out') {
-      // Skip zero-amount lines
       if (amount === 0) continue;
       trade_type = amount > 0 ? 'deposit' : 'withdrawal';
       symbol = 'CASH';
-      notes = comment.trim() || type;
+      notes = comment || type;
+    } else if (type === 'Currency Exchange') {
+      // FX transfer between currency accounts (e.g. AUD → USD or USD → AUD).
+      // Positive = funds arriving in this currency (deposit).
+      // Negative = funds leaving this currency (withdrawal).
+      // Both sides live in the same PDF; the currency filter routes each side
+      // to the correct portfolio on import (AUD side → AUD portfolio, USD side → USD portfolio).
+      if (amount === 0) continue;
+      trade_type = amount > 0 ? 'deposit' : 'withdrawal';
+      symbol = 'CASH';
+      // Extract direction from comment: "(AUD -> USD 0.629)" or similar
+      const dirMatch = comment.match(/\(([A-Z]+)\s*->\s*([A-Z]+)\s+([\d.]+)\)/);
+      notes = dirMatch
+        ? `FX Transfer (${dirMatch[1]} → ${dirMatch[2]}, rate ${dirMatch[3]})`
+        : `FX Transfer${comment ? ` — ${comment}` : ''}`;
     } else {
       continue;
     }
