@@ -247,16 +247,32 @@ async function handleImportParse(req: AuthenticatedRequest, res: any) {
       .select('trade_date, trade_type, quantity, price, security:securities(symbol)')
       .eq('portfolio_id', portfolioId);
 
+    // Strict key: date|symbol|type|qty|price — for normal trades
     const existingKeys = new Set(
       (existingTrades ?? []).map((t: any) => {
         const sym = (t.security as any)?.symbol ?? '';
         return `${t.trade_date}|${sym.toUpperCase()}|${t.trade_type}|${Number(t.quantity)}|${Number(t.price)}`;
       }),
     );
+    // Loose key: date|symbol|type|qty — for zero-price parsed trades (e.g. SI IN
+    // transfers) where the user may have corrected the price after first import.
+    const existingLooseKeys = new Set(
+      (existingTrades ?? []).map((t: any) => {
+        const sym = (t.security as any)?.symbol ?? '';
+        return `${t.trade_date}|${sym.toUpperCase()}|${t.trade_type}|${Number(t.quantity)}`;
+      }),
+    );
 
-    const newTrades      = enriched.filter((t) => !existingKeys.has(
-      `${t.trade_date}|${t.symbol.toUpperCase()}|${t.trade_type}|${t.quantity}|${t.price}`,
-    ));
+    const newTrades = enriched.filter((t) => {
+      const strict = `${t.trade_date}|${t.symbol.toUpperCase()}|${t.trade_type}|${t.quantity}|${t.price}`;
+      if (existingKeys.has(strict)) return false;
+      // Zero-price trades: fall back to loose match so edited prices don't re-surface them
+      if (t.price === 0) {
+        const loose = `${t.trade_date}|${t.symbol.toUpperCase()}|${t.trade_type}|${t.quantity}`;
+        if (existingLooseKeys.has(loose)) return false;
+      }
+      return true;
+    });
     const duplicateCount = enriched.length - newTrades.length;
 
     if (duplicateCount > 0) {
