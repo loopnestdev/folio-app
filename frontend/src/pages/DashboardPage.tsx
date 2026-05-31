@@ -180,7 +180,7 @@ export function DashboardPage() {
         <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
           <div>
             <h2 className="text-[19px] font-semibold text-[var(--c-ink)]">Performance</h2>
-            <p className="text-[13px] text-[var(--c-ink-mute)] mt-0.5">Since first trade vs benchmarks (% return)</p>
+            <p className="text-[13px] text-[var(--c-ink-mute)] mt-0.5">Time-weighted return vs benchmarks</p>
           </div>
           {/* Benchmark toggles */}
           <div className="flex items-center gap-2 flex-wrap">

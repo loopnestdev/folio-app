@@ -240,22 +240,33 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
       }
     }
 
-    // Pre-compute two running totals (price-independent):
-    //   • runningCash     — full cash position (deposits, withdrawals, buys, sells, dividends)
-    //   • runningNetDep   — net deposited capital (deposits minus withdrawals ONLY)
+    // ── Time-Weighted Return (TWR) ────────────────────────────────────────────
+    // TWR chains daily returns and neutralises the effect of external cash flows
+    // (deposits, withdrawals) and in-specie Transfer-In events (shares received
+    // at $0 cost). This is the industry standard for performance measurement and
+    // fixes two problems with simpler formulas:
     //
-    // Using net_deposited as the chart baseline means:
-    //   portfolio_gain_pct = (total_value − net_deposited) / net_deposited × 100
-    // This is exactly the "Overall Gain %" shown on the dashboard — a true P&L chart that
-    // is immune to the near-zero-base problem (which previously caused +500,000% readings).
+    //   1. "(total − net_dep) / net_dep" is sensitive to denominator size — a small
+    //      net_deposited + large position = extreme % swings on normal price moves.
+    //   2. Large deposits/withdrawals (e.g. FX transfers) would spike the chart.
+    //
+    // Formula per day:
+    //   daily_factor = value_t / (value_{t−1} + external_flows_on_t)
+    //   TWR_t        = (Π daily_factors − 1) × 100
+    //
+    // External flows excluded from return (capital movements, not performance):
+    //   • deposit / withdrawal trades
+    //   • buy trades at price=0 (Transfer-In from broker, value added "for free")
+
     const sortedTrades = [...trades].sort((a, b) => a.trade_date.localeCompare(b.trade_date));
 
+    // Running cash (for portfolio value calculation)
     const runningCash: [string, number][] = (() => {
       let cash = 0;
       return sortedTrades.map(t => {
-        const qty  = Number(t.quantity)  || 0;
-        const price = Number(t.price)   || 0;
-        const brok  = Number(t.brokerage) || 0;
+        const qty   = Number(t.quantity)   || 0;
+        const price = Number(t.price)      || 0;
+        const brok  = Number(t.brokerage)  || 0;
         if      (t.trade_type === 'deposit')                        cash += price * qty;
         else if (t.trade_type === 'withdrawal')                     cash -= price * qty;
         else if (t.trade_type === 'buy' || t.trade_type === 'drp') cash -= price * qty + brok;
@@ -265,47 +276,60 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
       });
     })();
 
-    const runningNetDep: [string, number][] = (() => {
-      let net = 0;
-      return sortedTrades
-        .filter(t => t.trade_type === 'deposit' || t.trade_type === 'withdrawal')
-        .map(t => {
-          const qty  = Number(t.quantity) || 0;
-          const price = Number(t.price)  || 0;
-          if (t.trade_type === 'deposit')    net += price * qty;
-          else                               net -= price * qty;
-          return [t.trade_date, net] as [string, number];
-        });
-    })();
-
-    const getAt = (series: [string, number][], date: string): number => {
+    const getCashAt = (date: string): number => {
       let val = 0;
-      for (const [d, v] of series) { if (d <= date) val = v; else break; }
+      for (const [d, v] of runningCash) { if (d <= date) val = v; else break; }
       return val;
     };
 
+    // External flows by date (deposits + withdrawals + transfer-in market value)
+    const externalFlowsByDate: Record<string, number> = {};
+    for (const t of sortedTrades) {
+      const qty   = Number(t.quantity) || 0;
+      const price = Number(t.price)    || 0;
+      if (t.trade_type === 'deposit') {
+        externalFlowsByDate[t.trade_date] = (externalFlowsByDate[t.trade_date] ?? 0) + price * qty;
+      } else if (t.trade_type === 'withdrawal') {
+        externalFlowsByDate[t.trade_date] = (externalFlowsByDate[t.trade_date] ?? 0) - price * qty;
+      } else if (t.trade_type === 'buy' && price === 0 && qty > 0) {
+        // Transfer-In at $0: treat as external inflow at market value so the
+        // "free" shares do not inflate TWR performance.
+        const sym      = (t as any).security?.symbol ?? '';
+        const mktPrice = priceMap[t.trade_date]?.[sym] ?? 0;
+        if (mktPrice > 0) {
+          externalFlowsByDate[t.trade_date] = (externalFlowsByDate[t.trade_date] ?? 0) + mktPrice * qty;
+        }
+      }
+    }
+
     const portfolioValues = Object.keys(priceMap).sort().map((date) => {
-      const dayPrices  = priceMap[date];
+      const dayPrices   = priceMap[date];
       const dayHoldings = calculateHoldings(
         trades.filter(t => t.trade_date <= date) as any, dayPrices
       );
       const investedValue = dayHoldings.reduce((s, h) => s + (h.market_value ?? 0), 0);
-      const cashValue     = getAt(runningCash, date);
-      const netDep        = getAt(runningNetDep, date);
-      return { date, totalValue: investedValue + cashValue, netDep };
+      return { date, totalValue: investedValue + getCashAt(date) };
     });
 
-    // Build P&L gain% series: (total_value − net_deposited) / net_deposited × 100
-    // Only emit points where net_deposited > 0 — before first deposit, the ratio is
-    // undefined (small positions funded by "borrowed" cash with no real baseline).
-    const portfolioGain = portfolioValues
-      .filter(d => d.netDep > 0)
-      .map(d => ({ date: d.date, value: (d.totalValue - d.netDep) / d.netDep * 100 }));
+    // Chain daily factors → TWR
+    let multiplier  = 1.0;
+    let prevValue: number | null = null;
 
-    // Chart anchored to first date where net_deposited > 0
+    const portfolioGain = portfolioValues.map(({ date, totalValue }) => {
+      const extFlow = externalFlowsByDate[date] ?? 0;
+      if (prevValue === null) { prevValue = totalValue; return { date, value: 0.0 }; }
+      const adjustedBase = prevValue + extFlow;
+      if (Math.abs(adjustedBase) > 0.001) {
+        const factor = totalValue / adjustedBase;
+        if (isFinite(factor)) multiplier *= factor;
+      }
+      prevValue = totalValue;
+      return { date, value: (multiplier - 1) * 100 };
+    });
+
     const chartStart = portfolioGain[0]?.date ?? effectiveFrom;
 
-    // Benchmarks: % gain from chartStart (0% = start date, same baseline as portfolio)
+    // Benchmarks: simple % gain from chartStart (same 0-baseline as TWR)
     const benchPctGain = (arr: { date: string; close: number }[], fromDate: string) => {
       const slice = arr.filter(d => d.date >= fromDate);
       if (!slice.length) return [] as { date: string; value: number }[];
@@ -319,12 +343,10 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
     const normNASDAQ = benchPctGain(nasdaq, chartStart);
     const normASX200 = benchPctGain(asx200, chartStart);
 
-    // Build lookup maps so we can join benchmarks onto each portfolio date
     const sp500Map:  Record<string, number> = Object.fromEntries(normSP500.map(d => [d.date, d.value]));
     const nasdaqMap: Record<string, number> = Object.fromEntries(normNASDAQ.map(d => [d.date, d.value]));
     const asx200Map: Record<string, number> = Object.fromEntries(normASX200.map(d => [d.date, d.value]));
 
-    // Return flat array — one entry per trading day — matching PerformancePoint type
     const merged = portfolioGain.map(d => ({
       date:             d.date,
       portfolio_value:  d.value,
