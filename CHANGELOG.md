@@ -2,6 +2,12 @@
 
 All notable changes to Folio App are documented here.
 
+## [Unreleased]
+
+### Fixed
+
+- **Parser missed trades with space-merged symbol+exchange** — Some tickers (e.g. `IONQ`) render their Line 2 as `IONQ US\tUSD\tDATE` instead of the normal `IONQ\tUS\tUSD\tDATE`. The missing tab collapsed symbol and exchange into one token (3 tokens instead of 4), causing the trade to be silently dropped. Fixed by detecting the 3-token case and splitting on `lastIndexOf(' ')` to recover symbol and exchange. Normal 4-token trades are unaffected. (`backend/src/services/pdf-parser/moomoo.ts`)
+
 ## [v0.3.9] — 2026-05-31
 
 ### Fixed
