@@ -6,6 +6,10 @@ All notable changes to Folio App are documented here.
 
 ### Fixed
 
+- **FX transfers not tracked; USD portfolio showed negative cash** — `parseCashSection` previously ignored `Currency Exchange` entries so AUD↔USD transfers were invisible to the cash position calculation. The parser now captures these entries as `deposit` (positive amount, funds arriving) or `withdrawal` (negative amount, funds leaving). The multi-line FX comment (containing direction and rate, e.g. `AUD → USD, rate 0.621`) is collected via look-ahead. Both sides of each FX transfer are in the same PDF; the existing currency filter routes each side to the correct portfolio on import automatically — no manual deposit trades needed. Re-importing Dec-2024 through Jun-2025 statements will fully account for all AUD↔USD funding. (`backend/src/services/pdf-parser/moomoo.ts`)
+
+- **Frontend build failure — unused CardHeader import** — Removed `CardHeader` from the `DashboardPage.tsx` import after it was no longer used in the Performance card redesign. (`frontend/src/pages/DashboardPage.tsx`)
+
 - **Dashboard performance chart appeared flat** — Benchmarks (S&P 500, NASDAQ) were normalised to 100 at their own start date (2000-01-01) while the portfolio was normalised from its first trade (2024). S&P 500 was already at ~380 when the portfolio started, making the portfolio line look completely flat. Fixed by clamping the benchmark fetch date to the portfolio's earliest investment trade date so all series start together. (`backend/src/routes/reports.ts`)
 
 - **YTD return always showed $0** — When no trades exist in the current calendar year, both the current-value and YTD-start-value used identical `currentPrices`, giving a difference of $0. Fixed by fetching actual historical prices for the first trading week of the current year and using those to value the Jan 1 portfolio position. (`backend/src/routes/reports.ts`)
