@@ -12,16 +12,10 @@ import ReactECharts from 'echarts-for-react';
 import { useSettings } from '../../contexts/SettingsContext';
 import type { PerformancePoint, BenchmarkToggle } from '../../types';
 
-// The chart data is indexed to 100 (100 = portfolio start value).
-// Format index values as percentage return: 150 → "+50%", 90 → "-10%"
-const fmtReturn = (v: number) => {
-  const pct = v - 100;
-  return `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`;
-};
-const fmtReturnAxis = (v: number) => {
-  const pct = Math.round(v - 100);
-  return `${pct >= 0 ? '+' : ''}${pct}%`;
-};
+// The chart data is P&L gain % with 0 as the breakeven baseline.
+// e.g. 58.0 → "+58.0%", -10.5 → "-10.5%"
+const fmtReturn = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
+const fmtReturnAxis = (v: number) => `${v >= 0 ? '+' : ''}${Math.round(v)}%`;
 
 interface PerformanceChartProps {
   data: PerformancePoint[];

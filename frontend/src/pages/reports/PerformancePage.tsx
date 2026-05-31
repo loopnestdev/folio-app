@@ -41,20 +41,28 @@ export function PerformancePage() {
     setBenchmarks((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  // portfolio_value is an index (100 = start). Derive % returns directly.
-  const lastValue  = performanceData[performanceData.length - 1]?.portfolio_value ?? 100;
-  const totalReturnPct = lastValue - 100; // e.g. 150 → +50%
+  // portfolio_value is now P&L gain % with 0 as baseline (0 = breakeven).
+  // e.g. 58.0 means +58% gain on invested capital.
+  const lastValue      = performanceData[performanceData.length - 1]?.portfolio_value ?? 0;
+  const totalReturnPct = lastValue;
 
-  const peakValue   = Math.max(...performanceData.map((d) => d.portfolio_value), 100);
-  const peakReturnPct = peakValue - 100;
+  const peakValue      = Math.max(...performanceData.map((d) => d.portfolio_value), 0);
+  const peakReturnPct  = peakValue;
 
-  const troughValue    = Math.min(...performanceData.filter((d) => d.portfolio_value > 0).map((d) => d.portfolio_value), peakValue);
-  const maxDrawdown    = peakValue > 0 ? ((troughValue - peakValue) / peakValue) * 100 : 0;
+  // Max drawdown: largest peak-to-trough drop expressed as % of portfolio value at peak
+  // (peak_portfolio_value = (1 + peak/100) × base; drawdown% uses that as denominator)
+  const troughValue = Math.min(
+    ...performanceData.filter((d) => d.portfolio_value > -100).map((d) => d.portfolio_value),
+    peakValue
+  );
+  const maxDrawdown = peakValue > -100
+    ? ((troughValue - peakValue) / (100 + peakValue)) * 100
+    : 0;
 
-  // Benchmark returns for the period (last index value - 100)
-  const lastSP500Pct   = (performanceData.findLast((d) => d.benchmark_sp500  != null)?.benchmark_sp500  ?? 100) - 100;
-  const lastNasdaqPct  = (performanceData.findLast((d) => d.benchmark_nasdaq != null)?.benchmark_nasdaq ?? 100) - 100;
-  const lastAsx200Pct  = (performanceData.findLast((d) => d.benchmark_asx200 != null)?.benchmark_asx200 ?? 100) - 100;
+  // Benchmark returns for the period (already 0-based % gain)
+  const lastSP500Pct  = performanceData.findLast((d) => d.benchmark_sp500  != null)?.benchmark_sp500  ?? 0;
+  const lastNasdaqPct = performanceData.findLast((d) => d.benchmark_nasdaq != null)?.benchmark_nasdaq ?? 0;
+  const lastAsx200Pct = performanceData.findLast((d) => d.benchmark_asx200 != null)?.benchmark_asx200 ?? 0;
 
   const benchmarkButtons: { key: keyof BenchmarkToggle; label: string; color: string }[] = [
     { key: 'sp500', label: 'S&P 500', color: '#059669' },

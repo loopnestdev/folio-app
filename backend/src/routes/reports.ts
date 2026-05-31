@@ -240,73 +240,84 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
       }
     }
 
-    // Pre-compute running cash balance for every trade date (price-independent).
-    // Including cash prevents spiky charts for swing-trading portfolios — when
-    // a position is sold, cash absorbs the proceeds so portfolio value stays smooth.
+    // Pre-compute two running totals (price-independent):
+    //   • runningCash     — full cash position (deposits, withdrawals, buys, sells, dividends)
+    //   • runningNetDep   — net deposited capital (deposits minus withdrawals ONLY)
+    //
+    // Using net_deposited as the chart baseline means:
+    //   portfolio_gain_pct = (total_value − net_deposited) / net_deposited × 100
+    // This is exactly the "Overall Gain %" shown on the dashboard — a true P&L chart that
+    // is immune to the near-zero-base problem (which previously caused +500,000% readings).
+    const sortedTrades = [...trades].sort((a, b) => a.trade_date.localeCompare(b.trade_date));
+
     const runningCash: [string, number][] = (() => {
       let cash = 0;
-      return [...trades]
-        .sort((a, b) => a.trade_date.localeCompare(b.trade_date))
+      return sortedTrades.map(t => {
+        const qty  = Number(t.quantity)  || 0;
+        const price = Number(t.price)   || 0;
+        const brok  = Number(t.brokerage) || 0;
+        if      (t.trade_type === 'deposit')                        cash += price * qty;
+        else if (t.trade_type === 'withdrawal')                     cash -= price * qty;
+        else if (t.trade_type === 'buy' || t.trade_type === 'drp') cash -= price * qty + brok;
+        else if (t.trade_type === 'sell')                           cash += price * qty - brok;
+        else if (t.trade_type === 'dividend')                       cash += price * qty;
+        return [t.trade_date, cash] as [string, number];
+      });
+    })();
+
+    const runningNetDep: [string, number][] = (() => {
+      let net = 0;
+      return sortedTrades
+        .filter(t => t.trade_type === 'deposit' || t.trade_type === 'withdrawal')
         .map(t => {
-          const qty      = Number(t.quantity)  || 0;
-          const price    = Number(t.price)     || 0;
-          const brok     = Number(t.brokerage) || 0;
-          if      (t.trade_type === 'deposit')                    cash += price * qty;
-          else if (t.trade_type === 'withdrawal')                 cash -= price * qty;
-          else if (t.trade_type === 'buy' || t.trade_type === 'drp') cash -= price * qty + brok;
-          else if (t.trade_type === 'sell')                       cash += price * qty - brok;
-          else if (t.trade_type === 'dividend')                   cash += price * qty;
-          return [t.trade_date, cash] as [string, number];
+          const qty  = Number(t.quantity) || 0;
+          const price = Number(t.price)  || 0;
+          if (t.trade_type === 'deposit')    net += price * qty;
+          else                               net -= price * qty;
+          return [t.trade_date, net] as [string, number];
         });
     })();
 
-    const getCashAt = (date: string): number => {
-      let cash = 0;
-      for (const [tradeDate, balance] of runningCash) {
-        if (tradeDate <= date) cash = balance;
-        else break;
-      }
-      return cash;
+    const getAt = (series: [string, number][], date: string): number => {
+      let val = 0;
+      for (const [d, v] of series) { if (d <= date) val = v; else break; }
+      return val;
     };
 
     const portfolioValues = Object.keys(priceMap).sort().map((date) => {
-      const dayPrices = priceMap[date];
+      const dayPrices  = priceMap[date];
       const dayHoldings = calculateHoldings(
-        trades.filter(t => t.trade_date <= date) as any,
-        dayPrices
+        trades.filter(t => t.trade_date <= date) as any, dayPrices
       );
       const investedValue = dayHoldings.reduce((s, h) => s + (h.market_value ?? 0), 0);
-      const cashValue = getCashAt(date);
-      return { date, value: investedValue + cashValue };
+      const cashValue     = getAt(runningCash, date);
+      const netDep        = getAt(runningNetDep, date);
+      return { date, totalValue: investedValue + cashValue, netDep };
     });
 
-    // Find the first day where total portfolio value is meaningfully positive.
-    // Before cash deposits arrive, the portfolio may have negative cash + small holdings
-    // giving a total ≈ $0 or negative — dividing by near-zero produces astronomical %.
-    // Starting from the first positive-value day and syncing all benchmarks to that same
-    // date ensures the comparison is always anchored to a real, stable starting point.
-    const firstPositiveIdx = portfolioValues.findIndex(d => d.value > 1);
-    const chartStart = firstPositiveIdx >= 0
-      ? portfolioValues[firstPositiveIdx].date
-      : (portfolioValues[0]?.date ?? effectiveFrom);
+    // Build P&L gain% series: (total_value − net_deposited) / net_deposited × 100
+    // Only emit points where net_deposited > 0 — before first deposit, the ratio is
+    // undefined (small positions funded by "borrowed" cash with no real baseline).
+    const portfolioGain = portfolioValues
+      .filter(d => d.netDep > 0)
+      .map(d => ({ date: d.date, value: (d.totalValue - d.netDep) / d.netDep * 100 }));
 
-    // Normalize a series to 100 from `fromDate` — skip all data before that date.
-    const normalizeFrom = (
-      arr: { date: string; close?: number; value?: number }[],
-      key: 'close' | 'value',
-      fromDate: string
-    ): { date: string; value: number }[] => {
-      const filtered = arr.filter(d => d.date >= fromDate);
-      if (!filtered.length) return [];
-      const base = (filtered[0] as any)[key] as number;
-      if (base <= 0) return filtered.map(d => ({ date: d.date, value: 100 }));
-      return filtered.map(d => ({ date: d.date, value: (((d as any)[key] as number) / base) * 100 }));
+    // Chart anchored to first date where net_deposited > 0
+    const chartStart = portfolioGain[0]?.date ?? effectiveFrom;
+
+    // Benchmarks: % gain from chartStart (0% = start date, same baseline as portfolio)
+    const benchPctGain = (arr: { date: string; close: number }[], fromDate: string) => {
+      const slice = arr.filter(d => d.date >= fromDate);
+      if (!slice.length) return [] as { date: string; value: number }[];
+      const base = slice[0].close;
+      return base > 0
+        ? slice.map(d => ({ date: d.date, value: (d.close / base - 1) * 100 }))
+        : slice.map(d => ({ date: d.date, value: 0 }));
     };
 
-    const normPortfolio = normalizeFrom(portfolioValues, 'value', chartStart);
-    const normSP500     = normalizeFrom(sp500,   'close', chartStart);
-    const normNASDAQ    = normalizeFrom(nasdaq,  'close', chartStart);
-    const normASX200    = normalizeFrom(asx200,  'close', chartStart);
+    const normSP500  = benchPctGain(sp500,  chartStart);
+    const normNASDAQ = benchPctGain(nasdaq, chartStart);
+    const normASX200 = benchPctGain(asx200, chartStart);
 
     // Build lookup maps so we can join benchmarks onto each portfolio date
     const sp500Map:  Record<string, number> = Object.fromEntries(normSP500.map(d => [d.date, d.value]));
@@ -314,12 +325,12 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
     const asx200Map: Record<string, number> = Object.fromEntries(normASX200.map(d => [d.date, d.value]));
 
     // Return flat array — one entry per trading day — matching PerformancePoint type
-    const merged = normPortfolio.map(d => ({
-      date:              d.date,
-      portfolio_value:   d.value,
-      benchmark_sp500:   sp500Map[d.date]  ?? null,
-      benchmark_nasdaq:  nasdaqMap[d.date] ?? null,
-      benchmark_asx200:  asx200Map[d.date] ?? null,
+    const merged = portfolioGain.map(d => ({
+      date:             d.date,
+      portfolio_value:  d.value,
+      benchmark_sp500:  sp500Map[d.date]  ?? null,
+      benchmark_nasdaq: nasdaqMap[d.date] ?? null,
+      benchmark_asx200: asx200Map[d.date] ?? null,
     }));
 
     res.json(merged);

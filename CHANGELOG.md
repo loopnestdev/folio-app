@@ -2,6 +2,12 @@
 
 All notable changes to Folio App are documented here.
 
+## [Unreleased]
+
+### Fixed
+
+- **Performance chart showed +373,000% / +599,900% (astronomical gain)** — root cause: the chart was normalising `portfolio_total_value` (holdings + cash) against an early-period base that was near-zero (small stock positions funded by negative cash before any deposits arrived). Any later value divided by ~$0 produces infinite %. Switched the chart to a true **P&L gain % baseline**: `(total_value − net_deposited) / net_deposited × 100` — the same formula as the "Overall Gain %" stat card, so the chart end-point always matches the dashboard number. Dates before the first deposit (where `net_deposited ≤ 0`) are skipped entirely. Benchmarks now use the same 0%-baseline (`(price / start_price − 1) × 100`) so all series are directly comparable. (`backend/src/routes/reports.ts`, `frontend/src/components/charts/PerformanceChart.tsx`, `frontend/src/pages/reports/PerformancePage.tsx`)
+
 ## [v0.4.0] — 2026-05-31
 
 ### Fixed
