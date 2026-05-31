@@ -146,10 +146,26 @@ router.get('/:id/summary', async (req: AuthenticatedRequest, res: any) => {
     const overallGain    = totalValue - netDeposited;
     const overallGainPct = netDeposited > 0 ? (overallGain / netDeposited) * 100 : 0;
 
-    // YTD: compare current value against portfolio value at the start of this year
-    const ytdStartDate = format(startOfYear(new Date()), 'yyyy-MM-dd');
+    // YTD: compare current value against portfolio value at the start of this year.
+    // Must use HISTORICAL prices at Jan 1 (not today's prices) for the start valuation —
+    // otherwise if there are no trades in the current year, ytdReturn is always 0.
+    const thisYear = new Date().getFullYear();
+    const ytdStartDate = `${thisYear}-01-01`;
+    const ytdEndDate   = `${thisYear}-01-10`; // fetch first 10 days to catch first trading day
     const tradesBeforeYTD = trades.filter(t => t.trade_date < ytdStartDate);
-    const holdingsAtYTDStart = calculateHoldings(tradesBeforeYTD as any, currentPrices);
+
+    const ytdPriceEntries = await Promise.all(
+      Array.from(securitiesMap.entries()).map(async ([sym, exchange]) => {
+        const prices = await getHistoricalPrices(sym, ytdStartDate, ytdEndDate, undefined, exchange);
+        return [sym, prices[0]?.close ?? null] as [string, number | null];
+      })
+    );
+    const ytdPrices: Record<string, number> = {};
+    for (const [sym, price] of ytdPriceEntries) {
+      if (price !== null) ytdPrices[sym] = price as number;
+    }
+
+    const holdingsAtYTDStart = calculateHoldings(tradesBeforeYTD as any, ytdPrices);
     const { cash_balance: cashAtYTDStart } = calculateCashPosition(tradesBeforeYTD as any);
     const valueAtYTDStart = holdingsAtYTDStart.reduce((s, h) => s + (h.market_value ?? 0), 0) + cashAtYTDStart;
     const ytdReturn = totalValue - valueAtYTDStart;
@@ -187,19 +203,28 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
     // Empty portfolio — return empty array so the chart renders the "no data" state
     if (!trades.length) { res.json([]); return; }
 
-    const symbols = [...new Set(trades.filter(t => t.security).map(t => t.security!.symbol))];
+    // Clamp fromDate to the portfolio's earliest trade so benchmarks start at the
+    // same point as the portfolio — avoids the S&P 500 appearing at 380 when the
+    // portfolio just started (normalized from 2000 → portfolio looks flat by comparison).
+    const investmentTrades = trades.filter(t => t.trade_type !== 'deposit' && t.trade_type !== 'withdrawal');
+    const earliestTradeDate = investmentTrades.length
+      ? investmentTrades.reduce((min, t) => t.trade_date < min ? t.trade_date : min, investmentTrades[0].trade_date)
+      : trades[0].trade_date;
+    const effectiveFrom = fromDate > earliestTradeDate ? fromDate : earliestTradeDate;
+
+    const symbols = [...new Set(investmentTrades.filter(t => t.security).map(t => t.security!.symbol))];
 
     const [asx200, sp500, nasdaq] = await Promise.all([
-      getBenchmarkPrices(BENCHMARKS.ASX200, fromDate, toDate),
-      getBenchmarkPrices(BENCHMARKS.SP500, fromDate, toDate),
-      getBenchmarkPrices(BENCHMARKS.NASDAQ, fromDate, toDate),
+      getBenchmarkPrices(BENCHMARKS.ASX200, effectiveFrom, toDate),
+      getBenchmarkPrices(BENCHMARKS.SP500, effectiveFrom, toDate),
+      getBenchmarkPrices(BENCHMARKS.NASDAQ, effectiveFrom, toDate),
     ]);
 
     // Build daily portfolio value
     const pricesBySymbol = await Promise.all(
       symbols.map(async (sym) => {
         const sec = trades.find(t => t.security?.symbol === sym)?.security;
-        const prices = await getHistoricalPrices(sym, fromDate, toDate, sec?.id, sec?.exchange);
+        const prices = await getHistoricalPrices(sym, effectiveFrom, toDate, sec?.id, sec?.exchange);
         return { symbol: sym, prices };
       })
     );

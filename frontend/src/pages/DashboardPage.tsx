@@ -13,7 +13,7 @@ import { PortfolioForm } from '../components/forms/PortfolioForm';
 import { useCreatePortfolio } from '../hooks/usePortfolio';
 import { useToast } from '../components/ui/Toast';
 import { formatCurrency, formatPercent, formatDate, getValueColor } from '../lib/utils';
-import type { Holding, Trade } from '../types';
+import type { Holding, Trade, BenchmarkToggle } from '../types';
 
 export function DashboardPage() {
   const { activePortfolio } = usePortfolioContext();
@@ -26,6 +26,9 @@ export function DashboardPage() {
   });
 
   const [createOpen, setCreateOpen] = useState(false);
+  const [benchmarks, setBenchmarks] = useState<BenchmarkToggle>({ sp500: false, nasdaq: true, asx200: false });
+  const toggleBenchmark = (key: keyof BenchmarkToggle) =>
+    setBenchmarks(prev => ({ ...prev, [key]: !prev[key] }));
   const createPortfolio = useCreatePortfolio();
   const toast = useToast();
 
@@ -174,10 +177,37 @@ export function DashboardPage() {
 
       {/* Performance chart */}
       <Card>
-        <CardHeader title="Performance" subtitle="Last 12 months vs benchmarks" />
+        <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+          <div>
+            <h2 className="text-[19px] font-semibold text-[var(--c-ink)]">Performance</h2>
+            <p className="text-[13px] text-[var(--c-ink-mute)] mt-0.5">Since first trade vs benchmarks (indexed to 100)</p>
+          </div>
+          {/* Benchmark toggles */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {([
+              { key: 'sp500',  label: 'S&P 500',  color: '#059669' },
+              { key: 'nasdaq', label: 'NASDAQ',   color: '#d97706' },
+              { key: 'asx200', label: 'ASX 200',  color: '#5856d6' },
+            ] as { key: keyof BenchmarkToggle; label: string; color: string }[]).map(({ key, label, color }) => (
+              <button
+                key={key}
+                onClick={() => toggleBenchmark(key)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium border transition-all ${
+                  benchmarks[key]
+                    ? 'border-transparent text-white'
+                    : 'border-[var(--c-border)] text-[var(--c-ink-mute)] bg-transparent hover:border-[var(--c-primary-border)]'
+                }`}
+                style={benchmarks[key] ? { backgroundColor: color } : {}}
+              >
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: benchmarks[key] ? 'white' : color }} />
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
         <PerformanceChart
           data={performanceData}
-          benchmarks={{ sp500: true, nasdaq: false, asx200: false }}
+          benchmarks={benchmarks}
           currency={activePortfolio.currency}
           loading={perfLoading}
         />
