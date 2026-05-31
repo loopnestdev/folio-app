@@ -4,6 +4,10 @@ All notable changes to Folio App are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Statistics page blank screen** — Three root causes: (1) `PortfolioStatistics` type had `max_drawdown_monthly` but the backend returns `max_drawdown`, causing `undefined.toFixed()` to crash; (2) deposit/withdrawal trades were feeding a synthetic `CASH` security into the Yahoo Finance historical-price lookup; (3) no React error boundary meant a single page crash unmounted the entire app including the sidebar. Fixed field name, added `?? 0` guards on all `.toFixed()` calls, filtered deposit/withdrawal from the statistics symbol list, and added `PageErrorBoundary` in `AppLayout` so future page errors show an inline message with a Try Again button. (`frontend/src/types/index.ts`, `frontend/src/pages/reports/StatisticsPage.tsx`, `backend/src/routes/reports.ts`, `frontend/src/components/layout/AppLayout.tsx`)
+
 ### Added
 
 - **Import preview: zero-price dedup + Import Another File button** — Zero-price parsed trades (e.g. SI IN transfers) now dedup on date+symbol+type+quantity only, so manually price-corrected transfers aren't re-surfaced on re-import. Added "Import Another File" button to the 0-trade result state. (`backend/src/routes/trades.ts`, `frontend/src/pages/ImportPage.tsx`)
