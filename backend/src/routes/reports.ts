@@ -237,14 +237,44 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
       }
     }
 
+    // Pre-compute running cash balance for every trade date (price-independent).
+    // Including cash prevents spiky charts for swing-trading portfolios — when
+    // a position is sold, cash absorbs the proceeds so portfolio value stays smooth.
+    const runningCash: [string, number][] = (() => {
+      let cash = 0;
+      return [...trades]
+        .sort((a, b) => a.trade_date.localeCompare(b.trade_date))
+        .map(t => {
+          const qty      = Number(t.quantity)  || 0;
+          const price    = Number(t.price)     || 0;
+          const brok     = Number(t.brokerage) || 0;
+          if      (t.trade_type === 'deposit')                    cash += price * qty;
+          else if (t.trade_type === 'withdrawal')                 cash -= price * qty;
+          else if (t.trade_type === 'buy' || t.trade_type === 'drp') cash -= price * qty + brok;
+          else if (t.trade_type === 'sell')                       cash += price * qty - brok;
+          else if (t.trade_type === 'dividend')                   cash += price * qty;
+          return [t.trade_date, cash] as [string, number];
+        });
+    })();
+
+    const getCashAt = (date: string): number => {
+      let cash = 0;
+      for (const [tradeDate, balance] of runningCash) {
+        if (tradeDate <= date) cash = balance;
+        else break;
+      }
+      return cash;
+    };
+
     const portfolioValues = Object.keys(priceMap).sort().map((date) => {
       const dayPrices = priceMap[date];
       const dayHoldings = calculateHoldings(
         trades.filter(t => t.trade_date <= date) as any,
         dayPrices
       );
-      const value = dayHoldings.reduce((s, h) => s + (h.market_value ?? 0), 0);
-      return { date, value };
+      const investedValue = dayHoldings.reduce((s, h) => s + (h.market_value ?? 0), 0);
+      const cashValue = getCashAt(date);
+      return { date, value: investedValue + cashValue };
     });
 
     // Normalize to base 100 for comparison — all series start at 100

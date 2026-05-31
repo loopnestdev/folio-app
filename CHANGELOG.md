@@ -14,6 +14,12 @@ All notable changes to Folio App are documented here.
 
 - **YTD return always showed $0** — When no trades exist in the current calendar year, both the current-value and YTD-start-value used identical `currentPrices`, giving a difference of $0. Fixed by fetching actual historical prices for the first trading week of the current year and using those to value the Jan 1 portfolio position. (`backend/src/routes/reports.ts`)
 
+- **Performance chart y-axis showed dollar amounts instead of % return** — The chart data is normalised to an index (100 = portfolio start value) so the y-axis should show percentage return (e.g. `+50%`), not currency amounts (e.g. `$600K`). Fixed by replacing `formatCurrency` with a percentage formatter (`fmtReturn`, `fmtReturnAxis`) in both the Recharts and ECharts chart implementations. Tooltips also now show `+50.1%` rather than `$50.10`. (`frontend/src/components/charts/PerformanceChart.tsx`)
+
+- **Performance chart spiky for swing-trading portfolios** — Daily portfolio value only included invested holdings, not cash. When a position was sold, the holding vanished from the chart and cash dropped to $0, creating dramatic spikes. Fixed by pre-computing a running cash balance from the trade history (no extra DB queries) and adding it to the daily invested value so the total portfolio value stays smooth when positions are opened or closed. (`backend/src/routes/reports.ts`)
+
+- **PerformancePage stats showed meaningless dollar amounts** — The stat cards were calling `formatCurrency` on indexed values (where `150` means `+50%` return, not `$150`). Changed "Period Return" and "Peak Value" cards to format as `%`. Added a fourth card showing the selected benchmark's return for the same period. (`frontend/src/pages/reports/PerformancePage.tsx`)
+
 ### Added
 
 - **Interactive benchmark toggles on Dashboard** — Performance chart now has clickable S&P 500 / NASDAQ / ASX 200 toggle buttons instead of hardcoded props. NASDAQ is enabled by default. Each button animates to show the benchmark colour when active. (`frontend/src/pages/DashboardPage.tsx`)

@@ -7,7 +7,7 @@ import { DateRangePicker } from '../../components/ui/DateRangePicker';
 import { PerformanceChart } from '../../components/charts/PerformanceChart';
 import { StatCard } from '../../components/ui/StatCard';
 import type { DateRange, BenchmarkToggle } from '../../types';
-import { formatCurrency, formatPercent, cn } from '../../lib/utils';
+import { formatPercent, cn } from '../../lib/utils';
 
 export function PerformancePage() {
   const { id } = useParams<{ id: string }>();
@@ -41,15 +41,20 @@ export function PerformancePage() {
     setBenchmarks((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  // Calculate summary stats from data
-  const firstValue = performanceData[0]?.portfolio_value ?? 0;
-  const lastValue = performanceData[performanceData.length - 1]?.portfolio_value ?? 0;
-  const totalReturn = lastValue - firstValue;
-  const totalReturnPct = firstValue > 0 ? (totalReturn / firstValue) * 100 : 0;
+  // portfolio_value is an index (100 = start). Derive % returns directly.
+  const lastValue  = performanceData[performanceData.length - 1]?.portfolio_value ?? 100;
+  const totalReturnPct = lastValue - 100; // e.g. 150 → +50%
 
-  const peakValue = Math.max(...performanceData.map((d) => d.portfolio_value), 0);
-  const troughValue = Math.min(...performanceData.filter((d) => d.portfolio_value > 0).map((d) => d.portfolio_value), peakValue);
-  const maxDrawdown = peakValue > 0 ? ((troughValue - peakValue) / peakValue) * 100 : 0;
+  const peakValue   = Math.max(...performanceData.map((d) => d.portfolio_value), 100);
+  const peakReturnPct = peakValue - 100;
+
+  const troughValue    = Math.min(...performanceData.filter((d) => d.portfolio_value > 0).map((d) => d.portfolio_value), peakValue);
+  const maxDrawdown    = peakValue > 0 ? ((troughValue - peakValue) / peakValue) * 100 : 0;
+
+  // Benchmark returns for the period (last index value - 100)
+  const lastSP500Pct   = (performanceData.findLast((d) => d.benchmark_sp500  != null)?.benchmark_sp500  ?? 100) - 100;
+  const lastNasdaqPct  = (performanceData.findLast((d) => d.benchmark_nasdaq != null)?.benchmark_nasdaq ?? 100) - 100;
+  const lastAsx200Pct  = (performanceData.findLast((d) => d.benchmark_asx200 != null)?.benchmark_asx200 ?? 100) - 100;
 
   const benchmarkButtons: { key: keyof BenchmarkToggle; label: string; color: string }[] = [
     { key: 'sp500', label: 'S&P 500', color: '#059669' },
@@ -68,24 +73,26 @@ export function PerformancePage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Period Return"
-          value={formatCurrency(totalReturn, currency)}
+          value={formatPercent(totalReturnPct)}
           trend={totalReturnPct}
           loading={isLoading}
         />
         <StatCard
-          label="Return %"
-          value={formatPercent(totalReturnPct)}
-          loading={isLoading}
-        />
-        <StatCard
-          label="Peak Value"
-          value={formatCurrency(peakValue, currency)}
+          label="Peak Gain"
+          value={formatPercent(peakReturnPct)}
+          trend={peakReturnPct}
           loading={isLoading}
         />
         <StatCard
           label="Max Drawdown"
           value={formatPercent(maxDrawdown)}
           trend={maxDrawdown}
+          loading={isLoading}
+        />
+        <StatCard
+          label={`vs ${benchmarks.asx200 ? 'ASX 200' : benchmarks.nasdaq ? 'NASDAQ' : 'S&P 500'}`}
+          value={formatPercent(benchmarks.asx200 ? lastAsx200Pct : benchmarks.nasdaq ? lastNasdaqPct : lastSP500Pct)}
+          trend={benchmarks.asx200 ? lastAsx200Pct : benchmarks.nasdaq ? lastNasdaqPct : lastSP500Pct}
           loading={isLoading}
         />
       </div>

@@ -11,7 +11,17 @@ import {
 import ReactECharts from 'echarts-for-react';
 import { useSettings } from '../../contexts/SettingsContext';
 import type { PerformancePoint, BenchmarkToggle } from '../../types';
-import { formatCurrency } from '../../lib/utils';
+
+// The chart data is indexed to 100 (100 = portfolio start value).
+// Format index values as percentage return: 150 → "+50%", 90 → "-10%"
+const fmtReturn = (v: number) => {
+  const pct = v - 100;
+  return `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`;
+};
+const fmtReturnAxis = (v: number) => {
+  const pct = Math.round(v - 100);
+  return `${pct >= 0 ? '+' : ''}${pct}%`;
+};
 
 interface PerformanceChartProps {
   data: PerformancePoint[];
@@ -26,10 +36,7 @@ const COLOR_SP500     = '#059669';
 const COLOR_NASDAQ    = '#d97706';
 const COLOR_ASX200    = '#5856d6';
 
-function RechartsPerformanceChart({ data, benchmarks, currency = 'USD' }: PerformanceChartProps) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const formatTooltipValue = (value: any) => formatCurrency(Number(value) || 0, currency);
-
+function RechartsPerformanceChart({ data, benchmarks }: PerformanceChartProps) {
   return (
     <ResponsiveContainer width="100%" height={350}>
       <LineChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
@@ -44,10 +51,11 @@ function RechartsPerformanceChart({ data, benchmarks, currency = 'USD' }: Perfor
           tick={{ fontSize: 12, fill: 'var(--c-ink-mute)' }}
           tickLine={false}
           axisLine={false}
-          tickFormatter={(v: number) => formatCurrency(v, currency, { notation: 'compact' })}
+          tickFormatter={fmtReturnAxis}
         />
         <Tooltip
-          formatter={formatTooltipValue}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          formatter={(value: any, name: any) => [fmtReturn(Number(value) || 100), String(name)]}
           contentStyle={{
             borderRadius: 12,
             border: '1px solid var(--c-border)',
@@ -105,7 +113,7 @@ function RechartsPerformanceChart({ data, benchmarks, currency = 'USD' }: Perfor
   );
 }
 
-function EChartsPerformanceChart({ data, benchmarks, currency = 'USD' }: PerformanceChartProps) {
+function EChartsPerformanceChart({ data, benchmarks }: PerformanceChartProps) {
   const series = [
     {
       name: 'Portfolio',
@@ -163,13 +171,13 @@ function EChartsPerformanceChart({ data, benchmarks, currency = 'USD' }: Perform
       formatter: (params: Array<{ seriesName: string; value: [string, number] }>) => {
         const date = params[0]?.value[0];
         const rows = params
-          .map((p) => `<div>${p.seriesName}: ${formatCurrency(p.value[1], currency)}</div>`)
+          .map((p) => `<div>${p.seriesName}: <strong>${fmtReturn(p.value[1])}</strong></div>`)
           .join('');
         return `<div style="font-size:13px"><strong>${date}</strong>${rows}</div>`;
       },
     },
     legend: { bottom: 0, textStyle: { fontSize: 13, color: 'var(--c-ink-mute)' } },
-    grid: { top: 10, right: 20, bottom: 40, left: 60 },
+    grid: { top: 10, right: 20, bottom: 40, left: 70 },
     xAxis: {
       type: 'category',
       axisLine: { show: false },
@@ -184,7 +192,7 @@ function EChartsPerformanceChart({ data, benchmarks, currency = 'USD' }: Perform
       axisLabel: {
         fontSize: 12,
         color: 'var(--c-ink-mute)',
-        formatter: (v: number) => formatCurrency(v, currency, { notation: 'compact' }),
+        formatter: fmtReturnAxis,
       },
       splitLine: { lineStyle: { color: 'var(--c-border)' } },
     },
