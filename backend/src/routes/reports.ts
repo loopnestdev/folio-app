@@ -277,17 +277,33 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
       return { date, value: investedValue + cashValue };
     });
 
-    // Normalize to base 100 for comparison — all series start at 100
-    const normalize = (arr: { date: string; close?: number; value?: number }[], key: 'close' | 'value') => {
-      if (!arr.length) return [];
-      const base = (arr[0] as any)[key] as number;
-      return arr.map(d => ({ date: d.date, value: base > 0 ? (((d as any)[key] as number) / base) * 100 : 100 }));
+    // Find the first day where total portfolio value is meaningfully positive.
+    // Before cash deposits arrive, the portfolio may have negative cash + small holdings
+    // giving a total ≈ $0 or negative — dividing by near-zero produces astronomical %.
+    // Starting from the first positive-value day and syncing all benchmarks to that same
+    // date ensures the comparison is always anchored to a real, stable starting point.
+    const firstPositiveIdx = portfolioValues.findIndex(d => d.value > 1);
+    const chartStart = firstPositiveIdx >= 0
+      ? portfolioValues[firstPositiveIdx].date
+      : (portfolioValues[0]?.date ?? effectiveFrom);
+
+    // Normalize a series to 100 from `fromDate` — skip all data before that date.
+    const normalizeFrom = (
+      arr: { date: string; close?: number; value?: number }[],
+      key: 'close' | 'value',
+      fromDate: string
+    ): { date: string; value: number }[] => {
+      const filtered = arr.filter(d => d.date >= fromDate);
+      if (!filtered.length) return [];
+      const base = (filtered[0] as any)[key] as number;
+      if (base <= 0) return filtered.map(d => ({ date: d.date, value: 100 }));
+      return filtered.map(d => ({ date: d.date, value: (((d as any)[key] as number) / base) * 100 }));
     };
 
-    const normPortfolio = normalize(portfolioValues, 'value');
-    const normSP500    = normalize(sp500, 'close');
-    const normNASDAQ   = normalize(nasdaq, 'close');
-    const normASX200   = normalize(asx200, 'close');
+    const normPortfolio = normalizeFrom(portfolioValues, 'value', chartStart);
+    const normSP500     = normalizeFrom(sp500,   'close', chartStart);
+    const normNASDAQ    = normalizeFrom(nasdaq,  'close', chartStart);
+    const normASX200    = normalizeFrom(asx200,  'close', chartStart);
 
     // Build lookup maps so we can join benchmarks onto each portfolio date
     const sp500Map:  Record<string, number> = Object.fromEntries(normSP500.map(d => [d.date, d.value]));
