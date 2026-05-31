@@ -100,8 +100,15 @@ export function parseTradesSection(section: string): ParsedTrade[] {
 
     // Security name is the last non-empty tab token on the direction line
     // e.g. ["Buy to Open", "Buy to Open ", "Global X FANG+ ETF"]
+    // Sometimes the PDF wraps the security name onto its own line between the
+    // direction line and the symbol/exchange line (no tabs, no date). Detect and consume.
     const dirParts = line.split('\t').map((s) => s.trim()).filter(Boolean);
-    const securityName = dirParts.length >= 3 ? dirParts[dirParts.length - 1] : '';
+    let securityName = dirParts.length >= 3 ? dirParts[dirParts.length - 1] : '';
+    if (!securityName) {
+      const peek = (lines[i + 1] ?? '').trim();
+      const isNameLine = peek.length > 0 && !peek.includes('\t') && !/^\d{4}\/\d{2}\/\d{2}/.test(peek) && !peek.startsWith('Subtotal');
+      if (isNameLine) { securityName = peek; i++; }
+    }
 
     // Line 2: SYMBOL \t EXCHANGE \t CURRENCY \t YYYY/MM/DD
     // Some tickers render as "IONQ US \t USD \t DATE" (symbol+exchange space-merged,

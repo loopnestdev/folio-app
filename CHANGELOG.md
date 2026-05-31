@@ -6,6 +6,8 @@ All notable changes to Folio App are documented here.
 
 ### Fixed
 
+- **Parser missed trades when security name wraps to its own line** — Some PDF pages break between the direction line and the symbol/exchange line, pushing the security name onto a standalone line with no tabs. The parser previously misread the security name as the symbol/exchange line, skipping the entire trade (e.g. FANG buy on 2025-04-22 was silently dropped). Fixed by detecting a standalone name-only line and consuming it before reading the symbol/exchange line. (`backend/src/services/pdf-parser/moomoo.ts`)
+
 - **Parser missed trades with space-merged symbol+exchange** — Some tickers (e.g. `IONQ`) render their Line 2 as `IONQ US\tUSD\tDATE` instead of the normal `IONQ\tUS\tUSD\tDATE`. The missing tab collapsed symbol and exchange into one token (3 tokens instead of 4), causing the trade to be silently dropped. Fixed by detecting the 3-token case and splitting on `lastIndexOf(' ')` to recover symbol and exchange. Normal 4-token trades are unaffected. (`backend/src/services/pdf-parser/moomoo.ts`)
 
 ## [v0.3.9] — 2026-05-31
