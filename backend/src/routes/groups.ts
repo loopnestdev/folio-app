@@ -458,6 +458,11 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
         portfolioGain.push({ date, value: (multiplier - 1) * 100 });
         prevValue = totalValue;
       } else {
+        // Combined value temporarily non-positive — show null gap.
+        // Always update prevValue so subsequent extFlows (e.g. the USD deposit
+        // that arrives the day after the AUD withdrawal) adjust against the correct
+        // baseline, preventing phantom losses/gains when the group recovers.
+        prevValue = totalValue;
         portfolioGain.push({ date, value: null });
       }
     }

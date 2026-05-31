@@ -20,9 +20,11 @@ export function DashboardPage() {
   const { data: summary, isLoading: summaryLoading } = useActivePortfolioSummary();
   const { data: holdings = [] } = useHoldings(activePortfolio?.id);
   const { data: trades = [] } = useTrades(activePortfolio?.id);
+  // Use ALL range so portfolios whose active period is more than 1Y ago
+  // (e.g. a portfolio that was transferred out) still display their chart.
   const { data: performanceData = [], isLoading: perfLoading } = usePerformance({
     portfolioId: activePortfolio?.id,
-    range: '1Y',
+    range: 'ALL',
   });
 
   const [createOpen, setCreateOpen] = useState(false);

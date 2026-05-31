@@ -395,14 +395,20 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
       if (adjustedBase > 0 && totalValue > 0) {
         multiplier *= totalValue / adjustedBase;
         portfolioGain.push({ date, value: (multiplier - 1) * 100 });
-        // Only advance prevValue on valid calculations.
-        // Leaving it unchanged during null gaps means adjustedBase on recovery is
-        // computed from the last-valid portfolio value — not from a transient negative
-        // value — so the chain resumes correctly without exploded or inverted factors.
         prevValue = totalValue;
       } else {
-        // Portfolio temporarily non-positive (large buy exceeded cash, or FX drain) —
-        // show a gap rather than an inverted/undefined data point.
+        // Portfolio temporarily non-positive (large withdrawal exceeds value, or FX drain).
+        // Show a gap rather than an inverted/undefined data point.
+        //
+        // IMPORTANT: still update prevValue to the current totalValue (even when negative).
+        // If prevValue is frozen at the last-valid value and a large extFlow later arrives
+        // (e.g. the matching USD deposit from an AUD→USD FX transfer), adjustedBase becomes
+        // prevValue_frozen + extFlow, which is much larger than the actual combined value.
+        // That produces a phantom loss on the deposit day and a phantom gain when the
+        // portfolio recovers — the "big jump after null gap" pattern in the group chart.
+        // By updating prevValue here, subsequent extFlows are applied against the correct
+        // (possibly negative) baseline so the chain resumes accurately.
+        prevValue = totalValue;
         portfolioGain.push({ date, value: null });
       }
     }
