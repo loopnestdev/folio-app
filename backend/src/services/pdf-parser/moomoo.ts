@@ -104,10 +104,22 @@ export function parseTradesSection(section: string): ParsedTrade[] {
     const securityName = dirParts.length >= 3 ? dirParts[dirParts.length - 1] : '';
 
     // Line 2: SYMBOL \t EXCHANGE \t CURRENCY \t YYYY/MM/DD
+    // Some tickers render as "IONQ US \t USD \t DATE" (symbol+exchange space-merged,
+    // only 3 tab tokens) instead of the normal 4-token layout. Handle both.
     const line2 = lines[++i] ?? '';
     const p2 = line2.split('\t').map((s) => s.trim()).filter(Boolean);
-    if (p2.length < 4) { i++; continue; }
-    const [symbol, exchange, currency, dateStr] = p2;
+    if (p2.length < 3) { i++; continue; }
+    let symbol: string, exchange: string, currency: string, dateStr: string;
+    if (p2.length >= 4) {
+      [symbol, exchange, currency, dateStr] = p2 as [string, string, string, string];
+    } else if (p2[0].includes(' ') && /^\d{4}\/\d{2}\/\d{2}$/.test(p2[2] ?? '')) {
+      // "IONQ US" merged — split on last space
+      const sp = p2[0].lastIndexOf(' ');
+      symbol   = p2[0].substring(0, sp).trim();
+      exchange = p2[0].substring(sp + 1).trim();
+      currency = p2[1] ?? '';
+      dateStr  = p2[2] ?? '';
+    } else { i++; continue; }
     if (!symbol || !exchange || !currency || !/^\d{4}\/\d{2}\/\d{2}$/.test(dateStr)) { i++; continue; }
 
     // Line 3: TIME \t PRICE \t QTY \t AMOUNT
