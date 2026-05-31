@@ -6,6 +6,14 @@ All notable changes to Folio App are documented here.
 
 ### Fixed
 
+- **Dashboard performance chart appeared flat** — Benchmarks (S&P 500, NASDAQ) were normalised to 100 at their own start date (2000-01-01) while the portfolio was normalised from its first trade (2024). S&P 500 was already at ~380 when the portfolio started, making the portfolio line look completely flat. Fixed by clamping the benchmark fetch date to the portfolio's earliest investment trade date so all series start together. (`backend/src/routes/reports.ts`)
+
+- **YTD return always showed $0** — When no trades exist in the current calendar year, both the current-value and YTD-start-value used identical `currentPrices`, giving a difference of $0. Fixed by fetching actual historical prices for the first trading week of the current year and using those to value the Jan 1 portfolio position. (`backend/src/routes/reports.ts`)
+
+### Added
+
+- **Interactive benchmark toggles on Dashboard** — Performance chart now has clickable S&P 500 / NASDAQ / ASX 200 toggle buttons instead of hardcoded props. NASDAQ is enabled by default. Each button animates to show the benchmark colour when active. (`frontend/src/pages/DashboardPage.tsx`)
+
 - **Parser missed trades when security name wraps to its own line** — Some PDF pages break between the direction line and the symbol/exchange line, pushing the security name onto a standalone line with no tabs. The parser previously misread the security name as the symbol/exchange line, skipping the entire trade (e.g. FANG buy on 2025-04-22 was silently dropped). Fixed by detecting a standalone name-only line and consuming it before reading the symbol/exchange line. (`backend/src/services/pdf-parser/moomoo.ts`)
 
 - **Parser missed trades with space-merged symbol+exchange** — Some tickers (e.g. `IONQ`) render their Line 2 as `IONQ US\tUSD\tDATE` instead of the normal `IONQ\tUS\tUSD\tDATE`. The missing tab collapsed symbol and exchange into one token (3 tokens instead of 4), causing the trade to be silently dropped. Fixed by detecting the 3-token case and splitting on `lastIndexOf(' ')` to recover symbol and exchange. Normal 4-token trades are unaffected. (`backend/src/services/pdf-parser/moomoo.ts`)
