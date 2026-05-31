@@ -9,14 +9,19 @@ import { Table } from '../../components/ui/Table';
 import { PerformanceChart } from '../../components/charts/PerformanceChart';
 import { DateRangePicker } from '../../components/ui/DateRangePicker';
 import { PageLoader } from '../../components/ui/LoadingSpinner';
-import { formatCurrency, formatPercent, getValueColor } from '../../lib/utils';
-import type { DateRange, GroupPortfolioBreakdown } from '../../types';
+import { formatCurrency, formatPercent, getValueColor, cn } from '../../lib/utils';
+import type { DateRange, BenchmarkToggle, GroupPortfolioBreakdown } from '../../types';
 
 export function GroupDashboardPage() {
   const { id } = useParams<{ id: string }>();
-  const [perfRange, setPerfRange] = useState<DateRange>('1Y');
+  const [perfRange, setPerfRange] = useState<DateRange>('ALL');
   const [perfStart, setPerfStart] = useState<string>();
   const [perfEnd,   setPerfEnd]   = useState<string>();
+  const [benchmarks, setBenchmarks] = useState<BenchmarkToggle>({
+    sp500: false, nasdaq: true, asx200: false,
+  });
+  const toggleBenchmark = (key: keyof BenchmarkToggle) =>
+    setBenchmarks((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const { data: groups = [] } = useGroups();
   const group = groups.find((g) => g.id === id);
@@ -142,8 +147,11 @@ export function GroupDashboardPage() {
 
       {/* Performance chart */}
       <Card>
-        <div className="flex items-center justify-between mb-4">
-          <CardHeader title="Consolidated Performance" subtitle={`Normalised to 100 · values in ${baseCurrency} at current forex`} />
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+          <CardHeader
+            title="Consolidated Performance"
+            subtitle={`Time-weighted return vs benchmarks · values in ${baseCurrency} at current forex`}
+          />
           <DateRangePicker
             value={perfRange}
             customStart={perfStart}
@@ -151,9 +159,39 @@ export function GroupDashboardPage() {
             onChange={(r, s, e) => { setPerfRange(r); setPerfStart(s); setPerfEnd(e); }}
           />
         </div>
+
+        {/* Benchmark toggles */}
+        {(() => {
+          const btns: { key: keyof BenchmarkToggle; label: string; color: string }[] = [
+            { key: 'sp500',  label: 'S&P 500', color: '#059669' },
+            { key: 'nasdaq', label: 'NASDAQ',  color: '#d97706' },
+            { key: 'asx200', label: 'ASX 200', color: '#5856d6' },
+          ];
+          return (
+            <div className="flex flex-wrap gap-2 mb-4">
+              {btns.map((b) => (
+                <button
+                  key={b.key}
+                  onClick={() => toggleBenchmark(b.key)}
+                  className={cn(
+                    'flex items-center gap-2 px-3 py-1.5 rounded-full text-[13px] font-medium border transition-all',
+                    benchmarks[b.key]
+                      ? 'text-white border-transparent'
+                      : 'bg-[var(--c-canvas)] text-[var(--c-ink-mute)] border-[var(--c-border)] hover:border-[var(--c-primary-border)]',
+                  )}
+                  style={benchmarks[b.key] ? { backgroundColor: b.color, borderColor: b.color } : {}}
+                >
+                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: benchmarks[b.key] ? 'white' : b.color }} />
+                  {b.label}
+                </button>
+              ))}
+            </div>
+          );
+        })()}
+
         <PerformanceChart
           data={performanceData}
-          benchmarks={{ sp500: true, nasdaq: false, asx200: false }}
+          benchmarks={benchmarks}
           currency={baseCurrency}
           loading={perfLoading}
         />

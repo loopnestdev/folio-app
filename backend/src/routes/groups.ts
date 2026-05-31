@@ -177,7 +177,9 @@ router.get('/:id/summary', async (req: AuthenticatedRequest, res: any) => {
       }),
     );
 
-    const ytdStartDate = format(startOfYear(new Date()), 'yyyy-MM-dd');
+    const thisYear     = new Date().getFullYear();
+    const ytdStartDate = `${thisYear}-01-01`;
+    const ytdEndDate   = `${thisYear}-01-10`; // fetch first 10 days to catch first trading day
 
     const portfolioBreakdowns = await Promise.all(
       portfolios.map(async (portfolio) => {
@@ -195,7 +197,27 @@ router.get('/:id/summary', async (req: AuthenticatedRequest, res: any) => {
 
         const securitiesMap = new Map<string, string>();
         trades.filter(t => t.security).forEach(t => securitiesMap.set(t.security!.symbol, t.security!.exchange ?? ''));
-        const currentPrices = await getCurrentPrices(Array.from(securitiesMap.entries()).map(([symbol, exchange]) => ({ symbol, exchange })));
+        const secEntries = Array.from(securitiesMap.entries()).map(([symbol, exchange]) => ({ symbol, exchange }));
+
+        // Fetch current prices and YTD-start prices in parallel.
+        // YTD-start prices use the first available trading day in Jan so the
+        // YTD return reflects actual price movement, not just composition changes.
+        const [currentPrices, ytdPriceEntries] = await Promise.all([
+          getCurrentPrices(secEntries),
+          Promise.all(
+            secEntries.map(async ({ symbol, exchange }) => {
+              const prices = await getHistoricalPrices(symbol, ytdStartDate, ytdEndDate, undefined, exchange);
+              const first = prices[0];
+              return [symbol, first?.close ?? null] as [string, number | null];
+            }),
+          ),
+        ]);
+
+        const ytdPrices: Record<string, number> = {};
+        for (const [sym, price] of ytdPriceEntries) {
+          if (price !== null) ytdPrices[sym] = price;
+        }
+
         const holdings = calculateHoldings(trades as any, currentPrices);
 
         const fx = fxRates[portfolio.currency] ?? 1;
@@ -203,9 +225,10 @@ router.get('/:id/summary', async (req: AuthenticatedRequest, res: any) => {
         const totalCost  = holdings.reduce((s, h) => s + h.cost_base, 0);
         const totalGain  = totalValue - totalCost;
 
-        const tradesBeforeYTD = trades.filter(t => t.trade_date < ytdStartDate);
-        const holdingsYTD = calculateHoldings(tradesBeforeYTD as any, currentPrices);
-        const ytdStartValue = holdingsYTD.reduce((s, h) => s + (h.market_value ?? 0), 0);
+        // YTD: value of what was held at Jan 1 using Jan 1 prices vs current prices
+        const tradesBeforeYTD   = trades.filter(t => t.trade_date < ytdStartDate);
+        const holdingsAtYTDStart = calculateHoldings(tradesBeforeYTD as any, ytdPrices);
+        const ytdStartValue      = holdingsAtYTDStart.reduce((s, h) => s + (h.market_value ?? 0), 0);
         const ytdReturn = totalValue - ytdStartValue;
 
         return {
@@ -326,22 +349,35 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
       combined.push({ date, value: total });
     }
 
-    // Normalise to base 100
-    const baseValue = combined[0].value;
-    const normalised = combined.map((d) => ({
+    // Skip leading dates where the combined portfolio has no holdings yet.
+    // Pre-portfolio dates always have value=0; starting from zero produces
+    // either division-by-zero or a flat 100-indexed line that fills the chart
+    // with meaningless data from the year 2000.
+    const startIdx = combined.findIndex((d) => d.value > 0);
+    if (startIdx === -1) { res.json([]); return; }
+    const chartStartDate = combined[startIdx].date;
+    const baseValue      = combined[startIdx].value;
+
+    // 0-based % gain from chartStart (same convention as individual portfolio TWR):
+    //   0% = no change, +58% = portfolio up 58%, -10% = portfolio down 10%.
+    const normalised = combined.slice(startIdx).map((d) => ({
       date: d.date,
-      portfolio_value: baseValue > 0 ? (d.value / baseValue) * 100 : 100,
+      portfolio_value: (d.value / baseValue - 1) * 100,
     }));
 
-    // Attach benchmarks
-    const normalise = (arr: { date: string; close: number }[]) => {
-      if (!arr.length) return {} as Record<string, number>;
-      const base = arr[0].close;
-      return Object.fromEntries(arr.map((d) => [d.date, base > 0 ? (d.close / base) * 100 : 100]));
+    // Benchmarks: 0-based % gain from chartStartDate so they share the same
+    // baseline and are directly comparable to the portfolio line.
+    const benchPctGain = (arr: { date: string; close: number }[], fromDate: string) => {
+      const slice = arr.filter((d) => d.date >= fromDate);
+      if (!slice.length) return {} as Record<string, number>;
+      const base = slice[0].close;
+      return Object.fromEntries(
+        slice.map((d) => [d.date, base > 0 ? (d.close / base - 1) * 100 : 0]),
+      );
     };
-    const sp500Map  = normalise(sp500);
-    const nasdaqMap = normalise(nasdaq);
-    const asx200Map = normalise(asx200);
+    const sp500Map  = benchPctGain(sp500,  chartStartDate);
+    const nasdaqMap = benchPctGain(nasdaq, chartStartDate);
+    const asx200Map = benchPctGain(asx200, chartStartDate);
 
     const result = normalised.map((d) => ({
       date:             d.date,

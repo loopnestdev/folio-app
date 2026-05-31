@@ -4,7 +4,19 @@ All notable changes to Folio App are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Group dashboard accessible from sidebar** — Portfolio groups now appear in the left sidebar under a "Groups" section, each linking directly to that group's consolidated dashboard. Previously the only entry point was the tiny "Dashboard" link on the Portfolios page. (`frontend/src/components/layout/Sidebar.tsx`)
+
+- **NASDAQ (and ASX 200) benchmark toggles on Group dashboard** — The group performance chart previously had S&P 500 only with no way to switch. Same toggle-pill UI as the individual Performance page; defaults to NASDAQ on. (`frontend/src/pages/groups/GroupDashboardPage.tsx`)
+
 ### Fixed
+
+- **Group performance chart showed data from year 2000 with a flat line** — Historical price fetches used `fromDate = 2000-01-01` for the ALL range; stocks like UA have Yahoo Finance data going back to the early 2000s, so `priceMap` contained thousands of pre-portfolio dates all with `value = 0`. The chart started from the first date (year 2000) and divided by zero, producing either a flat 100-indexed line or no meaningful data. Fixed by skipping leading dates where combined portfolio value = 0 and starting the chart from the first date the group had any holdings. (`backend/src/routes/groups.ts`)
+
+- **Group performance chart used 100-indexed scale instead of 0-based % gain** — Backend was returning values like 100, 95, 110 (Normalised to 100 style); the shared `PerformanceChart` component expects 0-based values like 0, −5, +10. This caused the Y-axis to show "+100%" at the start and the tooltip to show nonsensical values. Changed to `(value / baseValue − 1) × 100` (same convention as individual portfolio TWR). Benchmarks also aligned to `chartStartDate` with the same 0-based formula. (`backend/src/routes/groups.ts`)
+
+- **Group YTD return always showed A$0.00** — The group summary was valuing both the current portfolio AND the YTD-start portfolio using the same `currentPrices`, so their difference only captured changes in position composition (new buys/sells) not price movement. Fixed by fetching actual historical prices for the first trading day of the current year and using those to value the Jan 1 portfolio, matching the approach used by the individual portfolio summary endpoint. (`backend/src/routes/groups.ts`)
 
 - **Performance chart tooltip invisible in dark mode** — Recharts tooltip rendered with no background/text colour, so the date and values were illegible on dark backgrounds. ECharts tooltip HTML also lacked explicit colour styling. Both now read CSS custom properties (`--c-canvas`, `--c-ink`, `--c-border`) and apply them explicitly so the tooltip is always readable in both light and dark themes. (`frontend/src/components/charts/PerformanceChart.tsx`)
 

@@ -17,9 +17,11 @@ import {
   Shield,
   X,
   Package,
+  Layers,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { usePortfolioContext } from '../../contexts/PortfolioContext';
+import { useGroups } from '../../hooks/useGroups';
 import { cn } from '../../lib/utils';
 
 interface NavItem {
@@ -59,6 +61,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
   const { activePortfolio } = usePortfolioContext();
   const { id: paramId } = useParams<{ id: string }>();
   const portfolioId = activePortfolio?.id || paramId;
+  const { data: groups = [] } = useGroups();
 
   const mainItems: NavItem[] = [
     { label: 'Dashboard', to: '/', icon: <LayoutDashboard size={18} /> },
@@ -159,6 +162,35 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         {mainItems.map((item) => (
           <NavItemLink key={item.to} item={item} onClick={onClose} />
         ))}
+
+        {/* Groups */}
+        {groups.length > 0 && (
+          <>
+            <div className="pt-4 pb-1 px-3">
+              <p className="text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-widest">
+                Groups
+              </p>
+            </div>
+            {groups.map((g) => (
+              <NavLink
+                key={g.id}
+                to={`/groups/${g.id}`}
+                onClick={onClose}
+                className={({ isActive }) =>
+                  cn(
+                    'flex items-center gap-3 px-3 py-2 rounded-xl text-[15px] transition-colors',
+                    isActive
+                      ? 'bg-[var(--c-primary-bg)] text-[var(--c-primary)] font-semibold'
+                      : 'text-[var(--c-ink)] hover:bg-[var(--c-canvas-soft)] font-medium',
+                  )
+                }
+              >
+                <Layers size={18} className="shrink-0" />
+                <span className="truncate">{g.name}</span>
+              </NavLink>
+            ))}
+          </>
+        )}
 
         {/* Portfolio-specific items */}
         {portfolioItems.length > 0 && (
