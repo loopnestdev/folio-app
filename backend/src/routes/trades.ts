@@ -237,11 +237,39 @@ async function handleImportParse(req: AuthenticatedRequest, res: any) {
       }),
     );
 
+    // ── Dedup at parse time ───────────────────────────────────────────────
+    // Fetch existing trades for this portfolio and build a key set so the
+    // preview only shows genuinely new trades. Dedup key: trade_date + symbol
+    // + trade_type + quantity + price. This avoids misleading "6 trades found"
+    // when all 6 were already imported.
+    const { data: existingTrades } = await supabase
+      .from('trades')
+      .select('trade_date, trade_type, quantity, price, security:securities(symbol)')
+      .eq('portfolio_id', portfolioId);
+
+    const existingKeys = new Set(
+      (existingTrades ?? []).map((t: any) => {
+        const sym = (t.security as any)?.symbol ?? '';
+        return `${t.trade_date}|${sym.toUpperCase()}|${t.trade_type}|${Number(t.quantity)}|${Number(t.price)}`;
+      }),
+    );
+
+    const newTrades      = enriched.filter((t) => !existingKeys.has(
+      `${t.trade_date}|${t.symbol.toUpperCase()}|${t.trade_type}|${t.quantity}|${t.price}`,
+    ));
+    const duplicateCount = enriched.length - newTrades.length;
+
+    if (duplicateCount > 0) {
+      warnings.push(
+        `${duplicateCount} trade${duplicateCount !== 1 ? 's' : ''} already imported — skipped from preview.`,
+      );
+    }
+
     // Return shape matching the ImportPreview frontend type
     res.json({
       filename:     req.file.originalname,
-      parsed_count: enriched.length,
-      trades:       enriched,
+      parsed_count: newTrades.length,
+      trades:       newTrades,
       errors:       warnings,
     });
   } catch (err: any) {

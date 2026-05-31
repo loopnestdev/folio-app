@@ -286,9 +286,9 @@ export function ImportPage() {
 
               {preview.parsed_count === 0 ? (
                 <div className="mt-4 bg-[var(--c-canvas-soft)] border border-[var(--c-border)] rounded-xl p-4 text-[14px] text-[var(--c-ink-mute)]">
-                  No importable trades were found in this file. Cash deposits and withdrawals
-                  are not tracked as trades. If this is a new account or a month with no
-                  trading activity, this is expected.
+                  {preview.errors.some(e => e.includes('already imported'))
+                    ? 'All trades in this file are already in your portfolio — nothing new to import.'
+                    : 'No importable trades found in this file. If this is a month with no activity, this is expected.'}
                 </div>
               ) : (
                 <div className="mt-6 flex items-center justify-end gap-3">
