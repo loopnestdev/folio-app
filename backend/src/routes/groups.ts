@@ -264,8 +264,13 @@ router.get('/:id/summary', async (req: AuthenticatedRequest, res: any) => {
 });
 
 // ── GET /api/groups/:id/performance ──────────────────────────
-// Consolidated performance chart — each portfolio's values are converted to
-// base_currency using the current forex rate, then summed and normalised to 100.
+// Consolidated TWR chart. Each portfolio's daily value (holdings + cash) is
+// converted to base_currency and summed. External cash flows (deposits &
+// withdrawals) from all sub-portfolios are summed the same way. Because FX
+// transfers appear as an AUD withdrawal AND a USD deposit, they cancel out
+// in the combined flow sum — which is exactly right (money didn't leave the group).
+// The TWR chain is then applied to the combined series, identical to the
+// individual portfolio implementation in reports.ts.
 router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
   const group = await getGroup(req.params.id as string, req.userId!);
   if (!group) { res.status(404).json({ error: 'Group not found' }); return; }
@@ -278,7 +283,7 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
     const portfolios = await getGroupPortfolios(req.params.id as string, req.userId!);
     if (!portfolios.length) { res.json([]); return; }
 
-    // Forex rates (current) for non-base currencies
+    // Current forex rates for non-base currencies
     const today = format(new Date(), 'yyyy-MM-dd');
     const uniqueCurrencies = [...new Set(portfolios.map((p) => p.currency))].filter((c) => c !== baseCurrency);
     const fxRates: Record<string, number> = { [baseCurrency]: 1 };
@@ -288,20 +293,25 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
       }),
     );
 
-    // Benchmarks (shared across all portfolios in the group)
+    // Benchmarks — fetched in parallel with portfolio data below
     const [asx200, sp500, nasdaq] = await Promise.all([
       getBenchmarkPrices(BENCHMARKS.ASX200, fromDate, toDate),
-      getBenchmarkPrices(BENCHMARKS.SP500, fromDate, toDate),
+      getBenchmarkPrices(BENCHMARKS.SP500,  fromDate, toDate),
       getBenchmarkPrices(BENCHMARKS.NASDAQ, fromDate, toDate),
     ]);
 
-    // Compute raw daily values for each portfolio in base_currency
-    const portfolioValueSeries: Array<Record<string, number>> = await Promise.all(
+    // ── Per-portfolio daily series ─────────────────────────────────────────
+    // Each entry in `portfolioDateMaps` is a Record<date, {totalValue, extFlow, netDep}>
+    // all amounts are already in base_currency (multiplied by fx).
+    type DayEntry = { totalValue: number; extFlow: number; netDep: number };
+    const portfolioDateMaps: Array<Record<string, DayEntry>> = await Promise.all(
       portfolios.map(async (portfolio) => {
         const trades = await getPortfolioTrades(portfolio.id);
         if (!trades.length) return {};
 
+        const fx = fxRates[portfolio.currency] ?? 1;
         const symbols = [...new Set(trades.filter(t => t.security).map(t => t.security!.symbol))];
+
         const pricesBySymbol = await Promise.all(
           symbols.map(async (sym) => {
             const sec = trades.find(t => t.security?.symbol === sym)?.security;
@@ -318,70 +328,148 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
           }
         }
 
-        const fx = fxRates[portfolio.currency] ?? 1;
-        const dateValues: Record<string, number> = {};
-        for (const date of Object.keys(priceMap).sort()) {
-          const value = calculateHoldings(
-            trades.filter(t => t.trade_date <= date) as any,
-            priceMap[date],
-          ).reduce((s, h) => s + (h.market_value ?? 0), 0);
-          dateValues[date] = value * fx; // converted to base_currency
+        const sortedTrades = [...trades].sort((a, b) => a.trade_date.localeCompare(b.trade_date));
+
+        // Running cash balance at each trade event
+        let cash = 0;
+        const cashEvents: [string, number][] = sortedTrades.map((t) => {
+          if      (t.trade_type === 'deposit')    cash += t.price * t.quantity;
+          else if (t.trade_type === 'withdrawal') cash -= t.price * t.quantity;
+          else if (t.trade_type === 'buy')        cash -= t.price * t.quantity + t.brokerage;
+          else if (t.trade_type === 'sell')       cash += t.price * t.quantity - t.brokerage;
+          else if (t.trade_type === 'dividend')   cash += t.price * t.quantity;
+          return [t.trade_date, cash] as [string, number];
+        });
+        const getCashAt = (date: string): number => {
+          let val = 0;
+          for (const [d, c] of cashEvents) { if (d <= date) val = c; else break; }
+          return val;
+        };
+
+        // External flows on each date (for TWR denominator adjustment)
+        const extFlowByDate: Record<string, number> = {};
+        for (const t of sortedTrades) {
+          if (t.trade_type === 'deposit') {
+            extFlowByDate[t.trade_date] = (extFlowByDate[t.trade_date] ?? 0) + t.price * t.quantity;
+          } else if (t.trade_type === 'withdrawal') {
+            extFlowByDate[t.trade_date] = (extFlowByDate[t.trade_date] ?? 0) - t.price * t.quantity;
+          } else if (t.trade_type === 'buy' && t.price === 0 && t.security) {
+            // Transfer-In: treat as external inflow at market price
+            const mktPrice = priceMap[t.trade_date]?.[t.security.symbol] ?? 0;
+            extFlowByDate[t.trade_date] = (extFlowByDate[t.trade_date] ?? 0) + mktPrice * t.quantity;
+          }
         }
-        return dateValues;
+
+        // Running net deposited (deposits minus withdrawals only)
+        let netDep = 0;
+        const netDepEvents: [string, number][] = sortedTrades.map((t) => {
+          if      (t.trade_type === 'deposit')    netDep += t.price * t.quantity;
+          else if (t.trade_type === 'withdrawal') netDep -= t.price * t.quantity;
+          return [t.trade_date, netDep] as [string, number];
+        });
+        const getNetDepAt = (date: string): number => {
+          let val = 0;
+          for (const [d, n] of netDepEvents) { if (d <= date) val = n; else break; }
+          return val;
+        };
+
+        // Build per-date map
+        const dateMap: Record<string, DayEntry> = {};
+        for (const date of Object.keys(priceMap).sort()) {
+          const dayHoldings = calculateHoldings(
+            trades.filter((t) => t.trade_date <= date) as any,
+            priceMap[date],
+          );
+          const holdingsValue = dayHoldings.reduce((s, h) => s + (h.market_value ?? 0), 0);
+          dateMap[date] = {
+            totalValue: (holdingsValue + getCashAt(date)) * fx,
+            extFlow:    (extFlowByDate[date] ?? 0) * fx,
+            netDep:     getNetDepAt(date) * fx,
+          };
+        }
+        return dateMap;
       }),
     );
 
-    // Union of all dates across all portfolios
-    const allDates = [...new Set(portfolioValueSeries.flatMap((s) => Object.keys(s)))].sort();
+    // ── Aggregate across portfolios ────────────────────────────────────────
+    const allDates = [...new Set(portfolioDateMaps.flatMap((m) => Object.keys(m)))].sort();
     if (!allDates.length) { res.json([]); return; }
 
-    // Sum portfolio values at each date (carry-forward for missing dates)
-    const combined: { date: string; value: number }[] = [];
-    const lastKnown = portfolioValueSeries.map(() => 0);
+    // Carry-forward portfolio value and netDep (they persist between dates);
+    // extFlow is only counted on the date it actually occurred (no carry-forward).
+    const lastKnownValue  = portfolioDateMaps.map(() => 0);
+    const lastKnownNetDep = portfolioDateMaps.map(() => 0);
+
+    const combined: { date: string; totalValue: number; extFlow: number; netDep: number }[] = [];
     for (const date of allDates) {
-      let total = 0;
-      for (let i = 0; i < portfolioValueSeries.length; i++) {
-        if (portfolioValueSeries[i][date] !== undefined) {
-          lastKnown[i] = portfolioValueSeries[i][date];
+      let totalValue = 0, totalExtFlow = 0, totalNetDep = 0;
+      for (let i = 0; i < portfolioDateMaps.length; i++) {
+        const entry = portfolioDateMaps[i][date];
+        if (entry !== undefined) {
+          lastKnownValue[i]  = entry.totalValue;
+          lastKnownNetDep[i] = entry.netDep;
+          totalExtFlow += entry.extFlow;   // only on its actual date
         }
-        total += lastKnown[i];
+        totalValue  += lastKnownValue[i];
+        totalNetDep += lastKnownNetDep[i];
       }
-      combined.push({ date, value: total });
+      combined.push({ date, totalValue, extFlow: totalExtFlow, netDep: totalNetDep });
     }
 
-    // Skip leading dates where the combined portfolio has no holdings yet.
-    // Pre-portfolio dates always have value=0; starting from zero produces
-    // either division-by-zero or a flat 100-indexed line that fills the chart
-    // with meaningless data from the year 2000.
-    const startIdx = combined.findIndex((d) => d.value > 0);
+    // ── TWR chain ─────────────────────────────────────────────────────────
+    // Start from first date where BOTH group netDep > 0 AND totalValue > 0.
+    // Same logic as individual portfolio: avoids division by zero or inverted
+    // factors when the portfolio crosses zero.
+    const startIdx = combined.findIndex((d) => d.netDep > 0 && d.totalValue > 0);
     if (startIdx === -1) { res.json([]); return; }
     const chartStartDate = combined[startIdx].date;
-    const baseValue      = combined[startIdx].value;
 
-    // 0-based % gain from chartStart (same convention as individual portfolio TWR):
-    //   0% = no change, +58% = portfolio up 58%, -10% = portfolio down 10%.
-    const normalised = combined.slice(startIdx).map((d) => ({
-      date: d.date,
-      portfolio_value: (d.value / baseValue - 1) * 100,
-    }));
+    let multiplier = 1.0;
+    let prevValue  = combined[startIdx].totalValue;
 
-    // Benchmarks: 0-based % gain from chartStartDate so they share the same
-    // baseline and are directly comparable to the portfolio line.
-    const benchPctGain = (arr: { date: string; close: number }[], fromDate: string) => {
+    const portfolioGain: { date: string; value: number | null }[] = [
+      { date: chartStartDate, value: 0.0 },
+    ];
+
+    for (let i = startIdx + 1; i < combined.length; i++) {
+      const { date, totalValue, extFlow } = combined[i];
+      const adjustedBase = prevValue + extFlow;
+      if (adjustedBase > 0 && totalValue > 0) {
+        multiplier *= totalValue / adjustedBase;
+        portfolioGain.push({ date, value: (multiplier - 1) * 100 });
+        prevValue = totalValue;
+      } else {
+        portfolioGain.push({ date, value: null });
+      }
+    }
+
+    // ── Benchmarks ────────────────────────────────────────────────────────
+    // Build 0-based % gain maps from chartStartDate, then forward-fill so that
+    // ASX trading days (which have no US market price) still get a benchmark value.
+    const benchMap = (arr: { date: string; close: number }[], fromDate: string): Record<string, number> => {
       const slice = arr.filter((d) => d.date >= fromDate);
-      if (!slice.length) return {} as Record<string, number>;
+      if (!slice.length) return {};
       const base = slice[0].close;
-      return Object.fromEntries(
-        slice.map((d) => [d.date, base > 0 ? (d.close / base - 1) * 100 : 0]),
-      );
+      // Raw map: only trading days that Yahoo returned
+      const raw: Record<string, number> = {};
+      for (const d of slice) raw[d.date] = base > 0 ? (d.close / base - 1) * 100 : 0;
+      // Forward-fill across portfolio dates so gaps (e.g. ASX vs NYSE) are bridged
+      let last: number | null = null;
+      const filled: Record<string, number> = {};
+      for (const date of allDates) {
+        if (raw[date] !== undefined) last = raw[date];
+        if (last !== null) filled[date] = last;
+      }
+      return filled;
     };
-    const sp500Map  = benchPctGain(sp500,  chartStartDate);
-    const nasdaqMap = benchPctGain(nasdaq, chartStartDate);
-    const asx200Map = benchPctGain(asx200, chartStartDate);
 
-    const result = normalised.map((d) => ({
+    const sp500Map  = benchMap(sp500,  chartStartDate);
+    const nasdaqMap = benchMap(nasdaq, chartStartDate);
+    const asx200Map = benchMap(asx200, chartStartDate);
+
+    const result = portfolioGain.map((d) => ({
       date:             d.date,
-      portfolio_value:  d.portfolio_value,
+      portfolio_value:  d.value,
       benchmark_sp500:  sp500Map[d.date]  ?? null,
       benchmark_nasdaq: nasdaqMap[d.date] ?? null,
       benchmark_asx200: asx200Map[d.date] ?? null,
