@@ -111,11 +111,13 @@ export function parseTradesSection(section: string): ParsedTrade[] {
     }
 
     // Line 2: SYMBOL \t EXCHANGE \t CURRENCY \t YYYY/MM/DD
-    // Three known layouts:
-    //   Normal:  "INUV \t US \t USD \t 2025/08/09"  (4 tokens)
-    //   Split:   "INUV\n" then "US \t USD \t 2025/08/08"  (symbol alone, then 3 tokens)
-    //            — some PDF renders break the symbol off onto its own line
-    //   Merged:  "IONQ US \t USD \t DATE"  (symbol+exchange space-merged, 3 tokens)
+    // Four known layouts:
+    //   Normal:     "INUV \t US \t USD \t 2025/08/09"         (4 tokens)
+    //   Split:      "INUV\n" then "US \t USD \t 2025/08/08"   (symbol alone, then 3 tokens)
+    //               — some PDF renders break the symbol off onto its own line
+    //   Cur+Date:   "BITU \t US \t USD 2025/09/04"            (3 tokens, last = "CURR DATE")
+    //               — currency and date space-merged with no tab separator
+    //   Sym+Exch:   "IONQ US \t USD \t DATE"                  (symbol+exchange space-merged, 3 tokens)
     const line2 = lines[++i] ?? '';
     const p2 = line2.split('\t').map((s) => s.trim()).filter(Boolean);
     let symbol: string, exchange: string, currency: string, dateStr: string;
@@ -131,6 +133,13 @@ export function parseTradesSection(section: string): ParsedTrade[] {
         currency = p2b[1] ?? '';
         dateStr  = p2b[2] ?? '';
       } else { i++; continue; }
+    } else if (p2.length === 3 && /^\w{3}\s+\d{4}\/\d{2}\/\d{2}$/.test(p2[2] ?? '')) {
+      // "SYMBOL \t EXCHANGE \t CURRENCY DATE" — currency and date space-merged
+      const parts = (p2[2] ?? '').split(/\s+/);
+      symbol   = p2[0] ?? '';
+      exchange = p2[1] ?? '';
+      currency = parts[0] ?? '';
+      dateStr  = parts[1] ?? '';
     } else if (p2[0].includes(' ') && /^\d{4}\/\d{2}\/\d{2}$/.test(p2[2] ?? '')) {
       // "IONQ US" merged — split on last space
       const sp = p2[0].lastIndexOf(' ');
@@ -326,7 +335,7 @@ export function parseCashSection(section: string): ParsedTrade[] {
   //   "2024/09/30 13:41:14  Cash In Out       +515.30  ZEPTO_PR.2m3pdi"
   //   "2025/04/07 22:37:15  Currency Exchange -1,354.00"  (comment on next lines)
   const pattern =
-    /^(\d{4}\/\d{2}\/\d{2})\s+\d{2}:\d{2}:\d{2}\s+(Asset Adjustment|Coupon|Cash In Out|Currency Exchange|Corporate Action)\s+([+-][\d,\.]+)\s*(.*)$/;
+    /^(\d{4}\/\d{2}\/\d{2})\s+\d{2}:\d{2}:\d{2}\s+(Asset Adjustment|Coupon|Cash In Out|Currency Exchange|Corporate Action|Bank Transfer Deposits)\s+([+-][\d,\.]+)\s*(.*)$/;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -381,7 +390,7 @@ export function parseCashSection(section: string): ParsedTrade[] {
       trade_type = 'interest';
       symbol = 'CASH';
       notes = comment.trim() || 'Moomoo Cash Coupon';
-    } else if (type === 'Cash In Out') {
+    } else if (type === 'Cash In Out' || type === 'Bank Transfer Deposits') {
       if (amount === 0) continue;
       trade_type = amount > 0 ? 'deposit' : 'withdrawal';
       symbol = 'CASH';

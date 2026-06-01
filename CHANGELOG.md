@@ -8,6 +8,10 @@ All notable changes to Folio App are documented here.
 
 - **PDF import: missing trade when symbol renders on its own line** — Some Moomoo PDF statements break the symbol token onto a separate line before the exchange/currency/date line (e.g. `"INUV\n"` then `"US\tUSD\t2025/08/08"`). The parser's 4-token check skipped these trades entirely (e.g. the INUV 500-share buy on 08 Aug 2025 was silently dropped). The parser now detects a single-uppercase-word line as a split symbol and reads the next line for exchange/currency/date. (`backend/src/services/pdf-parser/moomoo.ts`)
 
+- **PDF import: trade missing when currency and date are space-merged on line 2** — Some PDF renders produce `"SYMBOL \t EXCHANGE \t CURRENCY DATE"` (3 tokens, currency and date joined by a space instead of a tab). The parser skipped these trades entirely (e.g. the BITU 27-share sell on 04 Sep 2025). Added a branch that detects this layout and splits the last token to recover the currency and date. (`backend/src/services/pdf-parser/moomoo.ts`)
+
+- **PDF import: Bank Transfer Deposits not recognised** — Direct bank deposits recorded as `Bank Transfer Deposits` in the Changes in Cash section were silently ignored. Added the type to the cash-section pattern; positive amounts are imported as `deposit` trades. (`backend/src/services/pdf-parser/moomoo.ts`)
+
 - **PDF import: Corporate Action cash dividends not parsed** — ETF cash distributions recorded as `Corporate Action` in the Changes in Cash section (e.g. BITU per-share dividend payout) were silently ignored because the pattern only matched `Asset Adjustment | Coupon | Cash In Out | Currency Exchange`. Added `Corporate Action` to the pattern: positive amounts are imported as `dividend` for the named security; negative amounts (withholding tax) are skipped since the gross dividend is the authoritative income figure. (`backend/src/services/pdf-parser/moomoo.ts`)
 
 ### Fixed
