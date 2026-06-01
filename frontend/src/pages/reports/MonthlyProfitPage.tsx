@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { usePortfolioContext } from '../../contexts/PortfolioContext';
 import { useMonthlyProfit } from '../../hooks/useReports';
-import { Card, CardHeader } from '../../components/ui/Card';
+import { Card } from '../../components/ui/Card';
 import { DateRangePicker } from '../../components/ui/DateRangePicker';
 import { MonthlyProfitChart } from '../../components/charts/MonthlyProfitChart';
 import { Table } from '../../components/ui/Table';
