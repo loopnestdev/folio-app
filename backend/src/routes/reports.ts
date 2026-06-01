@@ -412,11 +412,20 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
         // Cannot compute a valid TWR factor (adjustedBase ≤ 0 or totalValue ≤ 0).
         // Show a null gap and freeze prevValue at its last valid value.
         //
-        // If the withdrawal drove adjustedBase ≤ 0, permanently break the chain.
-        // The frozen prevValue is from before the withdrawal (high); if the chain
-        // resumed on a future date with only a tiny positive totalValue, the factor
-        // would be catastrophically small (tiny / large). chainBroken prevents that.
+        // Two conditions permanently break the chain (chainBroken = true):
+        //
+        // 1. The withdrawal directly made adjustedBase ≤ 0 (withdrawal > prevValue).
         if (extFlow < 0 && adjustedBase <= 0) chainBroken = true;
+        //
+        // 2. Permanent overdraft: the portfolio has had MORE withdrawn than deposited
+        //    (getNetDepAt < 0) AND the portfolio value is currently negative.
+        //    This handles portfolios where prevValue (inflated by TWR growth) was
+        //    larger than the withdrawal, so adjustedBase stayed positive — but the
+        //    portfolio is now permanently underwater (cash deeply negative, holdings
+        //    can't recover it). Without this check, every brief stock-price spike
+        //    that momentarily pushes totalValue above zero would resume the chain and
+        //    produce catastrophic downward factors (tiny totalValue / large prevValue).
+        if (totalValue <= 0 && getNetDepAt(date) < 0) chainBroken = true;
         portfolioGain.push({ date, value: null });
       }
     }

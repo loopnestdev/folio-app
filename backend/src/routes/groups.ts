@@ -466,7 +466,29 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
     // portfolioGain was computed from chartStartDate (earliest valid deposit+value).
     // Re-normalise to the display window [displayFrom, toDate] so the chart always
     // starts at 0% for the selected period.
-    const displayFrom = fromDate > chartStartDate ? fromDate : chartStartDate;
+    //
+    // LAST-RUN-START rule: if portfolioGain has a null gap in the middle (e.g. from
+    // an FX transfer temporarily making the group's combined value non-positive),
+    // the series has multiple valid segments. Starting the display from the FIRST
+    // segment would show the pre-gap history connected to the post-gap history via
+    // a dashed null line — confusing and visually broken. Instead, prefer to start
+    // from the LAST contiguous non-null run, which represents the group's current
+    // portfolio composition. Short-range views (1Y, YTD) are unaffected because
+    // their fromDate already lands in the last run.
+    let lastRunStartIdx = 0;
+    for (let gi = 1; gi < portfolioGain.length; gi++) {
+      if (portfolioGain[gi].value !== null && portfolioGain[gi - 1].value === null) {
+        lastRunStartIdx = gi; // last null→non-null transition
+      }
+    }
+    const lastRunStartDate = portfolioGain[lastRunStartIdx].date;
+
+    // displayFrom = the later of (user's range start, last valid run start).
+    // Benchmarks are also fetched from displayFrom so they start at 0% at the
+    // same reference point as the portfolio line.
+    const userFrom   = fromDate > chartStartDate ? fromDate : chartStartDate;
+    const displayFrom = userFrom > lastRunStartDate ? userFrom : lastRunStartDate;
+
     const dispIdx = portfolioGain.findIndex(d => d.value !== null && d.date >= displayFrom);
     if (dispIdx === -1) { res.json([]); return; }
     const dispBase = 1 + (portfolioGain[dispIdx].value as number) / 100;
