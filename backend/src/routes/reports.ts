@@ -380,8 +380,20 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
     // Chain daily TWR factors from chartStart.
     // When adjustedBase ≤ 0 OR totalValue ≤ 0 the formula is undefined — push null
     // (chart gap) so the line is broken rather than showing inverted/exploded values.
-    let multiplier = 1.0;
-    let prevValue  = portfolioValues[chartStartIdx].totalValue;
+    //
+    // CHAIN-BREAK rule: if a withdrawal drives adjustedBase ≤ 0 (the withdrawal
+    // exceeded the portfolio's last valid value), set chainBroken = true and push
+    // nulls for ALL remaining dates.
+    //
+    // Why this matters: after an overdraft withdrawal the portfolio's NAV can be
+    // permanently negative (cash deeply negative, small holdings). Stock price
+    // fluctuations may occasionally push totalValue briefly above zero. Without
+    // chainBroken, the chain would "resume" comparing that tiny positive value
+    // against a large frozen prevValue (from before the withdrawal), producing an
+    // astronomical downward factor (e.g. −87% or −95%). chainBroken prevents that.
+    let multiplier  = 1.0;
+    let prevValue   = portfolioValues[chartStartIdx].totalValue;
+    let chainBroken = false; // true once a withdrawal exceeds the portfolio's value
 
     const portfolioGain: { date: string; value: number | null }[] = [
       { date: chartStart, value: 0.0 },
@@ -392,7 +404,7 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
       const extFlow      = extFlowForTWR[date] ?? 0;
       const adjustedBase = prevValue + extFlow;
 
-      if (adjustedBase > 0 && totalValue > 0) {
+      if (!chainBroken && adjustedBase > 0 && totalValue > 0) {
         multiplier *= totalValue / adjustedBase;
         portfolioGain.push({ date, value: (multiplier - 1) * 100 });
         prevValue = totalValue;
@@ -400,12 +412,11 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
         // Cannot compute a valid TWR factor (adjustedBase ≤ 0 or totalValue ≤ 0).
         // Show a null gap and freeze prevValue at its last valid value.
         //
-        // prevValue must NOT be mutated here. When the chain eventually resumes
-        // (both conditions met), it measures recovery relative to the last valid
-        // portfolio state — which is the mathematically correct baseline for TWR.
-        // Mutating prevValue (to totalValue or prevValue+extFlow) during null periods
-        // creates near-zero adjustedBase values on subsequent valid days, producing
-        // astronomical factors (e.g. +1650% or +315,000%).
+        // If the withdrawal drove adjustedBase ≤ 0, permanently break the chain.
+        // The frozen prevValue is from before the withdrawal (high); if the chain
+        // resumed on a future date with only a tiny positive totalValue, the factor
+        // would be catastrophically small (tiny / large). chainBroken prevents that.
+        if (extFlow < 0 && adjustedBase <= 0) chainBroken = true;
         portfolioGain.push({ date, value: null });
       }
     }
