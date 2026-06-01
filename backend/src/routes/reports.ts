@@ -419,23 +419,20 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
         //    comparing a tiny totalValue against a large frozen prevValue.
         if (totalValue <= 0 && getNetDepAt(date) < 0) chainBroken = true;
 
-        // 3. Withdrawal-caused cash overdraft dominates the portfolio value.
-        //    Requires extFlow < 0 so that only an EXTERNAL WITHDRAWAL can trigger
-        //    this — not a buy order that temporarily exceeded available cash (e.g.
-        //    ASX T+2 settlement lag, DRP buy). Without the extFlow guard the
-        //    condition fires too early on normal trading activity.
+        // 3. Cash overdraft dominates the portfolio value.
+        //    Fires when negative cash (from any source — withdrawal, buy overdraft,
+        //    settlement timing) is LARGER than the total portfolio value. In this
+        //    leveraged state each 1% stock move causes extreme amplified TWR swings;
+        //    the chain produces oscillating zombie data if allowed to continue.
         //
-        //    Fires when: a withdrawal on this date drove cash negative AND the
-        //    overdraft now exceeds the net portfolio value — i.e. stocks can't
-        //    cover the debt. In this leveraged state each 1% stock move causes
-        //    ~100× amplified TWR swings; the chain produces oscillating zombie data.
+        //    Example (AUD portfolio after FX transfer):
+        //      cashBalance = −A$13,522 · stocks = A$14,000 · totalValue = A$478
+        //      totalValue (A$478) < -cashBalance (A$13,522) → chain breaks cleanly.
         //
-        //    Example (AUD portfolio, FX transfer day):
-        //      extFlow = −A$14,022 · cashBalance = −A$13,522 · totalValue = A$478
-        //      → stock drops 3% → totalValue = −A$9 (null, prevValue frozen at 478)
-        //      → stock +1% → totalValue = A$58  (factor = 58/478 = 0.12 → −88% day)
-        //      → chain would keep oscillating without this break.
-        if (extFlow < 0 && cashBalance < 0 && totalValue < -cashBalance) chainBroken = true;
+        //    Note: this may also fire on T+2 settlement timing or a buy that
+        //    temporarily exceeded available cash. That is an acceptable trade-off —
+        //    the alternative (zombie oscillation) is far more misleading.
+        if (cashBalance < 0 && totalValue < -cashBalance) chainBroken = true;
       }
 
       if (!chainBroken && adjustedBase > 0 && totalValue > 0) {
