@@ -78,7 +78,7 @@ export function MonthlyProfitPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Monthly Profit</h1>
-          <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">Month-by-month profit and loss</p>
+          <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">Month-by-month profit and loss{activePortfolio?.name ? ` · ${activePortfolio.name}` : ''}</p>
         </div>
         <DateRangePicker value={range} customStart={customStart} customEnd={customEnd} onChange={handleRangeChange} />
       </div>

@@ -73,7 +73,7 @@ export function PerformancePage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Performance</h1>
-        <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">Portfolio returns over time</p>
+        <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">Portfolio returns over time{activePortfolio?.name ? ` · ${activePortfolio.name}` : ''}</p>
       </div>
 
       {/* Stats */}

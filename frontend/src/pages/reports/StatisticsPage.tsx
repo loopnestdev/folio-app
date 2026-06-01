@@ -86,7 +86,7 @@ export function StatisticsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Statistics</h1>
-          <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">Risk and return metrics for your portfolio</p>
+          <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">Risk and return metrics{activePortfolio?.name ? ` · ${activePortfolio.name}` : ''}</p>
         </div>
         <DateRangePicker value={range} customStart={customStart} customEnd={customEnd} onChange={handleRangeChange} />
       </div>

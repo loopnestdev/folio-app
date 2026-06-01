@@ -94,7 +94,7 @@ export function CapitalGainsPage() {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Capital Gains</h1>
-          <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">CGT report for sold positions</p>
+          <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">CGT report for sold positions{activePortfolio?.name ? ` · ${activePortfolio.name}` : ''}</p>
         </div>
         <div className="flex gap-3">
           <Select

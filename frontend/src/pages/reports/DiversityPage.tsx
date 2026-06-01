@@ -83,7 +83,7 @@ export function DiversityPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Portfolio Diversity</h1>
-        <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">Allocation breakdown across sectors, types, and geographies</p>
+        <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">Allocation breakdown across sectors, types, and geographies{activePortfolio?.name ? ` · ${activePortfolio.name}` : ''}</p>
       </div>
 
       {/* Tabs */}

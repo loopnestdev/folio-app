@@ -69,7 +69,7 @@ export function DividendsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Dividends & Interest</h1>
-          <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">Income from dividends and interest payments</p>
+          <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">Income from dividends and interest payments{activePortfolio?.name ? ` · ${activePortfolio.name}` : ''}</p>
         </div>
         <DateRangePicker value={range} customStart={customStart} customEnd={customEnd} onChange={handleRangeChange} />
       </div>
