@@ -4,6 +4,12 @@ All notable changes to Folio App are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Individual portfolio report pages all returning empty data** — Capital Gains, Tax, Dividends, Diversity, and Upcoming Dividends pages were silently broken: their hooks call `/reports/` prefix API paths (e.g. `/api/portfolios/:id/reports/capital-gains`) but the backend only exposed the old paths without that prefix (e.g. `/:id/capital-gains`). Additionally, the old routes returned wrong response shapes (`{ lots, summary }` instead of `CapitalGain[]`, `{ items, total }` instead of `DividendSummary`, etc.). Added five correct `/reports/` prefix routes with properly shaped responses matching the frontend types. (`backend/src/routes/reports.ts`)
+
+- **TaxPage stat cards showing dollar amounts as trend percentages** — Same `trend={dollar_amount}` bug fixed for Capital Gains in v0.5.0 and Monthly Profit in this cycle. Removed `trend` from all six stat cards in TaxPage. (`frontend/src/pages/reports/TaxPage.tsx`)
+
 ### Added
 
 - **Monthly Profit report: backend route was completely missing** — `GET /api/portfolios/:id/reports/monthly-profit` did not exist, causing every Monthly Profit page to silently show empty data. Now implemented using Modified Dietz: `profit = end_value − start_value − net_flows`, `return_pct = profit / (start_value + 0.5 × net_flows) × 100`. Both invested value and cash balance are included. (`backend/src/routes/reports.ts`)
