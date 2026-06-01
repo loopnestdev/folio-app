@@ -2,6 +2,12 @@
 
 All notable changes to Folio App are documented here.
 
+## [Unreleased]
+
+### Changed
+
+- **Group Capital Gains + Tax: FX conversion now uses disposal-date rate (ATO-compliant)** — Previously the group `/capital-gains` and `/tax` endpoints fetched a single "today's rate" per currency and applied it to every lot regardless of when it was sold. The ATO requires the exchange rate at the date of each disposal. Now each CGT lot is converted at its own `sell_date` FX rate. Unique `(currency, sell_date)` pairs are collected upfront and fetched in parallel (deduplicated) so the Yahoo Finance API is called at most once per pair — no extra latency for portfolios with no foreign-currency CGT. The `fx_rate` field on each lot now reflects the disposal-date rate; the per-portfolio display `fx_rate` in the Tax report remains today's rate (informational only). Dividend/interest income in the Tax report continues to use today's rate (income is not a disposal). (`backend/src/routes/groups.ts`)
+
 ## [v0.5.0] — 2026-06-01
 
 ### Fixed
