@@ -870,7 +870,8 @@ router.get('/:id/dividends', async (req: AuthenticatedRequest, res: any) => {
       if (toDate)   query = query.lte('trade_date', toDate);
 
       const { data } = await query;
-      for (const t of (data ?? [])) {
+      // Exclude synthetic CASH entries (deposits/withdrawals recorded as dividend/interest)
+      for (const t of (data ?? []).filter((t: any) => t.security && t.security.symbol !== 'CASH')) {
         const amount     = t.price * t.quantity;
         const amountBase = amount * fx;
         if (t.trade_type === 'dividend') total_dividends += amountBase;

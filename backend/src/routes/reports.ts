@@ -1026,7 +1026,8 @@ router.get('/:id/reports/dividends', async (req: AuthenticatedRequest, res: any)
     const { data, error } = await query;
     if (error) { res.status(500).json({ error: error.message }); return; }
 
-    const items = data ?? [];
+    // Exclude synthetic CASH entries (deposits/withdrawals recorded as dividend/interest)
+    const items = (data ?? []).filter((t: any) => t.security && t.security.symbol !== 'CASH');
     const dividends = items.filter((t: any) => t.trade_type === 'dividend');
     const interest  = items.filter((t: any) => t.trade_type === 'interest');
 

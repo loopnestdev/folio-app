@@ -15,7 +15,7 @@ export function useReportViewSwitcher(paramId?: string) {
   const { activePortfolio, portfolios } = usePortfolioContext();
   const { data: groups = [] } = useGroups();
 
-  const [viewMode, setViewMode]                 = useState<'individual' | 'group'>('individual');
+  const [viewMode, setViewMode]                 = useState<'individual' | 'group'>('group');
   const [overridePortfolioId, setOverridePortfolioId] = useState<string | undefined>();
   const [selectedGroupId, setSelectedGroupId]   = useState<string | undefined>();
 

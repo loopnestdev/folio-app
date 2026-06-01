@@ -2,6 +2,18 @@
 
 All notable changes to Folio App are documented here.
 
+## [Unreleased]
+
+### Changed
+
+- **Report pages default to Group view** — When a user has at least one portfolio group the Individual / Group switcher now opens in Group mode instead of Individual mode, so the aggregate view is the first thing seen. (`frontend/src/hooks/useReportViewSwitcher.ts`)
+
+### Fixed
+
+- **Dividends page showing CASH transactions** — Deposits, withdrawals, and broker cash-management entries recorded against the synthetic CASH security were appearing in the Payment History table. Both the individual and group endpoints now exclude any transaction whose security symbol is `CASH`. (`backend/src/routes/reports.ts`, `backend/src/routes/groups.ts`)
+
+- **Individual / Group switcher layout inconsistency** — In Individual mode the portfolio dropdown was wrapping to a second line while in Group mode the group dropdown stayed inline. Removed `flex-wrap` from the switcher container so the toggle and dropdown are always side-by-side. (`frontend/src/components/ui/ReportViewSwitcher.tsx`)
+
 ## [v0.5.2] — 2026-06-01
 
 ### Added

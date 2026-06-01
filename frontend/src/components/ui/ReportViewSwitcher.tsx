@@ -27,7 +27,7 @@ export function ReportViewSwitcher({
   onGroupChange,
 }: ReportViewSwitcherProps) {
   return (
-    <div className="flex items-center gap-3 flex-wrap">
+    <div className="flex items-center gap-3">
       {/* Mode toggle */}
       <div className="flex items-center bg-[var(--c-canvas-soft)] rounded-full p-1 gap-0.5">
         <button
