@@ -754,4 +754,166 @@ router.get('/:id/tax', async (req: AuthenticatedRequest, res: any) => {
   }
 });
 
+// ── GET /api/groups/:id/monthly-profit ────────────────────────────────────────
+// Aggregates month-by-month P&L across all portfolios, converting each to the
+// group's base_currency at today's FX rate (consistent with the group summary).
+// profit     = sum of each portfolio's (end_value − start_value − net_flows) × fx
+// return_pct = aggregated_profit / aggregated_start_value × 100
+router.get('/:id/monthly-profit', async (req: AuthenticatedRequest, res: any) => {
+  const group = await getGroup(req.params.id as string, req.userId!);
+  if (!group) { res.status(404).json({ error: 'Group not found' }); return; }
+
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const { start_date, end_date } = req.query as Record<string, string>;
+  const fromDate = start_date ?? '2000-01-01';
+  const toDate   = end_date   ?? todayStr;
+  const baseCurrency: string = group.base_currency ?? 'AUD';
+
+  try {
+    const portfolios = await getGroupPortfolios(req.params.id as string, req.userId!);
+    if (!portfolios.length) { res.json([]); return; }
+
+    // Today's FX rates for all non-base currencies
+    const uniqueCurrencies = [...new Set(portfolios.map((p) => p.currency))].filter((c) => c !== baseCurrency);
+    const fxRates: Record<string, number> = { [baseCurrency]: 1 };
+    await Promise.all(
+      uniqueCurrencies.map(async (cur) => {
+        fxRates[cur] = await getForexRate(cur, baseCurrency, todayStr);
+      }),
+    );
+
+    // ── Per-portfolio: build monthly last-value and net flows ────────────────
+    type MonthMap = Record<string, number>; // YYYY-MM → amount in base currency
+    const allPortfolioMonthValues: MonthMap[] = [];
+    const allPortfolioMonthFlows:  MonthMap[] = [];
+
+    await Promise.all(
+      portfolios.map(async (portfolio, idx) => {
+        const trades = await getPortfolioTrades(portfolio.id);
+        if (!trades.length) {
+          allPortfolioMonthValues[idx] = {};
+          allPortfolioMonthFlows[idx]  = {};
+          return;
+        }
+
+        const fx = fxRates[portfolio.currency] ?? 1;
+
+        const investmentTrades = trades.filter(
+          (t) => t.trade_type !== 'deposit' && t.trade_type !== 'withdrawal',
+        );
+        const symbols = [...new Set(investmentTrades.filter((t) => t.security).map((t) => t.security!.symbol))];
+        const earliestDate = trades[0].trade_date;
+
+        const pricesBySymbol = await Promise.all(
+          symbols.map(async (sym) => {
+            const sec = trades.find((t) => t.security?.symbol === sym)?.security;
+            const prices = await getHistoricalPrices(sym, earliestDate, toDate, sec?.id, sec?.exchange);
+            return { symbol: sym, prices };
+          }),
+        );
+
+        const priceMap: Record<string, Record<string, number>> = {};
+        for (const { symbol, prices } of pricesBySymbol) {
+          for (const { date, close } of prices) {
+            if (!priceMap[date]) priceMap[date] = {};
+            priceMap[date][symbol] = close;
+          }
+        }
+
+        const sortedTrades = [...trades].sort((a, b) => a.trade_date.localeCompare(b.trade_date));
+        let cashAmt = 0;
+        const cashEvents: [string, number][] = sortedTrades.map((t) => {
+          if      (t.trade_type === 'deposit')                         cashAmt += t.price * t.quantity;
+          else if (t.trade_type === 'withdrawal')                      cashAmt -= t.price * t.quantity;
+          else if (t.trade_type === 'buy' || t.trade_type === 'drp') cashAmt -= t.price * t.quantity + t.brokerage;
+          else if (t.trade_type === 'sell')                            cashAmt += t.price * t.quantity - t.brokerage;
+          else if (t.trade_type === 'dividend')                        cashAmt += t.price * t.quantity;
+          return [t.trade_date, cashAmt] as [string, number];
+        });
+        const getCashAt = (date: string): number => {
+          let val = 0;
+          for (const [d, v] of cashEvents) { if (d <= date) val = v; else break; }
+          return val;
+        };
+
+        // Monthly last total-value in base currency
+        const monthValues: MonthMap = {};
+        for (const date of Object.keys(priceMap).sort()) {
+          const dayHoldings = calculateHoldings(trades.filter((t) => t.trade_date <= date) as any, priceMap[date]);
+          const invested = dayHoldings.reduce((s, h) => s + (h.market_value ?? 0), 0);
+          monthValues[date.slice(0, 7)] = (invested + getCashAt(date)) * fx;
+        }
+
+        // Monthly net external flows in base currency
+        const monthFlows: MonthMap = {};
+        for (const t of sortedTrades) {
+          if (t.trade_type !== 'deposit' && t.trade_type !== 'withdrawal') continue;
+          const amount = t.price * t.quantity * (t.trade_type === 'withdrawal' ? -1 : 1) * fx;
+          const m = t.trade_date.slice(0, 7);
+          monthFlows[m] = (monthFlows[m] ?? 0) + amount;
+        }
+
+        allPortfolioMonthValues[idx] = monthValues;
+        allPortfolioMonthFlows[idx]  = monthFlows;
+      }),
+    );
+
+    // ── Aggregate across portfolios ──────────────────────────────────────────
+    const allMonths = new Set<string>();
+    for (const mv of allPortfolioMonthValues) Object.keys(mv).forEach((m) => allMonths.add(m));
+    const months = [...allMonths].sort();
+
+    const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const result = [];
+
+    // Carry-forward: last known value per portfolio (handles months with no price data)
+    const lastKnown = allPortfolioMonthValues.map(() => 0);
+
+    for (let i = 1; i < months.length; i++) {
+      const m    = months[i]!;
+      const prev = months[i - 1]!;
+      if (m < fromDate.slice(0, 7) || m > toDate.slice(0, 7)) {
+        // Still update lastKnown so the carry-forward stays accurate
+        for (let p = 0; p < allPortfolioMonthValues.length; p++) {
+          if (allPortfolioMonthValues[p][prev] !== undefined) lastKnown[p] = allPortfolioMonthValues[p][prev]!;
+        }
+        continue;
+      }
+
+      let groupStartValue = 0;
+      let groupEndValue   = 0;
+      let groupNetFlow    = 0;
+
+      for (let p = 0; p < allPortfolioMonthValues.length; p++) {
+        // start = last value from previous month (carry-forward if no price that month)
+        const prevVal = allPortfolioMonthValues[p][prev] ?? lastKnown[p];
+        const endVal  = allPortfolioMonthValues[p][m]   ?? prevVal;
+        groupStartValue += prevVal;
+        groupEndValue   += endVal;
+        groupNetFlow    += allPortfolioMonthFlows[p][m] ?? 0;
+        // Update carry-forward
+        lastKnown[p] = allPortfolioMonthValues[p][m] ?? lastKnown[p];
+      }
+
+      const profit     = groupEndValue - groupStartValue - groupNetFlow;
+      const denom      = groupStartValue + groupNetFlow * 0.5; // Modified Dietz
+      const return_pct = denom > 0 ? (profit / denom) * 100 : 0;
+
+      const year  = parseInt(m.slice(0, 4), 10);
+      const month = parseInt(m.slice(5, 7), 10);
+      result.push({
+        year,
+        month,
+        month_label: `${MONTH_NAMES[month - 1]} ${year}`,
+        profit,
+        return_pct,
+      });
+    }
+
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;

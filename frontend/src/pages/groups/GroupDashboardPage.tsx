@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowRight, Layers, FileText, Receipt } from 'lucide-react';
+import { ArrowRight, Layers, FileText, Receipt, BarChart3 } from 'lucide-react';
 import { useGroups } from '../../hooks/useGroups';
 import { useGroupSummary, useGroupPerformance } from '../../hooks/useGroupReports';
 import { StatCard } from '../../components/ui/StatCard';
@@ -101,7 +101,14 @@ export function GroupDashboardPage() {
             Consolidated across {summary?.portfolios.length ?? '—'} portfolios · All values in {baseCurrency}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <Link
+            to={`/groups/${id}/monthly-profit`}
+            className="flex items-center gap-1.5 text-[14px] text-[var(--c-primary)] font-medium hover:underline"
+          >
+            <BarChart3 size={14} /> Monthly Profit
+          </Link>
+          <span className="text-[var(--c-border)]">·</span>
           <Link
             to={`/groups/${id}/capital-gains`}
             className="flex items-center gap-1.5 text-[14px] text-[var(--c-primary)] font-medium hover:underline"
@@ -212,18 +219,24 @@ export function GroupDashboardPage() {
             keyField="id"
             emptyMessage="No portfolios in this group yet"
           />
-          <div className="px-6 py-4 border-t border-[var(--c-border)] flex gap-3">
+          <div className="px-6 py-4 border-t border-[var(--c-border)] flex gap-3 flex-wrap">
+            <Link
+              to={`/groups/${id}/monthly-profit`}
+              className="flex items-center gap-1.5 text-[15px] text-[var(--c-primary)] font-medium hover:underline"
+            >
+              Monthly Profit <ArrowRight size={15} />
+            </Link>
             <Link
               to={`/groups/${id}/capital-gains`}
               className="flex items-center gap-1.5 text-[15px] text-[var(--c-primary)] font-medium hover:underline"
             >
-              View Capital Gains <ArrowRight size={15} />
+              Capital Gains <ArrowRight size={15} />
             </Link>
             <Link
               to={`/groups/${id}/tax`}
               className="flex items-center gap-1.5 text-[15px] text-[var(--c-primary)] font-medium hover:underline"
             >
-              View Tax Report <ArrowRight size={15} />
+              Tax Report <ArrowRight size={15} />
             </Link>
           </div>
         </Card>

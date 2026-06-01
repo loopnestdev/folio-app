@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
-import type { GroupSummary, GroupCapitalGain, GroupTaxReport, PerformancePoint } from '../types';
+import type { GroupSummary, GroupCapitalGain, GroupTaxReport, PerformancePoint, MonthlyProfit } from '../types';
 import { dateRangeToParams } from '../lib/utils';
 import type { DateRange } from '../types';
 
@@ -38,6 +38,29 @@ export function useGroupPerformance({ groupId, range, customStart, customEnd }: 
     enabled: !!groupId,
     // Performance data can take a few seconds — keep stale longer
     staleTime: 1000 * 60 * 10,
+  });
+}
+
+// ── Group Monthly Profit ─────────────────────────────────────
+interface GroupMonthlyProfitOptions {
+  groupId?: string;
+  range: DateRange;
+  customStart?: string;
+  customEnd?: string;
+}
+
+export function useGroupMonthlyProfit({ groupId, range, customStart, customEnd }: GroupMonthlyProfitOptions) {
+  const params = dateRangeToParams(range, customStart, customEnd);
+  return useQuery({
+    queryKey: ['group-monthly-profit', groupId, range, customStart, customEnd],
+    queryFn: async () => {
+      const { data } = await api.get<MonthlyProfit[]>(
+        `/api/groups/${groupId}/monthly-profit`,
+        { params },
+      );
+      return data;
+    },
+    enabled: !!groupId,
   });
 }
 

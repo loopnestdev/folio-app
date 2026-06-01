@@ -2,6 +2,16 @@
 
 All notable changes to Folio App are documented here.
 
+## [Unreleased]
+
+### Added
+
+- **Monthly Profit report: backend route was completely missing** — `GET /api/portfolios/:id/reports/monthly-profit` did not exist, causing every Monthly Profit page to silently show empty data. Now implemented using Modified Dietz: `profit = end_value − start_value − net_flows`, `return_pct = profit / (start_value + 0.5 × net_flows) × 100`. Both invested value and cash balance are included. (`backend/src/routes/reports.ts`)
+
+- **Drawdown report: backend route was completely missing** — `GET /api/portfolios/:id/reports/drawdown` did not exist. Now implemented as a rolling peak-to-trough percentage: the peak is tracked from full history so the rolling maximum is accurate even when the display range starts mid-portfolio. (`backend/src/routes/reports.ts`)
+
+- **Group Monthly Profit page** — New `GET /api/groups/:id/monthly-profit` endpoint aggregates month-by-month P&L across all portfolios, converting each to the group's `base_currency` at today's FX rate. Frontend: new `GroupMonthlyProfitPage` at `/groups/:id/monthly-profit`, linked from the group dashboard (header link row and table footer). (`backend/src/routes/groups.ts`, `frontend/src/pages/groups/GroupMonthlyProfitPage.tsx`, `frontend/src/hooks/useGroupReports.ts`)
+
 ## [v0.5.1] — 2026-06-01
 
 ### Added

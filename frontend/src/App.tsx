@@ -33,6 +33,7 @@ import { AuthCallbackPage } from './pages/AuthCallbackPage';
 import { GroupDashboardPage } from './pages/groups/GroupDashboardPage';
 import { GroupCapitalGainsPage } from './pages/groups/GroupCapitalGainsPage';
 import { GroupTaxPage } from './pages/groups/GroupTaxPage';
+import { GroupMonthlyProfitPage } from './pages/groups/GroupMonthlyProfitPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -66,6 +67,7 @@ function ProtectedRoutes() {
                 <Route path="portfolios/:id/reports/diversity" element={<DiversityPage />} />
                 <Route path="portfolios/:id/reports/drawdown" element={<DrawdownPage />} />
                 <Route path="groups/:id" element={<GroupDashboardPage />} />
+                <Route path="groups/:id/monthly-profit" element={<GroupMonthlyProfitPage />} />
                 <Route path="groups/:id/capital-gains" element={<GroupCapitalGainsPage />} />
                 <Route path="groups/:id/tax" element={<GroupTaxPage />} />
                 <Route path="settings" element={<SettingsPage />} />

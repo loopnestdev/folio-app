@@ -689,6 +689,216 @@ router.get('/:id/diversity', async (req: AuthenticatedRequest, res: any) => {
   }
 });
 
+// GET /api/portfolios/:id/reports/monthly-profit
+// Returns month-by-month P&L adjusted for external cash flows (Modified Dietz).
+// profit      = end_value − start_value − net_flows_this_month
+// return_pct  = profit / (start_value + 0.5 × net_flows) × 100
+router.get('/:id/reports/monthly-profit', async (req: AuthenticatedRequest, res: any) => {
+  const id = req.params.id as string;
+  if (!(await verifyOwner(id, req.userId!))) { res.status(404).json({ error: 'Portfolio not found' }); return; }
+
+  const today = format(new Date(), 'yyyy-MM-dd');
+  const { start_date, end_date } = req.query as Record<string, string>;
+  const fromDate = start_date ?? '2000-01-01';
+  const toDate   = end_date   ?? today;
+
+  try {
+    const trades = await getPortfolioTrades(id);
+    if (!trades.length) { res.json([]); return; }
+
+    const investmentTrades = trades.filter(
+      (t) => t.trade_type !== 'deposit' && t.trade_type !== 'withdrawal',
+    );
+    const symbols = [...new Set(investmentTrades.filter((t) => t.security).map((t) => t.security!.symbol))];
+
+    // Fetch from earliest trade so cash is accurate from day one.
+    const earliestTradeDate = trades[0].trade_date;
+
+    const pricesBySymbol = await Promise.all(
+      symbols.map(async (sym) => {
+        const sec = trades.find((t) => t.security?.symbol === sym)?.security;
+        const prices = await getHistoricalPrices(sym, earliestTradeDate, toDate, sec?.id, sec?.exchange);
+        return { symbol: sym, prices };
+      }),
+    );
+
+    const priceMap: Record<string, Record<string, number>> = {};
+    for (const { symbol, prices } of pricesBySymbol) {
+      for (const { date, close } of prices) {
+        if (!priceMap[date]) priceMap[date] = {};
+        priceMap[date][symbol] = close;
+      }
+    }
+
+    // ── Running cash ─────────────────────────────────────────────────────────
+    const sortedTrades = [...trades].sort((a, b) => a.trade_date.localeCompare(b.trade_date));
+    let cash = 0;
+    const cashEvents: [string, number][] = sortedTrades.map((t) => {
+      const qty   = Number(t.quantity)  || 0;
+      const price = Number(t.price)     || 0;
+      const brok  = Number(t.brokerage) || 0;
+      if      (t.trade_type === 'deposit')                          cash += price * qty;
+      else if (t.trade_type === 'withdrawal')                       cash -= price * qty;
+      else if (t.trade_type === 'buy' || t.trade_type === 'drp')  cash -= price * qty + brok;
+      else if (t.trade_type === 'sell')                             cash += price * qty - brok;
+      else if (t.trade_type === 'dividend')                         cash += price * qty;
+      return [t.trade_date, cash] as [string, number];
+    });
+    const getCashAt = (date: string): number => {
+      let val = 0;
+      for (const [d, v] of cashEvents) { if (d <= date) val = v; else break; }
+      return val;
+    };
+
+    // ── External flows by date (deposits/withdrawals only) ───────────────────
+    const externalFlowsByDate: Record<string, number> = {};
+    for (const t of sortedTrades) {
+      const qty   = Number(t.quantity) || 0;
+      const price = Number(t.price)    || 0;
+      if (t.trade_type === 'deposit') {
+        externalFlowsByDate[t.trade_date] = (externalFlowsByDate[t.trade_date] ?? 0) + price * qty;
+      } else if (t.trade_type === 'withdrawal') {
+        externalFlowsByDate[t.trade_date] = (externalFlowsByDate[t.trade_date] ?? 0) - price * qty;
+      }
+    }
+
+    // ── Build last portfolio value per calendar month ─────────────────────────
+    // (investedValue + cash) on the last price-available day of each month.
+    const byMonth: Record<string, number> = {};  // YYYY-MM → last total value
+    for (const date of Object.keys(priceMap).sort()) {
+      const dayHoldings = calculateHoldings(trades.filter((t) => t.trade_date <= date) as any, priceMap[date]);
+      const investedValue = dayHoldings.reduce((s, h) => s + (h.market_value ?? 0), 0);
+      byMonth[date.slice(0, 7)] = investedValue + getCashAt(date);
+    }
+
+    // ── Net external flows per calendar month ────────────────────────────────
+    const flowsByMonth: Record<string, number> = {};
+    for (const [date, flow] of Object.entries(externalFlowsByDate)) {
+      const m = date.slice(0, 7);
+      flowsByMonth[m] = (flowsByMonth[m] ?? 0) + flow;
+    }
+
+    // ── Compute monthly P&L for months within the display range ──────────────
+    const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const months = Object.keys(byMonth).sort();
+    const result = [];
+
+    for (let i = 1; i < months.length; i++) {
+      const m    = months[i]!;
+      const prev = months[i - 1]!;
+      if (m < fromDate.slice(0, 7) || m > toDate.slice(0, 7)) continue;
+
+      const startValue = byMonth[prev]!;
+      const endValue   = byMonth[m]!;
+      const netFlow    = flowsByMonth[m] ?? 0;
+
+      const profit     = endValue - startValue - netFlow;
+      const denom      = startValue + netFlow * 0.5; // Modified Dietz denominator
+      const return_pct = denom > 0 ? (profit / denom) * 100 : 0;
+
+      const year  = parseInt(m.slice(0, 4), 10);
+      const month = parseInt(m.slice(5, 7), 10);
+      result.push({
+        year,
+        month,
+        month_label: `${MONTH_NAMES[month - 1]} ${year}`,
+        profit,
+        return_pct,
+      });
+    }
+
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/portfolios/:id/reports/drawdown
+// Returns daily rolling drawdown from the all-time peak (within history).
+// drawdown is expressed as a negative percentage (0 = at peak, −20 = 20% below peak).
+router.get('/:id/reports/drawdown', async (req: AuthenticatedRequest, res: any) => {
+  const id = req.params.id as string;
+  if (!(await verifyOwner(id, req.userId!))) { res.status(404).json({ error: 'Portfolio not found' }); return; }
+
+  const today = format(new Date(), 'yyyy-MM-dd');
+  const { start_date, end_date } = req.query as Record<string, string>;
+  const fromDate = start_date ?? '2000-01-01';
+  const toDate   = end_date   ?? today;
+
+  try {
+    const trades = await getPortfolioTrades(id);
+    if (!trades.length) { res.json([]); return; }
+
+    const investmentTrades = trades.filter(
+      (t) => t.trade_type !== 'deposit' && t.trade_type !== 'withdrawal',
+    );
+    const symbols = [...new Set(investmentTrades.filter((t) => t.security).map((t) => t.security!.symbol))];
+
+    // Start from earliest investment trade so the rolling peak is accurate over
+    // the full history, even if the user's display range starts later.
+    const earliestTradeDate = investmentTrades.length
+      ? investmentTrades.reduce((m, t) => (t.trade_date < m ? t.trade_date : m), investmentTrades[0].trade_date)
+      : fromDate;
+
+    const pricesBySymbol = await Promise.all(
+      symbols.map(async (sym) => {
+        const sec = trades.find((t) => t.security?.symbol === sym)?.security;
+        const prices = await getHistoricalPrices(sym, earliestTradeDate, toDate, sec?.id, sec?.exchange);
+        return { symbol: sym, prices };
+      }),
+    );
+
+    const priceMap: Record<string, Record<string, number>> = {};
+    for (const { symbol, prices } of pricesBySymbol) {
+      for (const { date, close } of prices) {
+        if (!priceMap[date]) priceMap[date] = {};
+        priceMap[date][symbol] = close;
+      }
+    }
+
+    // Running cash (same pattern as performance route)
+    const sortedTrades = [...trades].sort((a, b) => a.trade_date.localeCompare(b.trade_date));
+    let cash2 = 0;
+    const cashEvents2: [string, number][] = sortedTrades.map((t) => {
+      const qty   = Number(t.quantity)  || 0;
+      const price = Number(t.price)     || 0;
+      const brok  = Number(t.brokerage) || 0;
+      if      (t.trade_type === 'deposit')                         cash2 += price * qty;
+      else if (t.trade_type === 'withdrawal')                      cash2 -= price * qty;
+      else if (t.trade_type === 'buy' || t.trade_type === 'drp') cash2 -= price * qty + brok;
+      else if (t.trade_type === 'sell')                            cash2 += price * qty - brok;
+      else if (t.trade_type === 'dividend')                        cash2 += price * qty;
+      return [t.trade_date, cash2] as [string, number];
+    });
+    const getCash2At = (date: string): number => {
+      let val = 0;
+      for (const [d, v] of cashEvents2) { if (d <= date) val = v; else break; }
+      return val;
+    };
+
+    // Rolling drawdown from peak — accumulate peak over full history,
+    // but only emit data points within [fromDate, toDate].
+    let peak = 0;
+    const result: { date: string; drawdown: number }[] = [];
+
+    for (const date of Object.keys(priceMap).sort()) {
+      const dayHoldings = calculateHoldings(trades.filter((t) => t.trade_date <= date) as any, priceMap[date]);
+      const investedValue = dayHoldings.reduce((s, h) => s + (h.market_value ?? 0), 0);
+      const totalValue = investedValue + getCash2At(date);
+
+      if (totalValue > peak) peak = totalValue;
+      if (date < fromDate || date > toDate) continue;
+
+      const drawdown = peak > 0 ? ((totalValue - peak) / peak) * 100 : 0;
+      result.push({ date, drawdown });
+    }
+
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/portfolios/:id/benchmarks
 router.get('/:id/benchmarks', async (req: AuthenticatedRequest, res: any) => {
   const id = req.params.id as string;
