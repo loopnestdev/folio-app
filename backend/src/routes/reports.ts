@@ -397,18 +397,21 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
         portfolioGain.push({ date, value: (multiplier - 1) * 100 });
         prevValue = totalValue;
       } else {
-        // Portfolio temporarily non-positive (large withdrawal exceeds value, or FX drain).
-        // Show a gap rather than an inverted/undefined data point.
+        // Cannot compute a valid TWR factor. Show a null gap.
         //
-        // IMPORTANT: still update prevValue to the current totalValue (even when negative).
-        // If prevValue is frozen at the last-valid value and a large extFlow later arrives
-        // (e.g. the matching USD deposit from an AUD→USD FX transfer), adjustedBase becomes
-        // prevValue_frozen + extFlow, which is much larger than the actual combined value.
-        // That produces a phantom loss on the deposit day and a phantom gain when the
-        // portfolio recovers — the "big jump after null gap" pattern in the group chart.
-        // By updating prevValue here, subsequent extFlows are applied against the correct
-        // (possibly negative) baseline so the chain resumes accurately.
-        prevValue = totalValue;
+        // Two cases require different prevValue strategies:
+        //
+        // (A) adjustedBase ≤ 0  — extFlow was so negative (e.g. large FX withdrawal)
+        //     that it exceeded prevValue. Apply the extFlow to prevValue so the next
+        //     incoming extFlow (e.g. a matching deposit) adjusts against the correct
+        //     post-withdrawal baseline rather than the stale pre-withdrawal value.
+        //     Without this, a future deposit would see an oversized adjustedBase and
+        //     produce a phantom loss when the chain tries to resume.
+        //
+        // (B) adjustedBase > 0 but totalValue ≤ 0  — portfolio value went negative
+        //     (stocks crashed, or cash overdraft). Freeze prevValue so the chain
+        //     resumes at the right level when the portfolio eventually recovers.
+        if (adjustedBase <= 0) prevValue += extFlow;
         portfolioGain.push({ date, value: null });
       }
     }
