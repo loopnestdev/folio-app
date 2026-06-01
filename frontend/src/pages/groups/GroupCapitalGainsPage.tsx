@@ -139,7 +139,7 @@ export function GroupCapitalGainsPage() {
       </div>
 
       <p className="text-[12px] text-[var(--c-ink-mute)]">
-        Cost base and proceeds shown in each portfolio's native currency. Gain totals above are expressed in {baseCurrency} at current forex rates.
+        Cost base and proceeds shown in each portfolio's native currency. Gain totals above are converted to {baseCurrency} at the forex rate on each disposal date (ATO-compliant).
       </p>
 
       {isLoading ? <PageLoader /> : (

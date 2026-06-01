@@ -127,7 +127,7 @@ export function GroupTaxPage() {
             <Card>
               <CardHeader
                 title="By Portfolio"
-                subtitle={`Converted to ${baseCurrency} at current forex rates`}
+                subtitle={`CGT converted to ${baseCurrency} at each disposal date · income at today's rate`}
               />
               <div className="space-y-4 mt-2">
                 {taxData.portfolios.map((p: GroupPortfolioTax) => (
