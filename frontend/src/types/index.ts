@@ -56,6 +56,9 @@ export interface GroupCapitalGain extends CapitalGain {
   portfolio_id: string;
   portfolio_name: string;
   portfolio_currency: string;
+  fx_rate: number;
+  net_gain_base: number;   // net_gain converted to group base currency
+  gross_gain_base: number; // gross_gain converted to group base currency
 }
 
 export interface GroupPortfolioTax {

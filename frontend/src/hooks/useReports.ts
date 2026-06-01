@@ -52,16 +52,27 @@ export function useDividends({ portfolioId, range = '1Y', customStart, customEnd
   });
 }
 
-// Capital gains report
-export function useCapitalGains({ portfolioId, range = '1Y', customStart, customEnd }: ReportOptions) {
-  const params = dateRangeToParams(range, customStart, customEnd);
+// Capital gains report — uses FY-based params (fyStart + year) to match the backend.
+// The backend /reports/capital-gains endpoint only reads fyStart and year; the old
+// date-range params (start_date / end_date) were silently ignored.
+export function useCapitalGains({
+  portfolioId,
+  fyStart = 'july',
+  year,
+}: {
+  portfolioId?: string;
+  fyStart?: 'january' | 'july';
+  year?: string;
+}) {
+  const currentYear = String(new Date().getFullYear());
+  const y = year ?? currentYear;
 
   return useQuery({
-    queryKey: ['capital-gains', portfolioId, range, customStart, customEnd],
+    queryKey: ['capital-gains', portfolioId, fyStart, y],
     queryFn: async () => {
       const { data } = await api.get<CapitalGain[]>(
         `/api/portfolios/${portfolioId}/reports/capital-gains`,
-        { params },
+        { params: { fyStart, year: y } },
       );
       return data;
     },
