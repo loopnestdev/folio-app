@@ -2,6 +2,12 @@
 
 All notable changes to Folio App are documented here.
 
+## [Unreleased]
+
+### Changed
+
+- **Report page layout: time-range controls moved below the title** — Monthly Profit, Statistics, Dividends, Drawdown, and Capital Gains pages now follow the same two-row layout as Portfolio Diversity: the Individual / Group switcher stays in the top-right corner of the header, while the date-range picker (YTD / 1Y / 2Y … / Custom) and the Capital Gains FY selectors appear on a second row directly underneath the title. (`frontend/src/pages/reports/MonthlyProfitPage.tsx`, `StatisticsPage.tsx`, `DividendsPage.tsx`, `DrawdownPage.tsx`, `CapitalGainsPage.tsx`)
+
 ## [v0.5.3] — 2026-06-01
 
 ### Fixed

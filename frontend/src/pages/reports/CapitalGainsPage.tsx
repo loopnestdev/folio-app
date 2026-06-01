@@ -102,35 +102,35 @@ export function CapitalGainsPage() {
           <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Capital Gains</h1>
           <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">CGT report for sold positions{view.displayName ? ` · ${view.displayName}` : ''}</p>
         </div>
-        <div className="flex flex-wrap gap-3 items-end">
-          {view.hasGroups && (
-            <ReportViewSwitcher
-              viewMode={view.viewMode} portfolios={view.portfolios} groups={view.groups}
-              activePortfolioId={view.activePortfolioId} activeGroupId={view.activeGroupId}
-              onViewModeChange={view.onViewModeChange} onPortfolioChange={view.onPortfolioChange} onGroupChange={view.onGroupChange}
-            />
-          )}
-          <Select
-            label="FY Type"
-            options={[
-              { label: 'July – June (AU)', value: 'july' },
-              { label: 'January – December', value: 'january' },
-            ]}
-            value={fyStart}
-            onChange={(v) => {
-              setFyStart(v as 'january' | 'july');
-              setYear(String(new Date().getFullYear()));
-            }}
-            containerClassName="w-52"
+        {view.hasGroups && (
+          <ReportViewSwitcher
+            viewMode={view.viewMode} portfolios={view.portfolios} groups={view.groups}
+            activePortfolioId={view.activePortfolioId} activeGroupId={view.activeGroupId}
+            onViewModeChange={view.onViewModeChange} onPortfolioChange={view.onPortfolioChange} onGroupChange={view.onGroupChange}
           />
-          <Select
-            label="Year"
-            options={years}
-            value={year}
-            onChange={setYear}
-            containerClassName="w-36"
-          />
-        </div>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-3 items-end">
+        <Select
+          label="FY Type"
+          options={[
+            { label: 'July – June (AU)', value: 'july' },
+            { label: 'January – December', value: 'january' },
+          ]}
+          value={fyStart}
+          onChange={(v) => {
+            setFyStart(v as 'january' | 'july');
+            setYear(String(new Date().getFullYear()));
+          }}
+          containerClassName="w-52"
+        />
+        <Select
+          label="Year"
+          options={years}
+          value={year}
+          onChange={setYear}
+          containerClassName="w-36"
+        />
       </div>
 
       {/* Summary */}

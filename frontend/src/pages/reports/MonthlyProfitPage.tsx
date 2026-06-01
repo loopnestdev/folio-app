@@ -81,17 +81,15 @@ export function MonthlyProfitPage() {
           <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Monthly Profit</h1>
           <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">Month-by-month profit and loss{view.displayName ? ` · ${view.displayName}` : ''}</p>
         </div>
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-          {view.hasGroups && (
-            <ReportViewSwitcher
-              viewMode={view.viewMode} portfolios={view.portfolios} groups={view.groups}
-              activePortfolioId={view.activePortfolioId} activeGroupId={view.activeGroupId}
-              onViewModeChange={view.onViewModeChange} onPortfolioChange={view.onPortfolioChange} onGroupChange={view.onGroupChange}
-            />
-          )}
-          <DateRangePicker value={range} customStart={customStart} customEnd={customEnd} onChange={handleRangeChange} />
-        </div>
+        {view.hasGroups && (
+          <ReportViewSwitcher
+            viewMode={view.viewMode} portfolios={view.portfolios} groups={view.groups}
+            activePortfolioId={view.activePortfolioId} activeGroupId={view.activeGroupId}
+            onViewModeChange={view.onViewModeChange} onPortfolioChange={view.onPortfolioChange} onGroupChange={view.onGroupChange}
+          />
+        )}
       </div>
+      <DateRangePicker value={range} customStart={customStart} customEnd={customEnd} onChange={handleRangeChange} />
 
       {/* Summary */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
