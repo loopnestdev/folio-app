@@ -458,13 +458,10 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
         portfolioGain.push({ date, value: (multiplier - 1) * 100 });
         prevValue = totalValue;
       } else {
-        // Cannot compute a valid TWR factor — show null gap.
-        // See reports.ts for the full explanation of the two-case strategy:
-        // (A) adjustedBase ≤ 0: apply extFlow to prevValue so the matching extFlow
-        //     (e.g. the USD deposit that offsets an AUD withdrawal) lands on the
-        //     correct baseline → no phantom loss/gain around FX transfers.
-        // (B) totalValue ≤ 0: freeze prevValue so the chain resumes cleanly.
-        if (adjustedBase <= 0) prevValue += extFlow;
+        // Cannot compute a valid TWR factor — show null gap and freeze prevValue.
+        // See reports.ts for the rationale: mutating prevValue during null periods
+        // creates near-zero adjustedBase on the first valid day after the gap,
+        // producing astronomical factors.
         portfolioGain.push({ date, value: null });
       }
     }

@@ -397,21 +397,15 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
         portfolioGain.push({ date, value: (multiplier - 1) * 100 });
         prevValue = totalValue;
       } else {
-        // Cannot compute a valid TWR factor. Show a null gap.
+        // Cannot compute a valid TWR factor (adjustedBase ≤ 0 or totalValue ≤ 0).
+        // Show a null gap and freeze prevValue at its last valid value.
         //
-        // Two cases require different prevValue strategies:
-        //
-        // (A) adjustedBase ≤ 0  — extFlow was so negative (e.g. large FX withdrawal)
-        //     that it exceeded prevValue. Apply the extFlow to prevValue so the next
-        //     incoming extFlow (e.g. a matching deposit) adjusts against the correct
-        //     post-withdrawal baseline rather than the stale pre-withdrawal value.
-        //     Without this, a future deposit would see an oversized adjustedBase and
-        //     produce a phantom loss when the chain tries to resume.
-        //
-        // (B) adjustedBase > 0 but totalValue ≤ 0  — portfolio value went negative
-        //     (stocks crashed, or cash overdraft). Freeze prevValue so the chain
-        //     resumes at the right level when the portfolio eventually recovers.
-        if (adjustedBase <= 0) prevValue += extFlow;
+        // prevValue must NOT be mutated here. When the chain eventually resumes
+        // (both conditions met), it measures recovery relative to the last valid
+        // portfolio state — which is the mathematically correct baseline for TWR.
+        // Mutating prevValue (to totalValue or prevValue+extFlow) during null periods
+        // creates near-zero adjustedBase values on subsequent valid days, producing
+        // astronomical factors (e.g. +1650% or +315,000%).
         portfolioGain.push({ date, value: null });
       }
     }
