@@ -378,21 +378,17 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
           return val;
         };
 
-        // ── External-flow remapping ─────────────────────────────────────────
-        // Deposits and withdrawals can be recorded on weekends or public holidays
-        // when no price data exists for that date. Without remapping,
-        // extFlowByDate[priceDate] returns 0 for those flows even though
-        // getCashAt() has already updated the cash balance — producing phantom
-        // gains/losses in the TWR denominator.
-        // Assign every flow to the NEXT available price date on or after it.
-        const sortedPriceDates = Object.keys(priceMap).sort();
-        const extFlowForDate: Record<string, number> = {};
-        for (const [flowDate, flowAmt] of Object.entries(extFlowByDate)) {
-          const target = sortedPriceDates.find(d => d >= flowDate);
-          if (target) extFlowForDate[target] = (extFlowForDate[target] ?? 0) + flowAmt;
-        }
-
-        // Build per-date map
+        // Build per-date map.
+        // NOTE: extFlow uses extFlowByDate[date] directly (no weekend remapping).
+        // In the group context, cross-currency FX transfers (AUD withdrawal + USD
+        // deposit) are typically recorded on the same date and naturally cancel out
+        // in the combined extFlow. Weekend remapping (which shifts each flow to the
+        // next price date on its per-portfolio calendar) breaks that cancellation
+        // because the AUD and USD portfolios have different trading calendars, so
+        // the same-date flows land on different remapped dates. Using the raw date
+        // preserves same-day cancellation; non-trading-day flows are simply absent
+        // from the priceMap and thus dropped — which is acceptable for the group
+        // because getCashAt() still captures the economic effect in totalValue.
         const dateMap: Record<string, DayEntry> = {};
         for (const date of Object.keys(priceMap).sort()) {
           const dayHoldings = calculateHoldings(
@@ -402,7 +398,7 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
           const holdingsValue = dayHoldings.reduce((s, h) => s + (h.market_value ?? 0), 0);
           dateMap[date] = {
             totalValue: (holdingsValue + getCashAt(date)) * fx,
-            extFlow:    (extFlowForDate[date] ?? 0) * fx,
+            extFlow:    (extFlowByDate[date] ?? 0) * fx,
             netDep:     getNetDepAt(date) * fx,
           };
         }
@@ -433,48 +429,6 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
         totalNetDep += lastKnownNetDep[i];
       }
       combined.push({ date, totalValue, extFlow: totalExtFlow, netDep: totalNetDep });
-    }
-
-    // ── FX-transfer pair consolidation ─────────────────────────────────────
-    // A cross-currency FX transfer (e.g. AUD→USD) appears in the combined
-    // extFlow series as:
-    //   D1: large NEGATIVE flow (AUD withdrawal from AUD portfolio)
-    //   D2: large POSITIVE flow (USD deposit converted to AUD, a few days later)
-    //
-    // Left on separate dates this causes two problems:
-    //   D1: adjustedBase = prevValue + neg → may go ≤ 0 → null gap, prevValue frozen
-    //   D2: adjustedBase = frozen_prevValue + large_positive >> totalValue → big drop
-    //
-    // Fix: move the negative flow to D2 so both are netted at the same point.
-    //   D1 after fix: extFlow = 0 → adjustedBase = prevValue > 0, but totalValue < 0
-    //                 (AUD cash deeply negative, USD portfolio not yet created) → 1-day null
-    //   D2 after fix: extFlow = D2_pos + D1_neg = net FX cost (small negative)
-    //                 → adjustedBase = prevValue + net ≈ prevValue
-    //                 → totalValue ≈ adjustedBase (no price movement)
-    //                 → factor ≈ 1.0  (correct: FX cost is capital overhead, not return)
-    //
-    // Match criteria: negative flow on D1 followed within 7 calendar days by a
-    // positive flow on D2 that is 50%–150% of the absolute negative (covers the
-    // realistic AUD/USD FX rate range including transaction costs).
-    const FX_PAIR_WINDOW = 7;
-    for (let ci = 0; ci < combined.length - 1; ci++) {
-      const negFlow = combined[ci].extFlow;
-      if (negFlow >= 0 || Math.abs(negFlow) < 100) continue; // skip small / positive flows
-
-      for (let cj = ci + 1; cj < combined.length; cj++) {
-        const daysApart = (new Date(combined[cj].date).getTime() - new Date(combined[ci].date).getTime()) / 86_400_000;
-        if (daysApart > FX_PAIR_WINDOW) break;
-
-        const posFlow = combined[cj].extFlow;
-        if (posFlow <= 0) continue;
-        // FX rate tolerance: inflow is 50%–150% of absolute outflow
-        if (posFlow < Math.abs(negFlow) * 0.5 || posFlow > Math.abs(negFlow) * 1.5) continue;
-
-        // Pair found — consolidate: move the outflow to the deposit date
-        combined[cj].extFlow += negFlow; // net ≈ small negative (FX transaction cost)
-        combined[ci].extFlow  = 0;
-        break; // only match each outflow once
-      }
     }
 
     // ── TWR chain ─────────────────────────────────────────────────────────
