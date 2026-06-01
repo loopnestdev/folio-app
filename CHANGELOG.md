@@ -4,6 +4,10 @@ All notable changes to Folio App are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- **Import page: portfolio context shown in subtitle** — The Import Trades page now displays the target portfolio name and currency directly under the title (e.g. "Importing into **Moomoo Personal Portfolio** (AUD)"), making it immediately clear which portfolio will receive the imported trades. (`frontend/src/pages/ImportPage.tsx`)
+
 ### Fixed
 
 - **PDF import: missing trade when symbol renders on its own line** — Some Moomoo PDF statements break the symbol token onto a separate line before the exchange/currency/date line (e.g. `"INUV\n"` then `"US\tUSD\t2025/08/08"`). The parser's 4-token check skipped these trades entirely (e.g. the INUV 500-share buy on 08 Aug 2025 was silently dropped). The parser now detects a single-uppercase-word line as a split symbol and reads the next line for exchange/currency/date. (`backend/src/services/pdf-parser/moomoo.ts`)
