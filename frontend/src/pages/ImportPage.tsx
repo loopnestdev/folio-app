@@ -152,7 +152,16 @@ export function ImportPage() {
       <div>
         <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Import Trades</h1>
         <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">
-          Upload a Moomoo monthly PDF statement or annual XLSX summary to import your trades
+          Importing into{' '}
+          {activePortfolio ? (
+            <span className="font-semibold text-[var(--c-ink)]">{activePortfolio.name}</span>
+          ) : (
+            <span>your portfolio</span>
+          )}
+          {activePortfolio?.currency && (
+            <span className="ml-1 text-[var(--c-ink-mute)]">({activePortfolio.currency})</span>
+          )}
+          {' '}· Upload a Moomoo monthly PDF statement or annual XLSX summary
         </p>
       </div>
 
@@ -165,7 +174,8 @@ export function ImportPage() {
           <div className="text-center">
             <h2 className="text-[22px] font-semibold text-[var(--c-ink)]">Import Successful</h2>
             <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">
-              {preview?.parsed_count} trades have been imported to your portfolio.
+              {preview?.parsed_count} trades have been imported to{' '}
+              {activePortfolio ? <strong>{activePortfolio.name}</strong> : 'your portfolio'}.
             </p>
           </div>
           <Button variant="primary" onClick={handleReset}>Import Another File</Button>
