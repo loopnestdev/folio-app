@@ -320,7 +320,9 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
         trades.filter(t => t.trade_date <= date) as any, dayPrices
       );
       const investedValue = dayHoldings.reduce((s, h) => s + (h.market_value ?? 0), 0);
-      return { date, totalValue: investedValue + getCashAt(date) };
+      const cashBalance   = getCashAt(date);
+      // Store cashBalance separately so the TWR loop can detect overdraft states.
+      return { date, totalValue: investedValue + cashBalance, cashBalance };
     });
 
     // ── TWR start: find first price-date with BOTH positive net deposits AND
@@ -400,32 +402,42 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
     ];
 
     for (let i = chartStartIdx + 1; i < portfolioValues.length; i++) {
-      const { date, totalValue } = portfolioValues[i];
+      const { date, totalValue, cashBalance } = portfolioValues[i];
       const extFlow      = extFlowForTWR[date] ?? 0;
       const adjustedBase = prevValue + extFlow;
+
+      // ── Chain-break detection (evaluated before every step) ────────────────
+      // All three conditions are checked here — not only in the null branch —
+      // so that condition 3 can fire even when both adjustedBase and totalValue
+      // are technically positive (the scenario that caused the −99% crash).
+      if (!chainBroken) {
+        // 1. Withdrawal directly made adjustedBase ≤ 0 (withdrawal > prevValue).
+        if (extFlow < 0 && adjustedBase <= 0) chainBroken = true;
+
+        // 2. Permanent overdraft: more withdrawn than deposited AND portfolio is
+        //    underwater. Any brief stock-price recovery would resume the chain
+        //    comparing a tiny totalValue against a large frozen prevValue.
+        if (totalValue <= 0 && getNetDepAt(date) < 0) chainBroken = true;
+
+        // 3. Cash overdraft dominates the portfolio value.
+        //    This fires when negative cash (from an FX withdrawal overdraft) is
+        //    larger than the total portfolio value — i.e. stocks can't cover the
+        //    debt. In this leveraged state each 1% stock move causes ~100×
+        //    amplified TWR swings; the chain produces oscillating zombie data.
+        //    Example (AUD portfolio after FX transfer):
+        //      cashBalance = −A$13,522 · stocks = A$14,000 · totalValue = A$478
+        //      → stock drops 3% → totalValue = −A$9,522 (null day, prevValue frozen)
+        //      → stock recovers 1% → totalValue = A$58 (valid! factor = 58/478 = 0.12 → −88%)
+        //      → stock drops 1% → totalValue = −A$8,659 (null) → …oscillates
+        if (cashBalance < 0 && totalValue < -cashBalance) chainBroken = true;
+      }
 
       if (!chainBroken && adjustedBase > 0 && totalValue > 0) {
         multiplier *= totalValue / adjustedBase;
         portfolioGain.push({ date, value: (multiplier - 1) * 100 });
         prevValue = totalValue;
       } else {
-        // Cannot compute a valid TWR factor (adjustedBase ≤ 0 or totalValue ≤ 0).
-        // Show a null gap and freeze prevValue at its last valid value.
-        //
-        // Two conditions permanently break the chain (chainBroken = true):
-        //
-        // 1. The withdrawal directly made adjustedBase ≤ 0 (withdrawal > prevValue).
-        if (extFlow < 0 && adjustedBase <= 0) chainBroken = true;
-        //
-        // 2. Permanent overdraft: the portfolio has had MORE withdrawn than deposited
-        //    (getNetDepAt < 0) AND the portfolio value is currently negative.
-        //    This handles portfolios where prevValue (inflated by TWR growth) was
-        //    larger than the withdrawal, so adjustedBase stayed positive — but the
-        //    portfolio is now permanently underwater (cash deeply negative, holdings
-        //    can't recover it). Without this check, every brief stock-price spike
-        //    that momentarily pushes totalValue above zero would resume the chain and
-        //    produce catastrophic downward factors (tiny totalValue / large prevValue).
-        if (totalValue <= 0 && getNetDepAt(date) < 0) chainBroken = true;
+        // Cannot compute a valid TWR factor. Show a null gap and freeze prevValue.
         portfolioGain.push({ date, value: null });
       }
     }
