@@ -93,15 +93,12 @@ export function GroupTaxPage() {
             <StatCard label="Dividends" value={formatCurrency(taxData.dividends_received, baseCurrency)} />
             <StatCard label="Interest"  value={formatCurrency(taxData.interest_received, baseCurrency)} />
             <StatCard label="Capital Gains (Short)"
-              value={formatCurrency(taxData.capital_gains_short_term, baseCurrency)}
-              trend={taxData.capital_gains_short_term} />
+              value={formatCurrency(taxData.capital_gains_short_term, baseCurrency)} />
             <StatCard label="Capital Gains (Long)"
-              value={formatCurrency(taxData.capital_gains_long_term, baseCurrency)}
-              trend={taxData.capital_gains_long_term} />
+              value={formatCurrency(taxData.capital_gains_long_term, baseCurrency)} />
             <StatCard label="CGT Discount" value={formatCurrency(taxData.cgt_discount_applied, baseCurrency)} />
             <StatCard label="Total Taxable Income"
-              value={formatCurrency(taxData.total_taxable_income, baseCurrency)}
-              trend={taxData.total_taxable_income} />
+              value={formatCurrency(taxData.total_taxable_income, baseCurrency)} />
           </div>
 
           {/* Consolidated waterfall */}

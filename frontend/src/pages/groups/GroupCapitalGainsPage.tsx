@@ -38,10 +38,15 @@ export function GroupCapitalGainsPage() {
 
   const { data: gains = [], isLoading } = useGroupCapitalGains({ groupId: id, fyStart, year });
 
-  const totalNet      = gains.reduce((s, g) => s + g.net_gain, 0);
-  const totalDiscount = gains.reduce((s, g) => s + (g.cgt_discount_applicable ? g.gross_gain * ((g.cgt_discount_pct ?? 50) / 100) : 0), 0);
-  const shortTerm     = gains.filter((g) => !g.is_long_term).reduce((s, g) => s + g.net_gain, 0);
-  const longTerm      = gains.filter((g) => g.is_long_term).reduce((s, g) => s + g.net_gain, 0);
+  // Use net_gain_base (FX-converted to base currency) for the summary totals so
+  // multi-currency groups (e.g. AUD + USD) are summed correctly.
+  // Falls back to net_gain for backwards compatibility when base fields are absent.
+  const totalNet      = gains.reduce((s, g) => s + (g.net_gain_base   ?? g.net_gain),   0);
+  const totalDiscount = gains.reduce((s, g) => s + (g.cgt_discount_applicable
+    ? (g.gross_gain_base ?? g.gross_gain) * ((g.cgt_discount_pct ?? 50) / 100)
+    : 0), 0);
+  const shortTerm     = gains.filter((g) => !g.is_long_term).reduce((s, g) => s + (g.net_gain_base ?? g.net_gain), 0);
+  const longTerm      = gains.filter((g) =>  g.is_long_term).reduce((s, g) => s + (g.net_gain_base ?? g.net_gain), 0);
 
   const columns = [
     { key: 'portfolio_name', label: 'Portfolio',
@@ -127,10 +132,10 @@ export function GroupCapitalGainsPage() {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Short-Term Gains" value={formatCurrency(shortTerm, baseCurrency)} trend={shortTerm} />
-        <StatCard label="Long-Term Gains"  value={formatCurrency(longTerm, baseCurrency)}  trend={longTerm}  />
+        <StatCard label="Short-Term Gains" value={formatCurrency(shortTerm, baseCurrency)} />
+        <StatCard label="Long-Term Gains"  value={formatCurrency(longTerm, baseCurrency)} />
         <StatCard label="CGT Discount"     value={formatCurrency(totalDiscount, baseCurrency)} />
-        <StatCard label="Net Taxable Gain" value={formatCurrency(totalNet, baseCurrency)}  trend={totalNet}  />
+        <StatCard label="Net Taxable Gain" value={formatCurrency(totalNet, baseCurrency)} />
       </div>
 
       <p className="text-[12px] text-[var(--c-ink-mute)]">

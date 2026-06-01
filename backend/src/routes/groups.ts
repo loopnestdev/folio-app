@@ -560,12 +560,26 @@ router.get('/:id/capital-gains', async (req: AuthenticatedRequest, res: any) => 
 
   try {
     const portfolios = await getGroupPortfolios(req.params.id as string, req.userId!);
+    const baseCurrency: string = group.base_currency ?? 'AUD';
+
+    // Fetch current FX rates so each lot can report net_gain_base (converted to
+    // base currency). This lets the frontend compute correct multi-currency totals.
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const uniqueCurrencies = [...new Set(portfolios.map((p) => p.currency))].filter((c) => c !== baseCurrency);
+    const fxRates: Record<string, number> = { [baseCurrency]: 1 };
+    await Promise.all(
+      uniqueCurrencies.map(async (cur) => {
+        fxRates[cur] = await getForexRate(cur, baseCurrency, today);
+      }),
+    );
+
     const allGains: any[] = [];
 
     await Promise.all(
       portfolios.map(async (portfolio) => {
         const trades = await getPortfolioTrades(portfolio.id);
         if (!trades.length) return;
+        const fx = fxRates[portfolio.currency] ?? 1;
         const lots = calculateCapitalGains(trades as any, params.data.fyStart, parseInt(params.data.year));
         for (const lot of lots) {
           allGains.push({
@@ -578,6 +592,11 @@ router.get('/:id/capital-gains', async (req: AuthenticatedRequest, res: any) => 
             portfolio_id:           portfolio.id,
             portfolio_name:         portfolio.name,
             portfolio_currency:     portfolio.currency,
+            fx_rate:                fx,
+            // net_gain and gross_gain converted to base currency for the summary
+            // stat cards. The per-lot table still shows native-currency values.
+            net_gain_base:          lot.net_gain   * fx,
+            gross_gain_base:        lot.gross_gain * fx,
           });
         }
       }),

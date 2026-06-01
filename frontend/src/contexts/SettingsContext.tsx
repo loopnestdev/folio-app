@@ -23,7 +23,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   );
 
   const [financialYear, setFinancialYearState] = useState<FinancialYearType>(
-    () => (localStorage.getItem(STORAGE_KEY_FY) as FinancialYearType) || 'jan-dec',
+    () => (localStorage.getItem(STORAGE_KEY_FY) as FinancialYearType) || 'jul-jun',
   );
 
   // Sync from profile when it loads
