@@ -226,6 +226,58 @@ export async function getForexRate(
   }).close;
 }
 
+/** Map common Yahoo quoteType values to human-readable asset type names. */
+const QUOTE_TYPE_MAP: Record<string, string> = {
+  EQUITY:         'Equity',
+  ETF:            'ETF',
+  MUTUALFUND:     'Mutual Fund',
+  FUTURE:         'Future',
+  CURRENCY:       'Currency',
+  CRYPTOCURRENCY: 'Crypto',
+  INDEX:          'Index',
+  OPTION:         'Option',
+};
+
+/** Derive country from exchange code when Yahoo doesn't provide it (common for ETFs). */
+function countryFromExchange(exchange: string | null | undefined): string | null {
+  const e = (exchange ?? '').toUpperCase();
+  if (e === 'ASX')                                                       return 'Australia';
+  if (['NYSE', 'NASDAQ', 'US', 'BATS', 'ARCA', 'NYSEARCA', 'AMEX'].includes(e)) return 'United States';
+  if (e === 'LSE')                                                       return 'United Kingdom';
+  if (e === 'TSX')                                                       return 'Canada';
+  if (e === 'HK')                                                        return 'Hong Kong';
+  if (e === 'SGX')                                                       return 'Singapore';
+  return null;
+}
+
+/**
+ * Fetch sector, country, and asset_type for a security from Yahoo Finance.
+ * Uses the assetProfile (sector/country) and quoteType (Equity/ETF/etc.) modules.
+ * Falls back gracefully — never throws. Country falls back to the exchange mapping
+ * for ETFs and other instruments that have no assetProfile.
+ *
+ * Results are intended to be persisted to the securities table so subsequent
+ * diversity loads skip the Yahoo call entirely.
+ */
+export async function enrichSecurityMetadata(
+  symbol: string,
+  exchange?: string | null,
+): Promise<{ sector: string | null; country: string | null; asset_type: string | null }> {
+  const ticker = toYahooTicker(symbol, exchange);
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result: any = await yahooFinance.quoteSummary(ticker, { modules: ['assetProfile', 'quoteType'] });
+    const sector     = (result.assetProfile?.sector    as string | null) ?? null;
+    const country    = (result.assetProfile?.country   as string | null) ?? countryFromExchange(exchange);
+    const qt         = result.quoteType?.quoteType as string | undefined;
+    const asset_type = qt ? (QUOTE_TYPE_MAP[qt] ?? (qt.charAt(0).toUpperCase() + qt.slice(1).toLowerCase())) : null;
+    return { sector, country, asset_type };
+  } catch {
+    // Yahoo call failed — still return a country from the exchange mapping
+    return { sector: null, country: countryFromExchange(exchange), asset_type: null };
+  }
+}
+
 export async function getCurrentPrice(symbol: string, exchange?: string | null): Promise<number | null> {
   const tryQuote = async (ticker: string): Promise<number | null> => {
     try {

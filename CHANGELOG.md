@@ -4,6 +4,10 @@ All notable changes to Folio App are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Portfolio Diversity Sector / Type / Country always showing "Other" / "Unknown"** — The `securities` table only stores `symbol`, `name`, `exchange`, and `currency` at trade-import time; `sector`, `asset_type`, and `country` were permanently null. Both the individual and group Diversity endpoints now lazily enrich missing metadata on first load: they call Yahoo Finance `assetProfile` (sector, country) and `quoteType` (Equity / ETF / Mutual Fund …) modules in parallel, persist the results back to the `securities` table, and return enriched data for the current request. Subsequent loads use the cached DB values so there is no extra latency. Country falls back to an exchange → country mapping (ASX → Australia, NYSE/NASDAQ → United States, etc.) for ETFs and other instruments that have no `assetProfile`. (`backend/src/services/market-data/yahoo.ts`, `backend/src/routes/reports.ts`, `backend/src/routes/groups.ts`)
+
 ### Changed
 
 - **Report pages default to Group view** — When a user has at least one portfolio group the Individual / Group switcher now opens in Group mode instead of Individual mode, so the aggregate view is the first thing seen. (`frontend/src/hooks/useReportViewSwitcher.ts`)

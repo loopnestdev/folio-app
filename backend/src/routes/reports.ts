@@ -5,7 +5,7 @@ import { requireApproved } from '../middleware/requireApproved';
 import { supabase } from '../lib/supabase';
 import { calculateHoldings, calculateCapitalGains, calculateCashPosition } from '../services/calculations/holdings';
 import { computeStatistics, computeMonthlyReturns } from '../services/calculations/statistics';
-import { getHistoricalPrices, getBenchmarkPrices, getCurrentPrices, BENCHMARKS } from '../services/market-data/yahoo';
+import { getHistoricalPrices, getBenchmarkPrices, getCurrentPrices, BENCHMARKS, enrichSecurityMetadata } from '../services/market-data/yahoo';
 import { format, subYears, startOfYear } from 'date-fns';
 import type { AuthenticatedRequest, Trade } from '../types';
 
@@ -1135,6 +1135,18 @@ router.get('/:id/reports/diversity', async (req: AuthenticatedRequest, res: any)
           exchange:   t.security.exchange,
         };
       }
+    }
+
+    // Lazily enrich securities that have no metadata yet (sector/country/asset_type all null).
+    // Results are persisted back to the DB so future calls skip the Yahoo lookup entirely.
+    const toEnrich = Object.entries(secMeta).filter(([, m]) => !m.sector && !m.asset_type && !m.country);
+    if (toEnrich.length > 0) {
+      await Promise.all(toEnrich.map(async ([sym, m]) => {
+        const enriched = await enrichSecurityMetadata(sym, m.exchange);
+        secMeta[sym] = { ...secMeta[sym], ...enriched };
+        // Always persist (even partial) so we don't re-query on every request
+        await supabase.from('securities').update(enriched).eq('symbol', sym.toUpperCase());
+      }));
     }
 
     const securitiesMap = new Map<string, string>();

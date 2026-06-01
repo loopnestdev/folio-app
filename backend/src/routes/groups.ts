@@ -7,8 +7,8 @@ import { calculateHoldings, calculateCapitalGains } from '../services/calculatio
 import { computeStatistics, computeMonthlyReturns } from '../services/calculations/statistics';
 import {
   getHistoricalPrices, getBenchmarkPrices, getCurrentPrices, BENCHMARKS,
+  getForexRate, enrichSecurityMetadata,
 } from '../services/market-data/yahoo';
-import { getForexRate } from '../services/market-data/yahoo';
 import { format, subYears, startOfYear } from 'date-fns';
 import type { AuthenticatedRequest, Trade } from '../types';
 
@@ -922,30 +922,42 @@ router.get('/:id/diversity', async (req: AuthenticatedRequest, res: any) => {
       fxRates[cur] = await getForexRate(cur, baseCurrency, todayStr);
     }));
 
+    // ── Phase 1: collect all trades, secMeta, and holdings across portfolios ─────
+    type SecMetaEntry = { sector?: string|null; asset_type?: string|null; country?: string|null; exchange?: string|null };
+    const secMeta: Record<string, SecMetaEntry> = {};
+    const portfolioHoldings: Array<{ holdings: ReturnType<typeof calculateHoldings>; fx: number }> = [];
+
+    for (const portfolio of portfolios) {
+      const trades = await getPortfolioTrades(portfolio.id);
+      for (const t of trades) {
+        if (t.security && !secMeta[t.security.symbol]) secMeta[t.security.symbol] = t.security;
+      }
+      const securitiesMap = new Map<string, string>();
+      trades.filter((t) => t.security).forEach((t) => securitiesMap.set(t.security!.symbol, t.security!.exchange ?? ''));
+      const currentPrices = await getCurrentPrices(
+        Array.from(securitiesMap.entries()).map(([symbol, exchange]) => ({ symbol, exchange })),
+      );
+      portfolioHoldings.push({ holdings: calculateHoldings(trades as any, currentPrices), fx: fxRates[portfolio.currency] ?? 1 });
+    }
+
+    // ── Phase 2: lazily enrich missing metadata from Yahoo Finance ────────────
+    const toEnrich = Object.entries(secMeta).filter(([, m]) => !m.sector && !m.asset_type && !m.country);
+    if (toEnrich.length > 0) {
+      await Promise.all(toEnrich.map(async ([sym, m]) => {
+        const enriched = await enrichSecurityMetadata(sym, m.exchange);
+        secMeta[sym] = { ...secMeta[sym], ...enriched };
+        await supabase.from('securities').update(enriched).eq('symbol', sym.toUpperCase());
+      }));
+    }
+
+    // ── Phase 3: compute allocations ─────────────────────────────────────────
     const bySector:  Record<string, number> = {};
     const byType:    Record<string, number> = {};
     const byCountry: Record<string, number> = {};
     const byMarket:  Record<string, number> = {};
     let total = 0;
 
-    for (const portfolio of portfolios) {
-      const trades = await getPortfolioTrades(portfolio.id);
-      const fx = fxRates[portfolio.currency] ?? 1;
-
-      // Security metadata from trades
-      const secMeta: Record<string, { sector?: string|null; asset_type?: string|null; country?: string|null; exchange?: string|null }> = {};
-      for (const t of trades) {
-        if (t.security) secMeta[t.security.symbol] = t.security;
-      }
-
-      const securitiesMap = new Map<string, string>();
-      trades.filter((t) => t.security).forEach((t) => securitiesMap.set(t.security!.symbol, t.security!.exchange ?? ''));
-
-      const currentPrices = await getCurrentPrices(
-        Array.from(securitiesMap.entries()).map(([symbol, exchange]) => ({ symbol, exchange })),
-      );
-      const holdings = calculateHoldings(trades as any, currentPrices);
-
+    for (const { holdings, fx } of portfolioHoldings) {
       for (const h of holdings) {
         const mv = (h.market_value ?? 0) * fx;
         if (mv <= 0) continue;
