@@ -2,6 +2,18 @@
 
 All notable changes to Folio App are documented here.
 
+## [Unreleased]
+
+### Fixed
+
+- **XLSX import: brokerage always $0** — The Moomoo annual XLSX uses the column name `Transaction Fee(Inc.GST)` but the parser was looking for `Bokerage(Inc.GST)` / `Brokerage(Inc.GST)` (both incorrect). Every trade imported via XLSX had brokerage = $0, which understates the cost base and overstates capital gains. Fixed by adding `Transaction Fee(Inc.GST)` as the primary lookup with the old names retained as fallbacks for older file formats. 39 of 49 trades in the 2024–25 file had non-zero fees affected. (`backend/src/services/pdf-parser/moomoo-xlsx.ts`)
+
+- **XLSX import: Cash Overview not parsed** — Bank deposits (ZEPTO_PR PayID references), AUD↔USD internal account transfers, and Moomoo cash vouchers from the Cash Overview sheet were silently ignored. These are external cash flows required for accurate TWR / Modified Dietz calculations. They are now parsed as `deposit` or `withdrawal` trades based on the sign of the amount, with the Comment stored as `notes` for display and deduplication. Stock Cash Coupons are intentionally skipped because they are already captured as dividend/interest trades via the monthly PDF import. (`backend/src/services/pdf-parser/moomoo-xlsx.ts`)
+
+- **XLSX import: multiple same-day same-amount deposits collapsed** — The dedup key for deposit/withdrawal trades was `date|symbol|type|qty|price`, which caused multiple deposits of the same amount on the same day (e.g. three separate $1,000 Zepto transfers) to be treated as duplicates of each other. Both parse-time and confirm-time dedup now include the `notes` field (i.e. the payment reference) for deposit/withdrawal trades, so entries with different Zepto references or transfer comments are correctly treated as distinct trades. (`backend/src/routes/trades.ts`)
+
+- **XLSX import: `mapMarket` never handled `ASX` directly** — Newer Moomoo files emit `Market: "ASX"` while the parser only had explicit cases for `"AU"` → ASX. The `default` branch happened to return `"ASX"` anyway, but the case is now explicit for clarity. (`backend/src/services/pdf-parser/moomoo-xlsx.ts`)
+
 ## [v0.5.4] — 2026-06-01
 
 ### Changed

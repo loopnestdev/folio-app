@@ -38,13 +38,14 @@ function parseDate(raw: unknown): string {
  * Map Moomoo "Market" column → exchange code used in the rest of the app.
  * Must match what the PDF parser produces so (symbol, exchange) upserts
  * don't create duplicate security records.
- *  AU  → ASX   (matches PDF "ASX AUD" line)
- *  US  → US    (matches PDF "US USD" line — NOT "NYSE", which would diverge)
- *  HK  → HK    (matches PDF "HK HKD" line)
+ *  AU / ASX → ASX  (matches PDF "ASX AUD" line; older files use "AU", newer use "ASX")
+ *  US       → US   (matches PDF "US USD" line — NOT "NYSE", which would diverge)
+ *  HK       → HK   (matches PDF "HK HKD" line)
  */
 function mapMarket(market: string): string {
   switch (market.toUpperCase()) {
-    case 'AU':  return 'ASX';
+    case 'AU':
+    case 'ASX': return 'ASX';
     case 'US':  return 'US';
     case 'HK':  return 'HK';
     default:    return market.toUpperCase();
@@ -97,8 +98,14 @@ export function parseMoomooAnnualSummary(buffer: Buffer): ParsedTrade[] {
       const price    = num(row['Avg Price']);
       const amount   = num(row['Transaction Amount']);
 
-      // Moomoo has a typo in their column name: "Bokerage(Inc.GST)"
-      const brokerageIncGST = num(row['Bokerage(Inc.GST)'] ?? row['Brokerage(Inc.GST)'] ?? 0);
+      // Moomoo renamed the column: newer files use "Transaction Fee(Inc.GST)",
+      // older files had "Bokerage(Inc.GST)" (with a typo) or "Brokerage(Inc.GST)".
+      const brokerageIncGST = num(
+        row['Transaction Fee(Inc.GST)'] ??
+        row['Bokerage(Inc.GST)']        ??
+        row['Brokerage(Inc.GST)']       ??
+        0,
+      );
       const gst             = num(row['GST']);
       // Our DB stores brokerage and GST separately; the XLSX column already
       // includes GST inside the brokerage figure, so subtract it back out.
@@ -195,6 +202,50 @@ export function parseMoomooAnnualSummary(buffer: Buffer): ParsedTrade[] {
         gst:           0,
         exchange_rate: 1,
         notes: `Total: ${num(row['Total Payment'])}, Withholding Tax: ${num(row['Withholding Tax'])}`,
+      });
+    }
+  }
+
+  // ── 4. Cash Overview ─────────────────────────────────────────────────────
+  // Contains: bank deposits (ZEPTO_PR.*), AUD↔USD internal transfers, and
+  // Moomoo cash vouchers.  "Stock Cash Coupon" entries are skipped here
+  // because they are already captured as dividend/interest transactions via
+  // monthly PDF imports (importing them again as deposits would double-count
+  // the cash balance).
+  const cashSheet = wb.Sheets['Cash Overview'];
+  if (cashSheet) {
+    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(cashSheet, { defval: null });
+    for (const row of rows) {
+      const payDate = row['Date'];
+      if (!payDate) continue;
+
+      const comment = str(row['Comment']);
+      const amount  = num(row['Amount']);
+      const currency = str(row['Currency'], 'AUD').toUpperCase();
+
+      // Skip Moomoo Stock Cash Coupons — they are captured as dividend/interest
+      // trades via PDF imports; importing them here would double-count cash.
+      if (comment.toLowerCase().includes('stock cash coupon')) continue;
+
+      if (amount === 0) continue;
+
+      const tradeType: TradeType = amount > 0 ? 'deposit' : 'withdrawal';
+      const absAmount = Math.abs(amount);
+
+      trades.push({
+        trade_date:    parseDate(payDate),
+        trade_type:    tradeType,
+        symbol:        'CASH',
+        security_name: comment || (tradeType === 'deposit' ? 'Cash Deposit' : 'Cash Withdrawal'),
+        exchange:      currency === 'AUD' ? 'ASX' : 'US',
+        currency,
+        quantity:      1,
+        price:         absAmount,
+        amount:        absAmount,
+        brokerage:     0,
+        gst:           0,
+        exchange_rate: 1,
+        notes:         comment || undefined,
       });
     }
   }

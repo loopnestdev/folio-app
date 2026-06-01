@@ -239,19 +239,30 @@ async function handleImportParse(req: AuthenticatedRequest, res: any) {
 
     // ── Dedup at parse time ───────────────────────────────────────────────
     // Fetch existing trades for this portfolio and build a key set so the
-    // preview only shows genuinely new trades. Dedup key: trade_date + symbol
-    // + trade_type + quantity + price. This avoids misleading "6 trades found"
-    // when all 6 were already imported.
+    // preview only shows genuinely new trades.
+    //
+    // For deposit/withdrawal we also fetch notes so that multiple same-day
+    // same-amount deposits (e.g. three $1,000 Zepto transfers on the same
+    // date) are treated as distinct trades rather than collapsed into one.
     const { data: existingTrades } = await supabase
       .from('trades')
-      .select('trade_date, trade_type, quantity, price, security:securities(symbol)')
+      .select('trade_date, trade_type, quantity, price, notes, security:securities(symbol)')
       .eq('portfolio_id', portfolioId);
 
-    // Strict key: date|symbol|type|qty|price — for normal trades
+    // Strict key: date|symbol|type|qty|price — for normal trades.
+    // deposit/withdrawal with a non-null notes value append "|notes" so that
+    // same-date same-amount entries with different payment references
+    // (e.g. ZEPTO_PR.xxx) are treated as distinct.
+    const makeKey = (sym: string, type: string, date: string, qty: number, price: number, notes?: string | null) => {
+      const base = `${date}|${sym.toUpperCase()}|${type}|${qty}|${price}`;
+      if ((type === 'deposit' || type === 'withdrawal') && notes) return `${base}|${notes}`;
+      return base;
+    };
+
     const existingKeys = new Set(
       (existingTrades ?? []).map((t: any) => {
         const sym = (t.security as any)?.symbol ?? '';
-        return `${t.trade_date}|${sym.toUpperCase()}|${t.trade_type}|${Number(t.quantity)}|${Number(t.price)}`;
+        return makeKey(sym, t.trade_type, t.trade_date, Number(t.quantity), Number(t.price), t.notes);
       }),
     );
     // Loose key: date|symbol|type|qty — for zero-price parsed trades (e.g. SI IN
@@ -264,7 +275,7 @@ async function handleImportParse(req: AuthenticatedRequest, res: any) {
     );
 
     const newTrades = enriched.filter((t) => {
-      const strict = `${t.trade_date}|${t.symbol.toUpperCase()}|${t.trade_type}|${t.quantity}|${t.price}`;
+      const strict = makeKey(t.symbol, t.trade_type, t.trade_date, t.quantity, t.price, t.notes);
       if (existingKeys.has(strict)) return false;
       // Zero-price trades: fall back to loose match so edited prices don't re-surface them
       if (t.price === 0) {
@@ -335,9 +346,12 @@ router.post('/:portfolioId/import/confirm', async (req: AuthenticatedRequest, re
 
     // Deduplicate: skip if an identical trade already exists for this portfolio.
     // Key: trade_date + security_id + trade_type + quantity + price.
-    // This prevents double-importing the same trade from both a monthly PDF
-    // and an overlapping annual XLSX summary.
-    const { data: existing } = await supabase
+    // For deposit/withdrawal with a non-null notes value (e.g. a Zepto payment
+    // reference), also match on notes so that multiple same-day same-amount
+    // deposits with different references are not incorrectly collapsed.
+    // This prevents double-importing trades from both a monthly PDF and an
+    // overlapping annual XLSX summary.
+    let dupQuery = supabase
       .from('trades')
       .select('id')
       .eq('portfolio_id', portfolioId)
@@ -345,8 +359,11 @@ router.post('/:portfolioId/import/confirm', async (req: AuthenticatedRequest, re
       .eq('trade_type',   t.trade_type)
       .eq('quantity',     t.quantity)
       .eq('price',        t.price)
-      .eq('security_id',  securityId ?? '')
-      .maybeSingle();
+      .eq('security_id',  securityId ?? '');
+    if ((t.trade_type === 'deposit' || t.trade_type === 'withdrawal') && t.notes) {
+      dupQuery = dupQuery.eq('notes', t.notes);
+    }
+    const { data: existing } = await dupQuery.maybeSingle();
 
     if (existing) {
       skipped.push({ trade_date: t.trade_date, symbol: t.symbol });
