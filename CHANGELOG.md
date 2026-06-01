@@ -2,6 +2,12 @@
 
 All notable changes to Folio App are documented here.
 
+## [Unreleased]
+
+### Fixed
+
+- **PDF import: multiple same-day Bank Transfer Deposits collapsed into one** — When several bank deposits arrive on the same day for the same amount (e.g. 7× A$1,000 on 30 Dec 2025), the dedup key treated them as identical and imported only one. The cash section pattern now captures the HH:MM:SS timestamp for each row and appends it to `notes` for `Bank Transfer Deposits` entries (e.g. `"Bank Transfer Deposits 14:51:09"`), giving every transfer a unique identifier. `Cash In Out` entries already carry unique Zepto payment references and are unaffected. (`backend/src/services/pdf-parser/moomoo.ts`)
+
 ## [v0.5.5] — 2026-06-01
 
 ### Changed

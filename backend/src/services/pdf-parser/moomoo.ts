@@ -335,7 +335,7 @@ export function parseCashSection(section: string): ParsedTrade[] {
   //   "2024/09/30 13:41:14  Cash In Out       +515.30  ZEPTO_PR.2m3pdi"
   //   "2025/04/07 22:37:15  Currency Exchange -1,354.00"  (comment on next lines)
   const pattern =
-    /^(\d{4}\/\d{2}\/\d{2})\s+\d{2}:\d{2}:\d{2}\s+(Asset Adjustment|Coupon|Cash In Out|Currency Exchange|Corporate Action|Bank Transfer Deposits)\s+([+-][\d,\.]+)\s*(.*)$/;
+    /^(\d{4}\/\d{2}\/\d{2})\s+(\d{2}:\d{2}:\d{2})\s+(Asset Adjustment|Coupon|Cash In Out|Currency Exchange|Corporate Action|Bank Transfer Deposits)\s+([+-][\d,\.]+)\s*(.*)$/;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -349,7 +349,7 @@ export function parseCashSection(section: string): ParsedTrade[] {
     const match = line.match(pattern);
     if (!match) continue;
 
-    const [, dateStr, type, amountStr, inlineComment] = match;
+    const [, dateStr, timeStr, type, amountStr, inlineComment] = match;
     const amount = parseNumber(amountStr);
 
     // For Currency Exchange the FX detail often wraps across the next 1-3 lines.
@@ -394,7 +394,15 @@ export function parseCashSection(section: string): ParsedTrade[] {
       if (amount === 0) continue;
       trade_type = amount > 0 ? 'deposit' : 'withdrawal';
       symbol = 'CASH';
-      notes = comment || type;
+      // For Bank Transfer Deposits the comment is usually empty — use the timestamp
+      // as a unique identifier so that multiple same-day same-amount deposits
+      // (e.g. 7× $1,000 on 30 Dec) each get a distinct dedup key on import.
+      // Cash In Out entries already carry a unique Zepto reference in the comment.
+      if (type === 'Bank Transfer Deposits') {
+        notes = comment ? `${comment} ${timeStr}` : `Bank Transfer Deposits ${timeStr}`;
+      } else {
+        notes = comment || type;
+      }
     } else if (type === 'Currency Exchange') {
       // FX transfer between currency accounts (e.g. AUD → USD or USD → AUD).
       // Positive = funds arriving in this currency (deposit).
