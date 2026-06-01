@@ -45,19 +45,32 @@ export async function getHistoricalPrices(
       .order('date', { ascending: true });
 
     if (cached && cached.length > 5) {
-      // Only use cache if it actually covers the requested fromDate.
-      // A previous query for a shorter range (e.g. 1Y) may have populated the cache
-      // with only recent data — its earliest row could be months after fromDate.
-      // In that case the priceMap would be empty for the portfolio's full history,
-      // all pre-cache-start dates would show totalValue ≤ 0, and chartStartIdx
-      // would never be found → "No performance data".
+      // Use cache only if it covers both ends of the requested range well.
+      //
+      // Start check: a previous query for a shorter range (e.g. 1Y) may have
+      // populated the cache with only recent data — its earliest row could be
+      // months after fromDate. In that case the priceMap would be empty for the
+      // portfolio's full history, all pre-cache-start dates would show
+      // totalValue ≤ 0, and chartStartIdx would never be found → "No performance data".
+      //
+      // End check: the cache may be stale at the trailing end. When some holdings
+      // are cached through an older date (e.g. Friday May 29) but others have
+      // more recent data (e.g. Monday June 1), the priceMap will include June 1
+      // but the stale holding has no entry → calculateHoldings returns
+      // market_value: null → treated as 0 → portfolio value drops artificially.
+      // We allow a 3-day gap at the end (covers Mon request against Fri cache);
+      // anything larger triggers a fresh Yahoo Finance fetch.
       const firstCached = new Date(cached[0].date as string);
+      const lastCached  = new Date(cached[cached.length - 1].date as string);
       const reqFrom     = new Date(fromDate);
-      const daysDiff    = (firstCached.getTime() - reqFrom.getTime()) / 86_400_000;
-      if (daysDiff <= 7) {
+      const reqTo       = new Date(toDate);
+      const startDiff   = (firstCached.getTime() - reqFrom.getTime()) / 86_400_000;
+      const endDiff     = (reqTo.getTime()    - lastCached.getTime()) / 86_400_000;
+      if (startDiff <= 7 && endDiff <= 3) {
         return cached.map((r) => ({ date: r.date as string, close: r.close_price as number }));
       }
-      // Cache starts too late — fall through to a fresh Yahoo Finance fetch
+      // Cache doesn't adequately cover the requested range — fall through to a
+      // fresh Yahoo Finance fetch (upsert will update stale rows in-place).
     }
   }
 
