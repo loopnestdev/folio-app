@@ -545,8 +545,8 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
 });
 
 // ── GET /api/groups/:id/capital-gains ────────────────────────
-// Combined CGT across all portfolios. Values are already in each portfolio's
-// currency with exchange_rate applied, so cost_base and proceeds are AUD-equivalent.
+// Combined CGT across all portfolios, with FX conversion at each disposal date
+// (ATO-compliant: the rate used is the rate on the day of each sell, not today).
 router.get('/:id/capital-gains', async (req: AuthenticatedRequest, res: any) => {
   const group = await getGroup(req.params.id as string, req.userId!);
   if (!group) { res.status(404).json({ error: 'Group not found' }); return; }
@@ -562,45 +562,65 @@ router.get('/:id/capital-gains', async (req: AuthenticatedRequest, res: any) => 
     const portfolios = await getGroupPortfolios(req.params.id as string, req.userId!);
     const baseCurrency: string = group.base_currency ?? 'AUD';
 
-    // Fetch current FX rates so each lot can report net_gain_base (converted to
-    // base currency). This lets the frontend compute correct multi-currency totals.
-    const today = format(new Date(), 'yyyy-MM-dd');
-    const uniqueCurrencies = [...new Set(portfolios.map((p) => p.currency))].filter((c) => c !== baseCurrency);
-    const fxRates: Record<string, number> = { [baseCurrency]: 1 };
-    await Promise.all(
-      uniqueCurrencies.map(async (cur) => {
-        fxRates[cur] = await getForexRate(cur, baseCurrency, today);
-      }),
-    );
-
-    const allGains: any[] = [];
-
-    await Promise.all(
+    // Step 1 — compute all CGT lots per portfolio in parallel.
+    const portfolioLots = await Promise.all(
       portfolios.map(async (portfolio) => {
         const trades = await getPortfolioTrades(portfolio.id);
-        if (!trades.length) return;
-        const fx = fxRates[portfolio.currency] ?? 1;
+        if (!trades.length) return { portfolio, lots: [] as ReturnType<typeof calculateCapitalGains> };
         const lots = calculateCapitalGains(trades as any, params.data.fyStart, parseInt(params.data.year));
-        for (const lot of lots) {
-          allGains.push({
-            ...lot,
-            // Map backend CgtLot fields to frontend CapitalGain shape
-            is_long_term:           lot.hold_days >= 365,
-            hold_period_days:       lot.hold_days,
-            cgt_discount_applicable: lot.cgt_discount_eligible,
-            cgt_discount_pct:       50,
-            portfolio_id:           portfolio.id,
-            portfolio_name:         portfolio.name,
-            portfolio_currency:     portfolio.currency,
-            fx_rate:                fx,
-            // net_gain and gross_gain converted to base currency for the summary
-            // stat cards. The per-lot table still shows native-currency values.
-            net_gain_base:          lot.net_gain   * fx,
-            gross_gain_base:        lot.gross_gain * fx,
-          });
-        }
+        return { portfolio, lots };
       }),
     );
+
+    // Step 2 — collect every unique (currency, sell_date) pair that needs conversion.
+    // Using the disposal-date rate is an ATO requirement; the same asset sold on
+    // different days will get different FX rates.
+    const fxPairSet = new Set<string>();
+    for (const { portfolio, lots } of portfolioLots) {
+      if (portfolio.currency === baseCurrency) continue;
+      for (const lot of lots) {
+        fxPairSet.add(`${portfolio.currency}|${lot.sell_date}`);
+      }
+    }
+
+    // Step 3 — fetch all required rates in parallel (the set already deduplicates
+    // so we never call the API twice for the same (currency, date) pair).
+    const fxCache = new Map<string, number>();
+    await Promise.all(
+      [...fxPairSet].map(async (key) => {
+        const [cur, date] = key.split('|');
+        fxCache.set(key, await getForexRate(cur, baseCurrency, date));
+      }),
+    );
+    const getFx = (currency: string, date: string): number => {
+      if (currency === baseCurrency) return 1;
+      return fxCache.get(`${currency}|${date}`) ?? 1;
+    };
+
+    // Step 4 — build response using the disposal-date FX for each lot.
+    const allGains: any[] = [];
+    for (const { portfolio, lots } of portfolioLots) {
+      for (const lot of lots) {
+        const fx = getFx(portfolio.currency, lot.sell_date);
+        allGains.push({
+          ...lot,
+          // Map backend CgtLot fields to frontend CapitalGain shape
+          is_long_term:            lot.hold_days >= 365,
+          hold_period_days:        lot.hold_days,
+          cgt_discount_applicable: lot.cgt_discount_eligible,
+          cgt_discount_pct:        50,
+          portfolio_id:            portfolio.id,
+          portfolio_name:          portfolio.name,
+          portfolio_currency:      portfolio.currency,
+          // fx_rate here is the rate on the sell date, not today's rate
+          fx_rate:                 fx,
+          // net_gain_base / gross_gain_base are converted at the disposal-date rate
+          // so the frontend summary stats are ATO-compliant totals.
+          net_gain_base:           lot.net_gain   * fx,
+          gross_gain_base:         lot.gross_gain * fx,
+        });
+      }
+    }
 
     // Sort by sell_date descending
     allGains.sort((a, b) => b.sell_date.localeCompare(a.sell_date));
@@ -639,55 +659,81 @@ router.get('/:id/tax', async (req: AuthenticatedRequest, res: any) => {
       return;
     }
 
-    // Fetch current forex rates for non-base currencies
-    const today = format(new Date(), 'yyyy-MM-dd');
-    const uniqueCurrencies = [...new Set(portfolios.map((p) => p.currency))].filter((c) => c !== baseCurrency);
-    const fxRates: Record<string, number> = { [baseCurrency]: 1 };
-    await Promise.all(
-      uniqueCurrencies.map(async (cur) => {
-        fxRates[cur] = await getForexRate(cur, baseCurrency, today);
-      }),
-    );
-
     const { fyStart, year } = params.data;
     const yearNum = parseInt(year);
     const fyStartDate = fyStart === 'july' ? `${yearNum - 1}-07-01` : `${yearNum}-01-01`;
     const fyEndDate   = fyStart === 'july' ? `${yearNum}-06-30`     : `${yearNum}-12-31`;
+    const today = format(new Date(), 'yyyy-MM-dd');
 
-    const portfolioTaxData = await Promise.all(
+    // Step 1 — fetch trades and compute CGT lots per portfolio in parallel.
+    const portfolioData = await Promise.all(
       portfolios.map(async (portfolio) => {
         const trades = await getPortfolioTrades(portfolio.id);
-        const fx = fxRates[portfolio.currency] ?? 1;
-        const fyTrades = trades.filter(t => t.trade_date >= fyStartDate && t.trade_date <= fyEndDate);
-
-        // Income (already in trade currency; multiply by exchange_rate stored on each trade for AUD base)
-        // For simplicity, use current fx rate here (same as individual portfolio tax endpoint)
-        const dividends = fyTrades.filter(t => t.trade_type === 'dividend');
-        const interest  = fyTrades.filter(t => t.trade_type === 'interest');
-        const dividendIncome = dividends.reduce((s, t) => s + (t.price * t.quantity) * fx, 0);
-        const interestIncome = interest.reduce((s, t) => s + (t.price * t.quantity) * fx, 0);
-
-        // CGT (cost_base and proceeds already AUD-equivalent via trade exchange_rate)
-        const lots = calculateCapitalGains(trades as any, fyStart, yearNum);
-        const shortTerm = lots.filter(l => l.hold_days < 365).reduce((s, l) => s + l.net_gain, 0) * fx;
-        const longTerm  = lots.filter(l => l.hold_days >= 365).reduce((s, l) => s + l.net_gain, 0) * fx;
-        const discount  = lots.filter(l => l.cgt_discount_eligible)
-          .reduce((s, l) => s + l.cgt_discount_amount, 0) * fx;
-
-        return {
-          portfolio_id:     portfolio.id,
-          portfolio_name:   portfolio.name,
-          portfolio_currency: portfolio.currency,
-          fx_rate:          fx,
-          dividends_received:         dividendIncome,
-          interest_received:          interestIncome,
-          capital_gains_short_term:   shortTerm,
-          capital_gains_long_term:    longTerm,
-          cgt_discount_applied:       discount,
-          total_taxable_income:       dividendIncome + interestIncome + shortTerm + longTerm - discount,
-        };
+        const lots   = calculateCapitalGains(trades as any, fyStart, yearNum);
+        return { portfolio, trades, lots };
       }),
     );
+
+    // Step 2 — collect unique (currency, date) pairs needed for FX conversion:
+    //   • Each CGT lot uses its sell_date (ATO-compliant disposal-date rate).
+    //   • Dividends/interest use today's rate (income, not a disposal — kept simple
+    //     for consistency with the per-portfolio tax report).
+    //   • Today's rate is also stored for the per-portfolio display field fx_rate.
+    const fxPairSet = new Set<string>();
+    for (const { portfolio, lots } of portfolioData) {
+      if (portfolio.currency === baseCurrency) continue;
+      fxPairSet.add(`${portfolio.currency}|${today}`);          // for income & display
+      for (const lot of lots) {
+        fxPairSet.add(`${portfolio.currency}|${lot.sell_date}`); // ATO disposal-date rate
+      }
+    }
+
+    // Step 3 — fetch all required FX rates in parallel (deduplicated).
+    const fxCache = new Map<string, number>();
+    await Promise.all(
+      [...fxPairSet].map(async (key) => {
+        const [cur, date] = key.split('|');
+        fxCache.set(key, await getForexRate(cur, baseCurrency, date));
+      }),
+    );
+    const getFx = (currency: string, date: string): number => {
+      if (currency === baseCurrency) return 1;
+      return fxCache.get(`${currency}|${date}`) ?? 1;
+    };
+
+    // Step 4 — build per-portfolio tax rows using disposal-date rates for CGT.
+    const portfolioTaxData = portfolioData.map(({ portfolio, trades, lots }) => {
+      const fxToday = getFx(portfolio.currency, today);
+      const fyTrades = trades.filter(t => t.trade_date >= fyStartDate && t.trade_date <= fyEndDate);
+
+      // Income: use today's rate (not a CGT disposal; kept consistent with
+      // the individual-portfolio tax endpoint).
+      const dividends = fyTrades.filter(t => t.trade_type === 'dividend');
+      const interest  = fyTrades.filter(t => t.trade_type === 'interest');
+      const dividendIncome = dividends.reduce((s, t) => s + (t.price * t.quantity) * fxToday, 0);
+      const interestIncome = interest.reduce( (s, t) => s + (t.price * t.quantity) * fxToday, 0);
+
+      // CGT: convert each lot at its disposal date rate (ATO requirement).
+      const shortTerm = lots.filter(l => l.hold_days < 365)
+        .reduce((s, l) => s + l.net_gain * getFx(portfolio.currency, l.sell_date), 0);
+      const longTerm  = lots.filter(l => l.hold_days >= 365)
+        .reduce((s, l) => s + l.net_gain * getFx(portfolio.currency, l.sell_date), 0);
+      const discount  = lots.filter(l => l.cgt_discount_eligible)
+        .reduce((s, l) => s + l.cgt_discount_amount * getFx(portfolio.currency, l.sell_date), 0);
+
+      return {
+        portfolio_id:       portfolio.id,
+        portfolio_name:     portfolio.name,
+        portfolio_currency: portfolio.currency,
+        fx_rate:            fxToday, // today's rate shown for display only
+        dividends_received:       dividendIncome,
+        interest_received:        interestIncome,
+        capital_gains_short_term: shortTerm,
+        capital_gains_long_term:  longTerm,
+        cgt_discount_applied:     discount,
+        total_taxable_income:     dividendIncome + interestIncome + shortTerm + longTerm - discount,
+      };
+    });
 
     const sum = (key: keyof typeof portfolioTaxData[0]) =>
       portfolioTaxData.reduce((s, p) => s + (p[key] as number), 0);
