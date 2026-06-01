@@ -327,7 +327,7 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
         const pricesBySymbol = await Promise.all(
           symbols.map(async (sym) => {
             const sec = trades.find(t => t.security?.symbol === sym)?.security;
-            const prices = await getHistoricalPrices(sym, portfolioEarliestDate, toDate, sec?.id);
+            const prices = await getHistoricalPrices(sym, portfolioEarliestDate, toDate, sec?.id, sec?.exchange);
             return { symbol: sym, prices };
           }),
         );
@@ -782,7 +782,7 @@ async function buildGroupDailyValues(
       const pricesBySymbol = await Promise.all(
         symbols.map(async (sym: string) => {
           const sec = trades.find((t: Trade) => t.security?.symbol === sym)?.security;
-          const prices = await getHistoricalPrices(sym, earliestDate, toDate, sec?.id);
+          const prices = await getHistoricalPrices(sym, earliestDate, toDate, sec?.id, sec?.exchange);
           return { symbol: sym, prices };
         }),
       );
