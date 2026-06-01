@@ -10,6 +10,7 @@ import { StatCard } from '../../components/ui/StatCard';
 import { PageLoader } from '../../components/ui/LoadingSpinner';
 import { formatCurrency, formatPercent, getValueColor } from '../../lib/utils';
 import type { DateRange, MonthlyProfit } from '../../types';
+import { DollarSign, Percent } from 'lucide-react';
 
 export function MonthlyProfitPage() {
   const { id } = useParams<{ id: string }>();
@@ -20,6 +21,7 @@ export function MonthlyProfitPage() {
   const [range, setRange] = useState<DateRange>('1Y');
   const [customStart, setCustomStart] = useState<string>();
   const [customEnd, setCustomEnd] = useState<string>();
+  const [chartMode, setChartMode] = useState<'profit' | 'percent'>('profit');
 
   const { data: monthlyData = [], isLoading } = useMonthlyProfit({
     portfolioId,
@@ -85,16 +87,54 @@ export function MonthlyProfitPage() {
 
       {/* Summary */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Total P&L" value={formatCurrency(totalProfit, currency)} trend={totalProfit} />
+        <StatCard
+          label="Total P&L"
+          value={formatCurrency(totalProfit, currency)}
+          subtitle={totalProfit >= 0 ? 'Cumulative gain' : 'Cumulative loss'}
+        />
         <StatCard label="Winning Months" value={`${winningMonths}`} subtitle={`of ${monthlyData.length} months`} />
-        <StatCard label="Best Month" value={bestMonth ? formatCurrency(bestMonth.profit, currency) : '—'} trend={bestMonth?.profit} />
-        <StatCard label="Worst Month" value={worstMonth ? formatCurrency(worstMonth.profit, currency) : '—'} trend={worstMonth?.profit} />
+        <StatCard
+          label="Best Month"
+          value={bestMonth ? formatCurrency(bestMonth.profit, currency) : '—'}
+          subtitle={bestMonth ? `${bestMonth.month_label} · ${bestMonth.return_pct >= 0 ? '+' : ''}${bestMonth.return_pct.toFixed(2)}%` : undefined}
+        />
+        <StatCard
+          label="Worst Month"
+          value={worstMonth ? formatCurrency(worstMonth.profit, currency) : '—'}
+          subtitle={worstMonth ? `${worstMonth.month_label} · ${worstMonth.return_pct.toFixed(2)}%` : undefined}
+        />
       </div>
 
       {/* Chart */}
       <Card>
-        <CardHeader title="Monthly P&L" />
-        <MonthlyProfitChart data={monthlyData} currency={currency} />
+        <div className="flex items-center justify-between px-6 pt-5 pb-2">
+          <div>
+            <h2 className="text-[19px] font-semibold text-[var(--c-ink)]">Monthly P&L</h2>
+          </div>
+          <div className="flex items-center bg-[var(--c-canvas-soft)] rounded-full p-1 gap-0.5">
+            <button
+              onClick={() => setChartMode('profit')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors ${
+                chartMode === 'profit'
+                  ? 'bg-[var(--c-canvas)] text-[var(--c-primary)] shadow-sm'
+                  : 'text-[var(--c-ink-mute)] hover:text-[var(--c-ink)]'
+              }`}
+            >
+              <DollarSign size={13} /> Amount
+            </button>
+            <button
+              onClick={() => setChartMode('percent')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors ${
+                chartMode === 'percent'
+                  ? 'bg-[var(--c-canvas)] text-[var(--c-primary)] shadow-sm'
+                  : 'text-[var(--c-ink-mute)] hover:text-[var(--c-ink)]'
+              }`}
+            >
+              <Percent size={13} /> Return %
+            </button>
+          </div>
+        </div>
+        <MonthlyProfitChart data={monthlyData} currency={currency} mode={chartMode} />
       </Card>
 
       {/* Table */}

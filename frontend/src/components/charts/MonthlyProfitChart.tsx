@@ -17,9 +17,11 @@ interface MonthlyProfitChartProps {
   data: MonthlyProfit[];
   currency?: string;
   loading?: boolean;
+  mode?: 'profit' | 'percent';
 }
 
-function RechartsMonthlyProfitChart({ data, currency = 'USD' }: MonthlyProfitChartProps) {
+function RechartsMonthlyProfitChart({ data, currency = 'USD', mode = 'profit' }: MonthlyProfitChartProps) {
+  const isPercent = mode === 'percent';
   return (
     <ResponsiveContainer width="100%" height={300}>
       <BarChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
@@ -34,17 +36,23 @@ function RechartsMonthlyProfitChart({ data, currency = 'USD' }: MonthlyProfitCha
           tick={{ fontSize: 12, fill: 'var(--c-ink-mute)' }}
           tickLine={false}
           axisLine={false}
-          tickFormatter={(v: number) => formatCurrency(v, currency, { notation: 'compact' })}
+          tickFormatter={(v: number) =>
+            isPercent ? `${v >= 0 ? '+' : ''}${v.toFixed(1)}%` : formatCurrency(v, currency, { notation: 'compact' })
+          }
         />
         <Tooltip
-          formatter={(value: any) => [formatCurrency(value, currency), 'P&L']}
+          formatter={(value: any) =>
+            isPercent
+              ? [`${Number(value) >= 0 ? '+' : ''}${Number(value).toFixed(2)}%`, 'Return']
+              : [formatCurrency(value, currency), 'P&L']
+          }
           contentStyle={{ borderRadius: 12, border: '1px solid var(--c-border)', fontSize: 13 }}
         />
-        <Bar dataKey="profit" radius={[4, 4, 0, 0]}>
+        <Bar dataKey={isPercent ? 'return_pct' : 'profit'} radius={[4, 4, 0, 0]}>
           {data.map((entry, idx) => (
             <Cell
               key={`cell-${idx}`}
-              fill={entry.profit >= 0 ? '#059669' : '#ea2261'}
+              fill={(isPercent ? entry.return_pct : entry.profit) >= 0 ? '#059669' : '#ea2261'}
             />
           ))}
         </Bar>
@@ -53,13 +61,20 @@ function RechartsMonthlyProfitChart({ data, currency = 'USD' }: MonthlyProfitCha
   );
 }
 
-function EChartsMonthlyProfitChart({ data, currency = 'USD' }: MonthlyProfitChartProps) {
+function EChartsMonthlyProfitChart({ data, currency = 'USD', mode = 'profit' }: MonthlyProfitChartProps) {
+  const isPercent = mode === 'percent';
+  const values = data.map((d) => (isPercent ? d.return_pct : d.profit));
+
   const option = {
     tooltip: {
       trigger: 'axis',
       formatter: (params: Array<{ name: string; value: number }>) => {
         const p = params[0];
-        return `<div style="font-size:13px"><strong>${p.name}</strong><br/>P&L: ${formatCurrency(p.value, currency)}</div>`;
+        const formatted = isPercent
+          ? `${p.value >= 0 ? '+' : ''}${p.value.toFixed(2)}%`
+          : formatCurrency(p.value, currency);
+        const label = isPercent ? 'Return' : 'P&L';
+        return `<div style="font-size:13px"><strong>${p.name}</strong><br/>${label}: ${formatted}</div>`;
       },
     },
     grid: { top: 10, right: 20, bottom: 30, left: 70 },
@@ -77,16 +92,17 @@ function EChartsMonthlyProfitChart({ data, currency = 'USD' }: MonthlyProfitChar
       axisLabel: {
         fontSize: 12,
         color: 'var(--c-ink-mute)',
-        formatter: (v: number) => formatCurrency(v, currency, { notation: 'compact' }),
+        formatter: (v: number) =>
+          isPercent ? `${v >= 0 ? '+' : ''}${v.toFixed(1)}%` : formatCurrency(v, currency, { notation: 'compact' }),
       },
       splitLine: { lineStyle: { color: 'var(--c-border)' } },
     },
     series: [
       {
         type: 'bar',
-        data: data.map((d) => ({
-          value: d.profit,
-          itemStyle: { color: d.profit >= 0 ? '#059669' : '#ea2261', borderRadius: [4, 4, 0, 0] },
+        data: values.map((v) => ({
+          value: v,
+          itemStyle: { color: v >= 0 ? '#059669' : '#ea2261', borderRadius: [4, 4, 0, 0] },
         })),
       },
     ],

@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, DollarSign, Percent } from 'lucide-react';
 import { useGroups } from '../../hooks/useGroups';
 import { useGroupMonthlyProfit } from '../../hooks/useGroupReports';
-import { Card, CardHeader } from '../../components/ui/Card';
+import { Card } from '../../components/ui/Card';
 import { DateRangePicker } from '../../components/ui/DateRangePicker';
 import { MonthlyProfitChart } from '../../components/charts/MonthlyProfitChart';
 import { Table } from '../../components/ui/Table';
@@ -21,6 +21,7 @@ export function GroupMonthlyProfitPage() {
   const [range, setRange] = useState<DateRange>('1Y');
   const [customStart, setCustomStart] = useState<string>();
   const [customEnd, setCustomEnd] = useState<string>();
+  const [chartMode, setChartMode] = useState<'profit' | 'percent'>('profit');
 
   const { data: monthlyData = [], isLoading } = useGroupMonthlyProfit({
     groupId: id,
@@ -98,16 +99,55 @@ export function GroupMonthlyProfitPage() {
 
       {/* Summary */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Total P&L" value={formatCurrency(totalProfit, baseCurrency)} trend={totalProfit} />
+        <StatCard
+          label="Total P&L"
+          value={formatCurrency(totalProfit, baseCurrency)}
+          subtitle={totalProfit >= 0 ? 'Cumulative gain' : 'Cumulative loss'}
+        />
         <StatCard label="Winning Months" value={`${winningMonths}`} subtitle={`of ${monthlyData.length} months`} />
-        <StatCard label="Best Month" value={bestMonth ? formatCurrency(bestMonth.profit, baseCurrency) : '—'} trend={bestMonth?.profit} />
-        <StatCard label="Worst Month" value={worstMonth ? formatCurrency(worstMonth.profit, baseCurrency) : '—'} trend={worstMonth?.profit} />
+        <StatCard
+          label="Best Month"
+          value={bestMonth ? formatCurrency(bestMonth.profit, baseCurrency) : '—'}
+          subtitle={bestMonth ? `${bestMonth.month_label} · ${bestMonth.return_pct >= 0 ? '+' : ''}${bestMonth.return_pct.toFixed(2)}%` : undefined}
+        />
+        <StatCard
+          label="Worst Month"
+          value={worstMonth ? formatCurrency(worstMonth.profit, baseCurrency) : '—'}
+          subtitle={worstMonth ? `${worstMonth.month_label} · ${worstMonth.return_pct.toFixed(2)}%` : undefined}
+        />
       </div>
 
       {/* Chart */}
       <Card>
-        <CardHeader title="Monthly P&L" subtitle={`Amounts in ${baseCurrency} at today's FX rate`} />
-        <MonthlyProfitChart data={monthlyData} currency={baseCurrency} />
+        <div className="flex items-center justify-between px-6 pt-5 pb-2">
+          <div>
+            <h2 className="text-[19px] font-semibold text-[var(--c-ink)]">Monthly P&L</h2>
+            <p className="text-[13px] text-[var(--c-ink-mute)] mt-0.5">Amounts in {baseCurrency} at today's FX rate</p>
+          </div>
+          <div className="flex items-center bg-[var(--c-canvas-soft)] rounded-full p-1 gap-0.5">
+            <button
+              onClick={() => setChartMode('profit')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors ${
+                chartMode === 'profit'
+                  ? 'bg-[var(--c-canvas)] text-[var(--c-primary)] shadow-sm'
+                  : 'text-[var(--c-ink-mute)] hover:text-[var(--c-ink)]'
+              }`}
+            >
+              <DollarSign size={13} /> Amount
+            </button>
+            <button
+              onClick={() => setChartMode('percent')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors ${
+                chartMode === 'percent'
+                  ? 'bg-[var(--c-canvas)] text-[var(--c-primary)] shadow-sm'
+                  : 'text-[var(--c-ink-mute)] hover:text-[var(--c-ink)]'
+              }`}
+            >
+              <Percent size={13} /> Return %
+            </button>
+          </div>
+        </div>
+        <MonthlyProfitChart data={monthlyData} currency={baseCurrency} mode={chartMode} />
       </Card>
 
       {/* Table */}
