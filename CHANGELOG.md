@@ -4,6 +4,10 @@ All notable changes to Folio App are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Report pages now show active portfolio name in subtitle** — All 8 report pages (Performance, Monthly Profit, Statistics, Tax, Dividends, Capital Gains, Diversity, Drawdown) append the active portfolio name to their subtitle, e.g. "Portfolio returns over time · Moomoo Personal USD". Resolves confusion when switching between portfolios — it's no longer ambiguous which portfolio's data is being displayed. Group report pages are unchanged (the group name already appears in the back-navigation link). (`frontend/src/pages/reports/*`)
+
 ### Fixed
 
 - **AUD portfolio chart: overdraft-leverage zombie resumption (−99.17% crash)** — After the AUD→USD FX withdrawal, the cash balance went deeply negative (−A$13,522) while ASX stocks still held positive value (A$14,000), leaving a net portfolio of only A$478. Because both `adjustedBase` and `totalValue` were positive on the withdrawal day, `chainBroken` never fired — the TWR chain continued. As ASX stocks subsequently fluctuated, the portfolio oscillated between barely-positive and negative `totalValue`. Every time `totalValue` went negative the null branch fired and `prevValue` was frozen at the prior small value (e.g. A$478). The next day a slight stock recovery pushed `totalValue` barely positive (e.g. A$35), computing a catastrophically small factor (35/478 = 0.073 → −93% single-day drop). A subsequent recovery then computed a massive positive factor (478/35 = 13.7x), creating the oscillating zombie chart. Fixed by adding a third chain-break condition checked *before* the valid/null branch split: `cashBalance < 0 && totalValue < -cashBalance` — fires when negative cash (from any source) is larger than the total portfolio value. `cashBalance` is now exposed from `portfolioValues` for this purpose. (`backend/src/routes/reports.ts`)
