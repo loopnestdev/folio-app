@@ -111,14 +111,26 @@ export function parseTradesSection(section: string): ParsedTrade[] {
     }
 
     // Line 2: SYMBOL \t EXCHANGE \t CURRENCY \t YYYY/MM/DD
-    // Some tickers render as "IONQ US \t USD \t DATE" (symbol+exchange space-merged,
-    // only 3 tab tokens) instead of the normal 4-token layout. Handle both.
+    // Three known layouts:
+    //   Normal:  "INUV \t US \t USD \t 2025/08/09"  (4 tokens)
+    //   Split:   "INUV\n" then "US \t USD \t 2025/08/08"  (symbol alone, then 3 tokens)
+    //            — some PDF renders break the symbol off onto its own line
+    //   Merged:  "IONQ US \t USD \t DATE"  (symbol+exchange space-merged, 3 tokens)
     const line2 = lines[++i] ?? '';
     const p2 = line2.split('\t').map((s) => s.trim()).filter(Boolean);
-    if (p2.length < 3) { i++; continue; }
     let symbol: string, exchange: string, currency: string, dateStr: string;
     if (p2.length >= 4) {
       [symbol, exchange, currency, dateStr] = p2 as [string, string, string, string];
+    } else if (p2.length === 1 && /^[A-Z]{1,10}$/.test(p2[0] ?? '')) {
+      // Symbol is alone on its own line — read the next line for exchange/currency/date
+      symbol = p2[0];
+      const line2b = lines[++i] ?? '';
+      const p2b = line2b.split('\t').map((s) => s.trim()).filter(Boolean);
+      if (p2b.length >= 3 && /^\d{4}\/\d{2}\/\d{2}$/.test(p2b[p2b.length - 1] ?? '')) {
+        exchange = p2b[0] ?? '';
+        currency = p2b[1] ?? '';
+        dateStr  = p2b[2] ?? '';
+      } else { i++; continue; }
     } else if (p2[0].includes(' ') && /^\d{4}\/\d{2}\/\d{2}$/.test(p2[2] ?? '')) {
       // "IONQ US" merged — split on last space
       const sp = p2[0].lastIndexOf(' ');
@@ -314,7 +326,7 @@ export function parseCashSection(section: string): ParsedTrade[] {
   //   "2024/09/30 13:41:14  Cash In Out       +515.30  ZEPTO_PR.2m3pdi"
   //   "2025/04/07 22:37:15  Currency Exchange -1,354.00"  (comment on next lines)
   const pattern =
-    /^(\d{4}\/\d{2}\/\d{2})\s+\d{2}:\d{2}:\d{2}\s+(Asset Adjustment|Coupon|Cash In Out|Currency Exchange)\s+([+-][\d,\.]+)\s*(.*)$/;
+    /^(\d{4}\/\d{2}\/\d{2})\s+\d{2}:\d{2}:\d{2}\s+(Asset Adjustment|Coupon|Cash In Out|Currency Exchange|Corporate Action)\s+([+-][\d,\.]+)\s*(.*)$/;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -353,6 +365,16 @@ export function parseCashSection(section: string): ParsedTrade[] {
       if (amount <= 0) continue;
       trade_type = 'dividend';
       symbol = comment.split(/\s+/)[0].toUpperCase();
+      notes = comment.trim();
+    } else if (type === 'Corporate Action') {
+      // Positive = cash dividend paid by a fund/ETF (e.g. BITU per-share distribution)
+      // Negative = withholding tax deducted on that dividend — skip it; the gross dividend
+      //            is the authoritative income figure for tax reporting.
+      if (amount <= 0) continue;
+      const symMatch = comment.match(/^([A-Z]{1,10})\b/);
+      if (!symMatch) continue;
+      trade_type = 'dividend';
+      symbol = symMatch[1];
       notes = comment.trim();
     } else if (type === 'Coupon') {
       if (amount <= 0) continue;

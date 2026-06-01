@@ -6,6 +6,12 @@ All notable changes to Folio App are documented here.
 
 ### Fixed
 
+- **PDF import: missing trade when symbol renders on its own line** — Some Moomoo PDF statements break the symbol token onto a separate line before the exchange/currency/date line (e.g. `"INUV\n"` then `"US\tUSD\t2025/08/08"`). The parser's 4-token check skipped these trades entirely (e.g. the INUV 500-share buy on 08 Aug 2025 was silently dropped). The parser now detects a single-uppercase-word line as a split symbol and reads the next line for exchange/currency/date. (`backend/src/services/pdf-parser/moomoo.ts`)
+
+- **PDF import: Corporate Action cash dividends not parsed** — ETF cash distributions recorded as `Corporate Action` in the Changes in Cash section (e.g. BITU per-share dividend payout) were silently ignored because the pattern only matched `Asset Adjustment | Coupon | Cash In Out | Currency Exchange`. Added `Corporate Action` to the pattern: positive amounts are imported as `dividend` for the named security; negative amounts (withholding tax) are skipped since the gross dividend is the authoritative income figure. (`backend/src/services/pdf-parser/moomoo.ts`)
+
+### Fixed
+
 - **XLSX import: brokerage always $0** — The Moomoo annual XLSX uses the column name `Transaction Fee(Inc.GST)` but the parser was looking for `Bokerage(Inc.GST)` / `Brokerage(Inc.GST)` (both incorrect). Every trade imported via XLSX had brokerage = $0, which understates the cost base and overstates capital gains. Fixed by adding `Transaction Fee(Inc.GST)` as the primary lookup with the old names retained as fallbacks for older file formats. 39 of 49 trades in the 2024–25 file had non-zero fees affected. (`backend/src/services/pdf-parser/moomoo-xlsx.ts`)
 
 - **XLSX import: Cash Overview not parsed** — Bank deposits (ZEPTO_PR PayID references), AUD↔USD internal account transfers, and Moomoo cash vouchers from the Cash Overview sheet were silently ignored. These are external cash flows required for accurate TWR / Modified Dietz calculations. They are now parsed as `deposit` or `withdrawal` trades based on the sign of the amount, with the Comment stored as `notes` for display and deduplication. Stock Cash Coupons are intentionally skipped because they are already captured as dividend/interest trades via the monthly PDF import. (`backend/src/services/pdf-parser/moomoo-xlsx.ts`)
