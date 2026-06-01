@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Info } from 'lucide-react';
-import { usePortfolioContext } from '../../contexts/PortfolioContext';
 import { useStatistics } from '../../hooks/useStatistics';
+import { useGroupStatistics } from '../../hooks/useGroupReports';
+import { useReportViewSwitcher } from '../../hooks/useReportViewSwitcher';
 import { Card, CardHeader } from '../../components/ui/Card';
 import { DateRangePicker } from '../../components/ui/DateRangePicker';
+import { ReportViewSwitcher } from '../../components/ui/ReportViewSwitcher';
 import { PageLoader } from '../../components/ui/LoadingSpinner';
 import { formatPercent } from '../../lib/utils';
 import type { DateRange } from '../../types';
@@ -59,19 +61,16 @@ function StatRow({ label, value, description, positive }: StatRowProps) {
 
 export function StatisticsPage() {
   const { id } = useParams<{ id: string }>();
-  const { activePortfolio } = usePortfolioContext();
-  const portfolioId = id || activePortfolio?.id;
+  const view = useReportViewSwitcher(id);
 
   const [range, setRange] = useState<DateRange>('1Y');
   const [customStart, setCustomStart] = useState<string>();
   const [customEnd, setCustomEnd] = useState<string>();
 
-  const { data: stats, isLoading } = useStatistics({
-    portfolioId,
-    range,
-    customStart,
-    customEnd,
-  });
+  const { data: indStats, isLoading: indLoading } = useStatistics({ portfolioId: view.portfolioId, range, customStart, customEnd });
+  const { data: grpStats, isLoading: grpLoading } = useGroupStatistics({ groupId: view.groupId, range, customStart, customEnd });
+  const stats     = view.viewMode === 'group' ? grpStats : indStats;
+  const isLoading = view.viewMode === 'group' ? grpLoading : indLoading;
 
   const handleRangeChange = (r: DateRange, start?: string, end?: string) => {
     setRange(r);
@@ -83,12 +82,21 @@ export function StatisticsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div>
           <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Statistics</h1>
-          <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">Risk and return metrics{activePortfolio?.name ? ` · ${activePortfolio.name}` : ''}</p>
+          <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">Risk and return metrics{view.displayName ? ` · ${view.displayName}` : ''}</p>
         </div>
-        <DateRangePicker value={range} customStart={customStart} customEnd={customEnd} onChange={handleRangeChange} />
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+          {view.hasGroups && (
+            <ReportViewSwitcher
+              viewMode={view.viewMode} portfolios={view.portfolios} groups={view.groups}
+              activePortfolioId={view.activePortfolioId} activeGroupId={view.activeGroupId}
+              onViewModeChange={view.onViewModeChange} onPortfolioChange={view.onPortfolioChange} onGroupChange={view.onGroupChange}
+            />
+          )}
+          <DateRangePicker value={range} customStart={customStart} customEnd={customEnd} onChange={handleRangeChange} />
+        </div>
       </div>
 
       {!stats ? (

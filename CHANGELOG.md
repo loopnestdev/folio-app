@@ -4,6 +4,10 @@ All notable changes to Folio App are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Option A: Individual / Group context switcher on all 8 report pages** — Every report page now shows an "Individual · Group" toggle (visible only when the user has at least one portfolio group). Switching to Group aggregates data across all portfolios in the selected group and converts amounts to the group's base currency. New group-level backends added for all previously missing reports: Dividends, Diversity, Drawdown, and Statistics. Existing group Performance, Monthly Profit, Capital Gains, and Tax backends are reused. The switcher auto-selects the group the current portfolio belongs to when switching modes. (`frontend/src/components/ui/ReportViewSwitcher.tsx`, `frontend/src/hooks/useReportViewSwitcher.ts`, `backend/src/routes/groups.ts`)
+
 ### Fixed
 
 - **Individual portfolio report pages all returning empty data** — Capital Gains, Tax, Dividends, Diversity, and Upcoming Dividends pages were silently broken: their hooks call `/reports/` prefix API paths (e.g. `/api/portfolios/:id/reports/capital-gains`) but the backend only exposed the old paths without that prefix (e.g. `/:id/capital-gains`). Additionally, the old routes returned wrong response shapes (`{ lots, summary }` instead of `CapitalGain[]`, `{ items, total }` instead of `DividendSummary`, etc.). Added five correct `/reports/` prefix routes with properly shaped responses matching the frontend types. (`backend/src/routes/reports.ts`)

@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { usePortfolioContext } from '../../contexts/PortfolioContext';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useCapitalGains } from '../../hooks/useReports';
+import { useGroupCapitalGains } from '../../hooks/useGroupReports';
+import { useReportViewSwitcher } from '../../hooks/useReportViewSwitcher';
+import { ReportViewSwitcher } from '../../components/ui/ReportViewSwitcher';
 import { Card } from '../../components/ui/Card';
 import { Select } from '../../components/ui/Select';
 import { Table } from '../../components/ui/Table';
@@ -24,9 +26,8 @@ function getFinancialYears(type: 'jan-dec' | 'jul-jun') {
 
 export function CapitalGainsPage() {
   const { id } = useParams<{ id: string }>();
-  const { activePortfolio } = usePortfolioContext();
-  const portfolioId = id || activePortfolio?.id;
-  const currency = activePortfolio?.currency || 'USD';
+  const view = useReportViewSwitcher(id);
+  const currency = view.currency;
   const { financialYear: fyType } = useSettings();
 
   const currentYear = new Date().getFullYear();
@@ -35,7 +36,12 @@ export function CapitalGainsPage() {
 
   const years = getFinancialYears(fyStart === 'july' ? 'jul-jun' : 'jan-dec');
 
-  const { data: gains = [], isLoading } = useCapitalGains({ portfolioId, fyStart, year });
+  const { data: indGains = [], isLoading: indLoading } = useCapitalGains({ portfolioId: view.portfolioId, fyStart, year });
+  const { data: grpRaw   = [], isLoading: grpLoading } = useGroupCapitalGains({ groupId: view.groupId, fyStart, year });
+  // GroupCapitalGain has net_gain_base (in base currency); map to same shape for display
+  const grpGains = grpRaw.map((g) => ({ ...g, net_gain: g.net_gain_base ?? g.net_gain, gross_gain: g.gross_gain_base ?? g.gross_gain }));
+  const gains     = view.viewMode === 'group' ? grpGains : indGains;
+  const isLoading = view.viewMode === 'group' ? grpLoading : indLoading;
 
   const totalNet      = gains.reduce((s, g) => s + g.net_gain, 0);
   const totalDiscount = gains.reduce((s, g) => s + (g.cgt_discount_applicable ? g.gross_gain * (g.cgt_discount_pct / 100) : 0), 0);
@@ -91,12 +97,19 @@ export function CapitalGainsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Capital Gains</h1>
-          <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">CGT report for sold positions{activePortfolio?.name ? ` · ${activePortfolio.name}` : ''}</p>
+          <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">CGT report for sold positions{view.displayName ? ` · ${view.displayName}` : ''}</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3 items-end">
+          {view.hasGroups && (
+            <ReportViewSwitcher
+              viewMode={view.viewMode} portfolios={view.portfolios} groups={view.groups}
+              activePortfolioId={view.activePortfolioId} activeGroupId={view.activeGroupId}
+              onViewModeChange={view.onViewModeChange} onPortfolioChange={view.onPortfolioChange} onGroupChange={view.onGroupChange}
+            />
+          )}
           <Select
             label="FY Type"
             options={[

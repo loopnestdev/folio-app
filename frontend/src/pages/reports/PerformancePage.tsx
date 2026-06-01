@@ -1,19 +1,19 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { usePortfolioContext } from '../../contexts/PortfolioContext';
 import { usePerformance } from '../../hooks/usePerformance';
+import { useGroupPerformance } from '../../hooks/useGroupReports';
+import { useReportViewSwitcher } from '../../hooks/useReportViewSwitcher';
 import { Card } from '../../components/ui/Card';
 import { DateRangePicker } from '../../components/ui/DateRangePicker';
 import { PerformanceChart } from '../../components/charts/PerformanceChart';
+import { ReportViewSwitcher } from '../../components/ui/ReportViewSwitcher';
 import { StatCard } from '../../components/ui/StatCard';
 import type { DateRange, BenchmarkToggle } from '../../types';
 import { formatPercent, cn } from '../../lib/utils';
 
 export function PerformancePage() {
   const { id } = useParams<{ id: string }>();
-  const { activePortfolio } = usePortfolioContext();
-  const portfolioId = id || activePortfolio?.id;
-  const currency = activePortfolio?.currency || 'USD';
+  const view = useReportViewSwitcher(id);
 
   const [range, setRange] = useState<DateRange>('1Y');
   const [customStart, setCustomStart] = useState<string>();
@@ -24,12 +24,21 @@ export function PerformancePage() {
     asx200: false,
   });
 
-  const { data: performanceData = [], isLoading } = usePerformance({
-    portfolioId,
+  const { data: indData = [], isLoading: indLoading } = usePerformance({
+    portfolioId: view.portfolioId,
     range,
     customStart,
     customEnd,
   });
+  const { data: grpData = [], isLoading: grpLoading } = useGroupPerformance({
+    groupId: view.groupId,
+    range,
+    customStart,
+    customEnd,
+  });
+  const performanceData = view.viewMode === 'group' ? grpData : indData;
+  const isLoading       = view.viewMode === 'group' ? grpLoading : indLoading;
+  const currency        = view.currency;
 
   const handleDateRangeChange = (r: DateRange, start?: string, end?: string) => {
     setRange(r);
@@ -71,9 +80,23 @@ export function PerformancePage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Performance</h1>
-        <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">Portfolio returns over time{activePortfolio?.name ? ` · ${activePortfolio.name}` : ''}</p>
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+        <div>
+          <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Performance</h1>
+          <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">Portfolio returns over time{view.displayName ? ` · ${view.displayName}` : ''}</p>
+        </div>
+        {view.hasGroups && (
+          <ReportViewSwitcher
+            viewMode={view.viewMode}
+            portfolios={view.portfolios}
+            groups={view.groups}
+            activePortfolioId={view.activePortfolioId}
+            activeGroupId={view.activeGroupId}
+            onViewModeChange={view.onViewModeChange}
+            onPortfolioChange={view.onPortfolioChange}
+            onGroupChange={view.onGroupChange}
+          />
+        )}
       </div>
 
       {/* Stats */}

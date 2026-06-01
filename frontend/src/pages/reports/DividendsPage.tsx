@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { usePortfolioContext } from '../../contexts/PortfolioContext';
 import { useDividends, useUpcomingDividends } from '../../hooks/useReports';
+import { useGroupDividends } from '../../hooks/useGroupReports';
+import { useReportViewSwitcher } from '../../hooks/useReportViewSwitcher';
+import { ReportViewSwitcher } from '../../components/ui/ReportViewSwitcher';
 import { Card, CardHeader } from '../../components/ui/Card';
 import { DateRangePicker } from '../../components/ui/DateRangePicker';
 import { Table } from '../../components/ui/Table';
@@ -13,22 +15,19 @@ import type { DateRange, Dividend, ExpectedDividend } from '../../types';
 
 export function DividendsPage() {
   const { id } = useParams<{ id: string }>();
-  const { activePortfolio } = usePortfolioContext();
-  const portfolioId = id || activePortfolio?.id;
-  const currency = activePortfolio?.currency || 'USD';
+  const view = useReportViewSwitcher(id);
+  const currency = view.currency;
 
   const [range, setRange] = useState<DateRange>('1Y');
   const [customStart, setCustomStart] = useState<string>();
   const [customEnd, setCustomEnd] = useState<string>();
 
-  const { data: dividendData, isLoading } = useDividends({
-    portfolioId,
-    range,
-    customStart,
-    customEnd,
-  });
+  const { data: indData, isLoading: indLoading } = useDividends({ portfolioId: view.portfolioId, range, customStart, customEnd });
+  const { data: grpData, isLoading: grpLoading } = useGroupDividends({ groupId: view.groupId, range, customStart, customEnd });
+  const dividendData = view.viewMode === 'group' ? grpData : indData;
+  const isLoading    = view.viewMode === 'group' ? grpLoading : indLoading;
 
-  const { data: upcoming } = useUpcomingDividends({ portfolioId });
+  const { data: upcoming } = useUpcomingDividends({ portfolioId: view.portfolioId });
 
   const handleRangeChange = (r: DateRange, start?: string, end?: string) => {
     setRange(r);
@@ -69,9 +68,18 @@ export function DividendsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Dividends & Interest</h1>
-          <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">Income from dividends and interest payments{activePortfolio?.name ? ` · ${activePortfolio.name}` : ''}</p>
+          <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">Income from dividends and interest payments{view.displayName ? ` · ${view.displayName}` : ''}</p>
         </div>
-        <DateRangePicker value={range} customStart={customStart} customEnd={customEnd} onChange={handleRangeChange} />
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+          {view.hasGroups && (
+            <ReportViewSwitcher
+              viewMode={view.viewMode} portfolios={view.portfolios} groups={view.groups}
+              activePortfolioId={view.activePortfolioId} activeGroupId={view.activeGroupId}
+              onViewModeChange={view.onViewModeChange} onPortfolioChange={view.onPortfolioChange} onGroupChange={view.onGroupChange}
+            />
+          )}
+          <DateRangePicker value={range} customStart={customStart} customEnd={customEnd} onChange={handleRangeChange} />
+        </div>
       </div>
 
       {/* Summary */}

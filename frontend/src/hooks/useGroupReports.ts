@@ -1,6 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
-import type { GroupSummary, GroupCapitalGain, GroupTaxReport, PerformancePoint, MonthlyProfit } from '../types';
+import type {
+  GroupSummary, GroupCapitalGain, GroupTaxReport, PerformancePoint,
+  MonthlyProfit, DividendSummary, PortfolioDiversity, PortfolioStatistics,
+} from '../types';
 import { dateRangeToParams } from '../lib/utils';
 import type { DateRange } from '../types';
 
@@ -103,5 +106,66 @@ export function useGroupTax({ groupId, fyStart, year }: GroupTaxOptions) {
       return data;
     },
     enabled: !!groupId && !!year,
+  });
+}
+
+// ── Group Dividends ──────────────────────────────────────────
+interface GroupRangeOptions {
+  groupId?: string;
+  range: DateRange;
+  customStart?: string;
+  customEnd?: string;
+}
+
+export function useGroupDividends({ groupId, range, customStart, customEnd }: GroupRangeOptions) {
+  const params = dateRangeToParams(range, customStart, customEnd);
+  return useQuery({
+    queryKey: ['group-dividends', groupId, range, customStart, customEnd],
+    queryFn: async () => {
+      const { data } = await api.get<DividendSummary>(`/api/groups/${groupId}/dividends`, { params });
+      return data;
+    },
+    enabled: !!groupId,
+  });
+}
+
+// ── Group Diversity ──────────────────────────────────────────
+export function useGroupDiversity({ groupId }: { groupId?: string }) {
+  return useQuery({
+    queryKey: ['group-diversity', groupId],
+    queryFn: async () => {
+      const { data } = await api.get<PortfolioDiversity>(`/api/groups/${groupId}/diversity`);
+      return data;
+    },
+    enabled: !!groupId,
+  });
+}
+
+// ── Group Drawdown ───────────────────────────────────────────
+export function useGroupDrawdown({ groupId, range, customStart, customEnd }: GroupRangeOptions) {
+  const params = dateRangeToParams(range, customStart, customEnd);
+  return useQuery({
+    queryKey: ['group-drawdown', groupId, range, customStart, customEnd],
+    queryFn: async () => {
+      const { data } = await api.get<Array<{ date: string; drawdown: number }>>(
+        `/api/groups/${groupId}/drawdown`,
+        { params },
+      );
+      return data;
+    },
+    enabled: !!groupId,
+  });
+}
+
+// ── Group Statistics ─────────────────────────────────────────
+export function useGroupStatistics({ groupId, range, customStart, customEnd }: GroupRangeOptions) {
+  const params = dateRangeToParams(range, customStart, customEnd);
+  return useQuery({
+    queryKey: ['group-statistics', groupId, range, customStart, customEnd],
+    queryFn: async () => {
+      const { data } = await api.get<PortfolioStatistics>(`/api/groups/${groupId}/statistics`, { params });
+      return data;
+    },
+    enabled: !!groupId,
   });
 }

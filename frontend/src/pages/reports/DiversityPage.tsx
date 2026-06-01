@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { usePortfolioContext } from '../../contexts/PortfolioContext';
 import { useDiversity } from '../../hooks/useReports';
+import { useGroupDiversity } from '../../hooks/useGroupReports';
+import { useReportViewSwitcher } from '../../hooks/useReportViewSwitcher';
+import { ReportViewSwitcher } from '../../components/ui/ReportViewSwitcher';
 import { Card, CardHeader } from '../../components/ui/Card';
 import { DiversityChart } from '../../components/charts/DiversityChart';
 import { Table } from '../../components/ui/Table';
@@ -11,10 +13,12 @@ import type { DiversityAllocation } from '../../types';
 
 export function DiversityPage() {
   const { id } = useParams<{ id: string }>();
-  const { activePortfolio } = usePortfolioContext();
-  const portfolioId = id || activePortfolio?.id;
+  const view = useReportViewSwitcher(id);
 
-  const { data: diversity, isLoading } = useDiversity({ portfolioId });
+  const { data: indDiversity, isLoading: indLoading } = useDiversity({ portfolioId: view.portfolioId });
+  const { data: grpDiversity, isLoading: grpLoading } = useGroupDiversity({ groupId: view.groupId });
+  const diversity = view.viewMode === 'group' ? grpDiversity : indDiversity;
+  const isLoading = view.viewMode === 'group' ? grpLoading : indLoading;
 
   const [activeTab, setActiveTab] = useState<'sector' | 'type' | 'country' | 'market'>('sector');
 
@@ -82,8 +86,19 @@ export function DiversityPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Portfolio Diversity</h1>
-        <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">Allocation breakdown across sectors, types, and geographies{activePortfolio?.name ? ` · ${activePortfolio.name}` : ''}</p>
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+          <div>
+            <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Portfolio Diversity</h1>
+            <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">Allocation breakdown across sectors, types, and geographies{view.displayName ? ` · ${view.displayName}` : ''}</p>
+          </div>
+          {view.hasGroups && (
+            <ReportViewSwitcher
+              viewMode={view.viewMode} portfolios={view.portfolios} groups={view.groups}
+              activePortfolioId={view.activePortfolioId} activeGroupId={view.activeGroupId}
+              onViewModeChange={view.onViewModeChange} onPortfolioChange={view.onPortfolioChange} onGroupChange={view.onGroupChange}
+            />
+          )}
+        </div>
       </div>
 
       {/* Tabs */}

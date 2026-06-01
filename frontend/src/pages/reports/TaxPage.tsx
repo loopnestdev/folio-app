@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { usePortfolioContext } from '../../contexts/PortfolioContext';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useTaxReport } from '../../hooks/useReports';
+import { useGroupTax } from '../../hooks/useGroupReports';
+import { useReportViewSwitcher } from '../../hooks/useReportViewSwitcher';
 import { Card, CardHeader } from '../../components/ui/Card';
 import { Select } from '../../components/ui/Select';
+import { ReportViewSwitcher } from '../../components/ui/ReportViewSwitcher';
 import { StatCard } from '../../components/ui/StatCard';
 import { PageLoader } from '../../components/ui/LoadingSpinner';
 import { formatCurrency } from '../../lib/utils';
@@ -24,10 +26,10 @@ function getFinancialYears(type: 'jan-dec' | 'jul-jun'): { label: string; value:
 
 export function TaxPage() {
   const { id } = useParams<{ id: string }>();
-  const { activePortfolio } = usePortfolioContext();
-  const portfolioId = id || activePortfolio?.id;
-  const currency = activePortfolio?.currency || 'USD';
+  const view = useReportViewSwitcher(id);
   const { financialYear: fyType } = useSettings();
+
+  const currency = view.currency;
 
   const currentYear = new Date().getFullYear();
   const defaultYear =
@@ -40,17 +42,39 @@ export function TaxPage() {
 
   const years = getFinancialYears(yearType);
 
-  const { data: taxData, isLoading } = useTaxReport({
-    portfolioId,
+  // Convert selectedYear + yearType to fyStart + year for group tax hook
+  const grpFyStart: 'january' | 'july' = yearType === 'jul-jun' ? 'july' : 'january';
+  const grpYear = yearType === 'jul-jun'
+    ? (selectedYear.split('-')[1] ?? String(currentYear))
+    : selectedYear;
+
+  const { data: indTax, isLoading: indLoading } = useTaxReport({
+    portfolioId: view.portfolioId,
     financialYear: selectedYear,
     yearType,
   });
+  const { data: grpTax, isLoading: grpLoading } = useGroupTax({
+    groupId: view.groupId,
+    fyStart: grpFyStart,
+    year: grpYear,
+  });
+  const taxData  = view.viewMode === 'group' ? grpTax : indTax;
+  const isLoading = view.viewMode === 'group' ? grpLoading : indLoading;
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Tax Report</h1>
-        <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">Income and capital gains for tax purposes{activePortfolio?.name ? ` · ${activePortfolio.name}` : ''}</p>
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+        <div>
+          <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Tax Report</h1>
+          <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">Income and capital gains for tax purposes{view.displayName ? ` · ${view.displayName}` : ''}</p>
+        </div>
+        {view.hasGroups && (
+          <ReportViewSwitcher
+            viewMode={view.viewMode} portfolios={view.portfolios} groups={view.groups}
+            activePortfolioId={view.activePortfolioId} activeGroupId={view.activeGroupId}
+            onViewModeChange={view.onViewModeChange} onPortfolioChange={view.onPortfolioChange} onGroupChange={view.onGroupChange}
+          />
+        )}
       </div>
 
       {/* Filters */}

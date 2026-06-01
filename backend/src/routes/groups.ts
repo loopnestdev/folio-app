@@ -4,6 +4,7 @@ import { authMiddleware } from '../middleware/auth';
 import { requireApproved } from '../middleware/requireApproved';
 import { supabase } from '../lib/supabase';
 import { calculateHoldings, calculateCapitalGains } from '../services/calculations/holdings';
+import { computeStatistics, computeMonthlyReturns } from '../services/calculations/statistics';
 import {
   getHistoricalPrices, getBenchmarkPrices, getCurrentPrices, BENCHMARKS,
 } from '../services/market-data/yahoo';
@@ -749,6 +750,307 @@ router.get('/:id/tax', async (req: AuthenticatedRequest, res: any) => {
       total_taxable_income:     sum('total_taxable_income'),
       portfolios: portfolioTaxData,
     });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Shared helper: combined daily portfolio value series ─────────────────────
+// Used by both the drawdown and statistics group endpoints so the aggregation
+// logic is written once. Does NOT replicate the TWR chain — it returns raw
+// combined total-value (investedValue + cash × fx) per trading date.
+async function buildGroupDailyValues(
+  portfolios: any[],
+  fxRates: Record<string, number>,
+  toDate: string,
+): Promise<{ date: string; value: number }[]> {
+  const portfolioDailyMaps: Record<string, number>[] = await Promise.all(
+    portfolios.map(async (portfolio) => {
+      const trades = await getPortfolioTrades(portfolio.id);
+      if (!trades.length) return {};
+      const fx = fxRates[portfolio.currency] ?? 1;
+      const investTrades = trades.filter((t: Trade) => t.security);
+      const symbols = [...new Set(investTrades.map((t: Trade) => t.security!.symbol))];
+      const earliestDate = trades[0].trade_date;
+
+      const pricesBySymbol = await Promise.all(
+        symbols.map(async (sym: string) => {
+          const sec = trades.find((t: Trade) => t.security?.symbol === sym)?.security;
+          const prices = await getHistoricalPrices(sym, earliestDate, toDate, sec?.id);
+          return { symbol: sym, prices };
+        }),
+      );
+
+      const priceMap: Record<string, Record<string, number>> = {};
+      for (const { symbol, prices } of pricesBySymbol) {
+        for (const { date, close } of prices) {
+          if (!priceMap[date]) priceMap[date] = {};
+          priceMap[date][symbol] = close;
+        }
+      }
+
+      const sortedTrades = [...trades].sort((a, b) => a.trade_date.localeCompare(b.trade_date));
+      let cashAmt = 0;
+      const cashEvents: [string, number][] = sortedTrades.map((t) => {
+        if      (t.trade_type === 'deposit')    cashAmt += t.price * t.quantity;
+        else if (t.trade_type === 'withdrawal') cashAmt -= t.price * t.quantity;
+        else if (t.trade_type === 'buy')        cashAmt -= t.price * t.quantity + t.brokerage;
+        else if (t.trade_type === 'sell')       cashAmt += t.price * t.quantity - t.brokerage;
+        else if (t.trade_type === 'dividend')   cashAmt += t.price * t.quantity;
+        return [t.trade_date, cashAmt] as [string, number];
+      });
+      const getCashAt = (date: string): number => {
+        let val = 0;
+        for (const [d, v] of cashEvents) { if (d <= date) val = v; else break; }
+        return val;
+      };
+
+      const dateMap: Record<string, number> = {};
+      for (const date of Object.keys(priceMap).sort()) {
+        const dayHoldings = calculateHoldings(
+          trades.filter((t) => t.trade_date <= date) as any,
+          priceMap[date],
+        );
+        const invested = dayHoldings.reduce((s, h) => s + (h.market_value ?? 0), 0);
+        dateMap[date] = (invested + getCashAt(date)) * fx;
+      }
+      return dateMap;
+    }),
+  );
+
+  const allDates = [...new Set(portfolioDailyMaps.flatMap((m) => Object.keys(m)))].sort();
+  const lastKnown = portfolioDailyMaps.map(() => 0);
+
+  return allDates.map((date) => {
+    let total = 0;
+    for (let i = 0; i < portfolioDailyMaps.length; i++) {
+      if (portfolioDailyMaps[i][date] !== undefined) lastKnown[i] = portfolioDailyMaps[i][date]!;
+      total += lastKnown[i];
+    }
+    return { date, value: total };
+  });
+}
+
+// ── GET /api/groups/:id/dividends ─────────────────────────────────────────────
+// Aggregated dividend + interest income across all portfolios.
+// All amounts are converted to base_currency at today's FX rate.
+router.get('/:id/dividends', async (req: AuthenticatedRequest, res: any) => {
+  const group = await getGroup(req.params.id as string, req.userId!);
+  if (!group) { res.status(404).json({ error: 'Group not found' }); return; }
+
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const { start_date, end_date } = req.query as Record<string, string>;
+  const fromDate = start_date ?? '2000-01-01';
+  const toDate   = end_date   ?? todayStr;
+  const baseCurrency: string = group.base_currency ?? 'AUD';
+
+  try {
+    const portfolios = await getGroupPortfolios(req.params.id as string, req.userId!);
+
+    const uniqueCurrencies = [...new Set(portfolios.map((p) => p.currency))].filter((c) => c !== baseCurrency);
+    const fxRates: Record<string, number> = { [baseCurrency]: 1 };
+    await Promise.all(uniqueCurrencies.map(async (cur) => {
+      fxRates[cur] = await getForexRate(cur, baseCurrency, todayStr);
+    }));
+
+    const allDividends: any[] = [];
+    let total_dividends = 0;
+    let total_interest  = 0;
+
+    for (const portfolio of portfolios) {
+      const fx = fxRates[portfolio.currency] ?? 1;
+      let query = supabase
+        .from('trades')
+        .select('*, security:securities(*)')
+        .eq('portfolio_id', portfolio.id)
+        .in('trade_type', ['dividend', 'interest'])
+        .order('trade_date', { ascending: false });
+
+      if (fromDate) query = query.gte('trade_date', fromDate);
+      if (toDate)   query = query.lte('trade_date', toDate);
+
+      const { data } = await query;
+      for (const t of (data ?? [])) {
+        const amount     = t.price * t.quantity;
+        const amountBase = amount * fx;
+        if (t.trade_type === 'dividend') total_dividends += amountBase;
+        else                             total_interest  += amountBase;
+
+        allDividends.push({
+          id:            t.id,
+          portfolio_id:  t.portfolio_id,
+          symbol:        t.security?.symbol ?? '',
+          security_name: t.security?.name   ?? null,
+          payment_date:  t.trade_date,
+          amount:        amountBase,
+          currency:      baseCurrency,
+          is_reinvested: t.is_reinvested ?? false,
+          franking_pct:  t.franking_pct  ?? null,
+        });
+      }
+    }
+
+    allDividends.sort((a, b) => b.payment_date.localeCompare(a.payment_date));
+
+    res.json({
+      total_dividends,
+      total_interest,
+      total_income: total_dividends + total_interest,
+      dividends: allDividends,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/groups/:id/diversity ─────────────────────────────────────────────
+// Aggregated portfolio allocation across all portfolios, converted to base currency.
+router.get('/:id/diversity', async (req: AuthenticatedRequest, res: any) => {
+  const group = await getGroup(req.params.id as string, req.userId!);
+  if (!group) { res.status(404).json({ error: 'Group not found' }); return; }
+
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const baseCurrency: string = group.base_currency ?? 'AUD';
+
+  try {
+    const portfolios = await getGroupPortfolios(req.params.id as string, req.userId!);
+
+    const uniqueCurrencies = [...new Set(portfolios.map((p) => p.currency))].filter((c) => c !== baseCurrency);
+    const fxRates: Record<string, number> = { [baseCurrency]: 1 };
+    await Promise.all(uniqueCurrencies.map(async (cur) => {
+      fxRates[cur] = await getForexRate(cur, baseCurrency, todayStr);
+    }));
+
+    const bySector:  Record<string, number> = {};
+    const byType:    Record<string, number> = {};
+    const byCountry: Record<string, number> = {};
+    const byMarket:  Record<string, number> = {};
+    let total = 0;
+
+    for (const portfolio of portfolios) {
+      const trades = await getPortfolioTrades(portfolio.id);
+      const fx = fxRates[portfolio.currency] ?? 1;
+
+      // Security metadata from trades
+      const secMeta: Record<string, { sector?: string|null; asset_type?: string|null; country?: string|null; exchange?: string|null }> = {};
+      for (const t of trades) {
+        if (t.security) secMeta[t.security.symbol] = t.security;
+      }
+
+      const securitiesMap = new Map<string, string>();
+      trades.filter((t) => t.security).forEach((t) => securitiesMap.set(t.security!.symbol, t.security!.exchange ?? ''));
+
+      const currentPrices = await getCurrentPrices(
+        Array.from(securitiesMap.entries()).map(([symbol, exchange]) => ({ symbol, exchange })),
+      );
+      const holdings = calculateHoldings(trades as any, currentPrices);
+
+      for (const h of holdings) {
+        const mv = (h.market_value ?? 0) * fx;
+        if (mv <= 0) continue;
+        const m = secMeta[h.symbol] ?? {};
+        bySector[m.sector     || 'Other']   = (bySector[m.sector     || 'Other']   ?? 0) + mv;
+        byType[m.asset_type   || 'Other']   = (byType[m.asset_type   || 'Other']   ?? 0) + mv;
+        byCountry[m.country   || 'Unknown'] = (byCountry[m.country   || 'Unknown'] ?? 0) + mv;
+        byMarket[m.exchange   || 'Unknown'] = (byMarket[m.exchange   || 'Unknown'] ?? 0) + mv;
+        total += mv;
+      }
+    }
+
+    const toSlices = (obj: Record<string, number>) =>
+      Object.entries(obj)
+        .map(([name, value]) => ({ name, value, pct: total > 0 ? (value / total) * 100 : 0 }))
+        .sort((a, b) => b.value - a.value);
+
+    res.json({
+      by_sector:          toSlices(bySector),
+      by_investment_type: toSlices(byType),
+      by_country:         toSlices(byCountry),
+      by_market:          toSlices(byMarket),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/groups/:id/drawdown ──────────────────────────────────────────────
+// Rolling peak-to-trough drawdown from combined group daily portfolio value.
+router.get('/:id/drawdown', async (req: AuthenticatedRequest, res: any) => {
+  const group = await getGroup(req.params.id as string, req.userId!);
+  if (!group) { res.status(404).json({ error: 'Group not found' }); return; }
+
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const { start_date, end_date } = req.query as Record<string, string>;
+  const fromDate = start_date ?? '2000-01-01';
+  const toDate   = end_date   ?? todayStr;
+  const baseCurrency: string = group.base_currency ?? 'AUD';
+
+  try {
+    const portfolios = await getGroupPortfolios(req.params.id as string, req.userId!);
+    if (!portfolios.length) { res.json([]); return; }
+
+    const uniqueCurrencies = [...new Set(portfolios.map((p) => p.currency))].filter((c) => c !== baseCurrency);
+    const fxRates: Record<string, number> = { [baseCurrency]: 1 };
+    await Promise.all(uniqueCurrencies.map(async (cur) => {
+      fxRates[cur] = await getForexRate(cur, baseCurrency, todayStr);
+    }));
+
+    const dailyValues = await buildGroupDailyValues(portfolios, fxRates, toDate);
+
+    let peak = 0;
+    const result: { date: string; drawdown: number }[] = [];
+    for (const { date, value } of dailyValues) {
+      if (value > peak) peak = value;
+      if (date < fromDate || date > toDate) continue;
+      result.push({ date, drawdown: peak > 0 ? ((value - peak) / peak) * 100 : 0 });
+    }
+
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/groups/:id/statistics ───────────────────────────────────────────
+// Portfolio statistics derived from combined group daily values.
+router.get('/:id/statistics', async (req: AuthenticatedRequest, res: any) => {
+  const group = await getGroup(req.params.id as string, req.userId!);
+  if (!group) { res.status(404).json({ error: 'Group not found' }); return; }
+
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const { start_date, end_date } = req.query as Record<string, string>;
+  const fromDate = start_date ?? '2000-01-01';
+  const toDate   = end_date   ?? todayStr;
+  const baseCurrency: string = group.base_currency ?? 'AUD';
+
+  try {
+    const portfolios = await getGroupPortfolios(req.params.id as string, req.userId!);
+    if (!portfolios.length) {
+      res.json({ total_return_annualized: 0, winning_months_pct: 0, max_drawdown: 0, std_dev_monthly: 0, sharpe_ratio: 0, sortino_ratio: 0, beta: 0, correlation_sp500: 0, total_return: 0, total_return_pct: 0 });
+      return;
+    }
+
+    const uniqueCurrencies = [...new Set(portfolios.map((p) => p.currency))].filter((c) => c !== baseCurrency);
+    const fxRates: Record<string, number> = { [baseCurrency]: 1 };
+    await Promise.all(uniqueCurrencies.map(async (cur) => {
+      fxRates[cur] = await getForexRate(cur, baseCurrency, todayStr);
+    }));
+
+    const dailyValues = await buildGroupDailyValues(portfolios, fxRates, toDate);
+    const inRange = dailyValues.filter((d) => d.date >= fromDate && d.date <= toDate);
+
+    const monthlyReturns = computeMonthlyReturns(inRange);
+
+    const [asx200, sp500] = await Promise.all([
+      getBenchmarkPrices(BENCHMARKS.ASX200, fromDate, toDate),
+      getBenchmarkPrices(BENCHMARKS.SP500,  fromDate, toDate),
+    ]);
+
+    const benchReturns = computeMonthlyReturns(asx200.map((d) => ({ date: d.date, value: d.close })));
+    const sp500Returns  = computeMonthlyReturns(sp500.map((d) => ({ date: d.date, value: d.close })));
+
+    const stats = computeStatistics(monthlyReturns, benchReturns, sp500Returns);
+    res.json({ ...stats, total_return: 0, total_return_pct: 0 });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
