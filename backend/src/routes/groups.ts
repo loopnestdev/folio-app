@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth';
 import { requireApproved } from '../middleware/requireApproved';
 import { supabase } from '../lib/supabase';
-import { calculateHoldings, calculateCapitalGains } from '../services/calculations/holdings';
+import { calculateHoldings, calculateCapitalGains, calculateCashPosition } from '../services/calculations/holdings';
 import { computeStatistics, computeMonthlyReturns } from '../services/calculations/statistics';
 import {
   getHistoricalPrices, getBenchmarkPrices, getCurrentPrices, BENCHMARKS,
@@ -220,16 +220,22 @@ router.get('/:id/summary', async (req: AuthenticatedRequest, res: any) => {
         }
 
         const holdings = calculateHoldings(trades as any, currentPrices);
+        const { cash_balance } = calculateCashPosition(trades as any);
 
         const fx = fxRates[portfolio.currency] ?? 1;
-        const totalValue = holdings.reduce((s, h) => s + (h.market_value ?? 0), 0);
+        // totalValue = stock market values + cash balance (mirrors individual portfolio logic)
+        const investedValue = holdings.reduce((s, h) => s + (h.market_value ?? 0), 0);
+        const totalValue = investedValue + cash_balance;
         const totalCost  = holdings.reduce((s, h) => s + h.cost_base, 0);
-        const totalGain  = totalValue - totalCost;
+        const totalGain  = investedValue - totalCost;   // unrealised gain on stocks only
 
-        // YTD: value of what was held at Jan 1 using Jan 1 prices vs current prices
+        // YTD: compare current total value (stocks + cash) against portfolio value at Jan 1,
+        // also including the cash balance at that point. This prevents large selloffs from
+        // appearing as losses simply because the cash proceeds aren't counted.
         const tradesBeforeYTD   = trades.filter(t => t.trade_date < ytdStartDate);
         const holdingsAtYTDStart = calculateHoldings(tradesBeforeYTD as any, ytdPrices);
-        const ytdStartValue      = holdingsAtYTDStart.reduce((s, h) => s + (h.market_value ?? 0), 0);
+        const { cash_balance: cashAtYTDStart } = calculateCashPosition(tradesBeforeYTD as any);
+        const ytdStartValue = holdingsAtYTDStart.reduce((s, h) => s + (h.market_value ?? 0), 0) + cashAtYTDStart;
         const ytdReturn = totalValue - ytdStartValue;
 
         return {

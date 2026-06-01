@@ -6,6 +6,8 @@ All notable changes to Folio App are documented here.
 
 ### Fixed
 
+- **Group dashboard: NAV and YTD return excluded cash balance** — The group summary endpoint calculated NAV as the sum of stock market values only, ignoring cash balance. After a large selloff (e.g. liquidating most US positions in January 2026), the cash proceeds were invisible to the NAV calculation, causing a massive apparent drop in both Net Asset Value and YTD Return. The fix mirrors the individual portfolio logic: `totalValue = investedValue + cash_balance`, and the YTD start value similarly includes the cash balance at 01 Jan. (`backend/src/routes/groups.ts`)
+
 - **PDF import: multiple same-day Bank Transfer Deposits collapsed into one** — When several bank deposits arrive on the same day for the same amount (e.g. 7× A$1,000 on 30 Dec 2025), the dedup key treated them as identical and imported only one. The cash section pattern now captures the HH:MM:SS timestamp for each row and appends it to `notes` for `Bank Transfer Deposits` entries (e.g. `"Bank Transfer Deposits 14:51:09"`), giving every transfer a unique identifier. `Cash In Out` entries already carry unique Zepto payment references and are unaffected. (`backend/src/services/pdf-parser/moomoo.ts`)
 
 ## [v0.5.5] — 2026-06-01
