@@ -101,12 +101,10 @@ export function TaxPage() {
             <StatCard
               label="Capital Gains (Short Term)"
               value={formatCurrency(taxData.capital_gains_short_term, currency)}
-              trend={taxData.capital_gains_short_term}
             />
             <StatCard
               label="Capital Gains (Long Term)"
               value={formatCurrency(taxData.capital_gains_long_term, currency)}
-              trend={taxData.capital_gains_long_term}
             />
             <StatCard
               label="CGT Discount Applied"
@@ -115,7 +113,6 @@ export function TaxPage() {
             <StatCard
               label="Total Taxable Income"
               value={formatCurrency(taxData.total_taxable_income, currency)}
-              trend={taxData.total_taxable_income}
             />
           </div>
 

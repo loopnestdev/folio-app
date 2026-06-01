@@ -899,6 +899,287 @@ router.get('/:id/reports/drawdown', async (req: AuthenticatedRequest, res: any) 
   }
 });
 
+// GET /api/portfolios/:id/reports/capital-gains
+// Returns CapitalGain[] — the frontend computes summary stats in-page.
+// Field mapping: CgtLot → CapitalGain (hold_days→hold_period_days, etc.)
+router.get('/:id/reports/capital-gains', async (req: AuthenticatedRequest, res: any) => {
+  const id = req.params.id as string;
+  if (!(await verifyOwner(id, req.userId!))) { res.status(404).json({ error: 'Portfolio not found' }); return; }
+
+  const schema = z.object({
+    fyStart: z.enum(['january', 'july']).default('july'),
+    year: z.string().regex(/^\d{4}$/).default(String(new Date().getFullYear())),
+  });
+  const params = schema.safeParse(req.query);
+  if (!params.success) { res.status(400).json({ error: params.error.flatten() }); return; }
+
+  try {
+    const trades = await getPortfolioTrades(id);
+    const lots = calculateCapitalGains(trades as any, params.data.fyStart, parseInt(params.data.year));
+
+    const gains = lots.map((l, idx) => ({
+      id: `${l.symbol}-${l.buy_date}-${l.sell_date}-${idx}`,
+      portfolio_id: id,
+      symbol: l.symbol,
+      security_name: l.security_name,
+      buy_date: l.buy_date,
+      sell_date: l.sell_date,
+      hold_period_days: l.hold_days,
+      quantity: l.quantity,
+      cost_base: l.cost_base,
+      proceeds: l.proceeds,
+      gross_gain: l.gross_gain,
+      cgt_discount_applicable: l.cgt_discount_eligible,
+      cgt_discount_pct: l.gross_gain > 0 ? (l.cgt_discount_amount / l.gross_gain) * 100 : 0,
+      net_gain: l.net_gain,
+      is_long_term: l.hold_days >= 365,
+    }));
+
+    res.json(gains);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/portfolios/:id/reports/tax
+// Returns TaxReport shape matching the frontend TaxPage.
+// Params: financial_year ("2024-2025" for jul-jun, "2024" for jan-dec), yearType.
+router.get('/:id/reports/tax', async (req: AuthenticatedRequest, res: any) => {
+  const id = req.params.id as string;
+  if (!(await verifyOwner(id, req.userId!))) { res.status(404).json({ error: 'Portfolio not found' }); return; }
+
+  const { financial_year, yearType } = req.query as Record<string, string>;
+  const isJulJun = yearType === 'jul-jun';
+
+  let fyStartDate: string, fyEndDate: string, fyLabel: string;
+  if (isJulJun) {
+    const parts = (financial_year ?? '').split('-').map(Number);
+    const startYear = parts[0] ?? new Date().getFullYear() - 1;
+    const endYear   = parts[1] ?? startYear + 1;
+    fyStartDate = `${startYear}-07-01`;
+    fyEndDate   = `${endYear}-06-30`;
+    fyLabel = `FY ${startYear}–${endYear}`;
+  } else {
+    const year = parseInt(financial_year ?? String(new Date().getFullYear()), 10);
+    fyStartDate = `${year}-01-01`;
+    fyEndDate   = `${year}-12-31`;
+    fyLabel = `CY ${year}`;
+  }
+
+  try {
+    const trades = await getPortfolioTrades(id);
+    const fyTrades = trades.filter(t => t.trade_date >= fyStartDate && t.trade_date <= fyEndDate);
+
+    const totalDividends = fyTrades.filter(t => t.trade_type === 'dividend')
+      .reduce((s, t) => s + Number(t.price) * Number(t.quantity), 0);
+    const totalInterest = fyTrades.filter(t => t.trade_type === 'interest')
+      .reduce((s, t) => s + Number(t.price) * Number(t.quantity), 0);
+
+    // Use the unified fyStart/year params for calculateCapitalGains
+    const fyStartParam: 'january' | 'july' = isJulJun ? 'july' : 'january';
+    const yearParam = isJulJun
+      ? parseInt(financial_year?.split('-')[1] ?? String(new Date().getFullYear()), 10)
+      : parseInt(financial_year ?? String(new Date().getFullYear()), 10);
+
+    const lots = calculateCapitalGains(trades as any, fyStartParam, yearParam);
+    const shortTermGains  = lots.filter(l => !l.cgt_discount_eligible).reduce((s, l) => s + l.net_gain, 0);
+    const longTermGrossGains = lots.filter(l => l.cgt_discount_eligible).reduce((s, l) => s + l.gross_gain, 0);
+    const cgtDiscount     = lots.reduce((s, l) => s + l.cgt_discount_amount, 0);
+    const longTermNetGains = lots.filter(l => l.cgt_discount_eligible).reduce((s, l) => s + l.net_gain, 0);
+
+    const netCapGain = shortTermGains + longTermNetGains;
+
+    res.json({
+      financial_year: fyLabel,
+      dividends_received: totalDividends,
+      interest_received: totalInterest,
+      capital_gains_short_term: shortTermGains,
+      capital_gains_long_term: longTermGrossGains,
+      cgt_discount_applied: cgtDiscount,
+      total_taxable_income: totalDividends + totalInterest + Math.max(0, netCapGain),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/portfolios/:id/reports/dividends
+// Returns DividendSummary: { dividends, total_dividends, total_interest, total_income }
+// Params: start_date, end_date (from dateRangeToParams)
+router.get('/:id/reports/dividends', async (req: AuthenticatedRequest, res: any) => {
+  const id = req.params.id as string;
+  if (!(await verifyOwner(id, req.userId!))) { res.status(404).json({ error: 'Portfolio not found' }); return; }
+
+  const { start_date, end_date } = req.query as Record<string, string>;
+
+  try {
+    let query = supabase
+      .from('trades')
+      .select('*, security:securities(*)')
+      .eq('portfolio_id', id)
+      .in('trade_type', ['dividend', 'interest'])
+      .order('trade_date', { ascending: false });
+
+    if (start_date) query = query.gte('trade_date', start_date);
+    if (end_date)   query = query.lte('trade_date', end_date);
+
+    const { data, error } = await query;
+    if (error) { res.status(500).json({ error: error.message }); return; }
+
+    const items = data ?? [];
+    const dividends = items.filter((t: any) => t.trade_type === 'dividend');
+    const interest  = items.filter((t: any) => t.trade_type === 'interest');
+
+    const total_dividends = dividends.reduce((s: number, t: any) => s + t.price * t.quantity, 0);
+    const total_interest  = interest.reduce((s: number, t: any) => s + t.price * t.quantity, 0);
+
+    res.json({
+      total_dividends,
+      total_interest,
+      total_income: total_dividends + total_interest,
+      dividends: items.map((t: any) => ({
+        id:             t.id,
+        portfolio_id:   t.portfolio_id,
+        symbol:         t.security?.symbol ?? '',
+        security_name:  t.security?.name   ?? null,
+        payment_date:   t.trade_date,
+        amount:         t.price * t.quantity,
+        currency:       t.currency ?? 'AUD',
+        is_reinvested:  t.is_reinvested  ?? false,
+        franking_pct:   t.franking_pct   ?? null,
+      })),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/portfolios/:id/reports/upcoming-dividends
+// Estimates upcoming dividends based on the last dividend paid per holding.
+router.get('/:id/reports/upcoming-dividends', async (req: AuthenticatedRequest, res: any) => {
+  const id = req.params.id as string;
+  if (!(await verifyOwner(id, req.userId!))) { res.status(404).json({ error: 'Portfolio not found' }); return; }
+
+  try {
+    const trades = await getPortfolioTrades(id);
+    const today = format(new Date(), 'yyyy-MM-dd');
+
+    // Find last dividend per symbol and estimate next payment
+    const lastDiv: Record<string, { date: string; amount: number; currency: string; name: string | null }> = {};
+    for (const t of trades) {
+      if (t.trade_type !== 'dividend' || !t.security) continue;
+      const sym = t.security.symbol;
+      if (!lastDiv[sym] || t.trade_date > lastDiv[sym].date) {
+        lastDiv[sym] = {
+          date: t.trade_date,
+          amount: t.price * t.quantity,
+          currency: t.currency,
+          name: t.security.name ?? null,
+        };
+      }
+    }
+
+    // Only include symbols that still have a non-zero holding
+    const currentPrices = await getCurrentPrices(
+      Object.keys(lastDiv).map(sym => ({ symbol: sym, exchange: '' }))
+    );
+    const holdings = calculateHoldings(trades as any, currentPrices);
+    const activeSymbols = new Set(
+      holdings.filter(h => h.quantity > 0).map(h => h.symbol)
+    );
+
+    const upcoming = [];
+    for (const [sym, info] of Object.entries(lastDiv)) {
+      if (!activeSymbols.has(sym)) continue;
+      // Estimate next quarterly payment (~90 days after last)
+      const lastDate = new Date(info.date);
+      const expectedDate = new Date(lastDate.getTime() + 90 * 86400000);
+      const expectedStr = format(expectedDate, 'yyyy-MM-dd');
+      if (expectedStr <= today) continue; // already past
+      upcoming.push({
+        symbol: sym,
+        security_name: info.name,
+        expected_date: expectedStr,
+        estimated_amount: info.amount,
+        currency: info.currency,
+        frequency: 'Quarterly',
+      });
+    }
+
+    upcoming.sort((a, b) => a.expected_date.localeCompare(b.expected_date));
+    const total_estimated = upcoming.reduce((s, d) => s + d.estimated_amount, 0);
+    res.json({ dividends: upcoming, total_estimated });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/portfolios/:id/reports/diversity
+// Returns PortfolioDiversity: { by_sector, by_investment_type, by_country, by_market }
+router.get('/:id/reports/diversity', async (req: AuthenticatedRequest, res: any) => {
+  const id = req.params.id as string;
+  if (!(await verifyOwner(id, req.userId!))) { res.status(404).json({ error: 'Portfolio not found' }); return; }
+
+  try {
+    const trades = await getPortfolioTrades(id);
+
+    // Build security metadata map from trades
+    const secMeta: Record<string, { sector?: string|null; asset_type?: string|null; country?: string|null; exchange?: string|null }> = {};
+    for (const t of trades) {
+      if (t.security) {
+        secMeta[t.security.symbol] = {
+          sector:     t.security.sector,
+          asset_type: t.security.asset_type,
+          country:    t.security.country,
+          exchange:   t.security.exchange,
+        };
+      }
+    }
+
+    const securitiesMap = new Map<string, string>();
+    trades.filter(t => t.security).forEach(t => securitiesMap.set(t.security!.symbol, t.security!.exchange ?? ''));
+    const currentPrices = await getCurrentPrices(
+      Array.from(securitiesMap.entries()).map(([symbol, exchange]) => ({ symbol, exchange }))
+    );
+    const holdings = calculateHoldings(trades as any, currentPrices);
+
+    const bySector: Record<string, number>  = {};
+    const byType: Record<string, number>    = {};
+    const byCountry: Record<string, number> = {};
+    const byMarket: Record<string, number>  = {};
+
+    for (const h of holdings) {
+      const mv = h.market_value ?? 0;
+      if (mv <= 0) continue;
+      const m = secMeta[h.symbol] ?? {};
+      const sector  = m.sector     || 'Other';
+      const type    = m.asset_type || 'Other';
+      const country = m.country    || 'Unknown';
+      const market  = m.exchange   || 'Unknown';
+
+      bySector[sector]   = (bySector[sector]   ?? 0) + mv;
+      byType[type]       = (byType[type]        ?? 0) + mv;
+      byCountry[country] = (byCountry[country]  ?? 0) + mv;
+      byMarket[market]   = (byMarket[market]    ?? 0) + mv;
+    }
+
+    const total = holdings.reduce((s, h) => s + (h.market_value ?? 0), 0);
+    const toSlices = (obj: Record<string, number>) =>
+      Object.entries(obj)
+        .map(([name, value]) => ({ name, value, pct: total > 0 ? (value / total) * 100 : 0 }))
+        .sort((a, b) => b.value - a.value);
+
+    res.json({
+      by_sector: toSlices(bySector),
+      by_investment_type: toSlices(byType),
+      by_country: toSlices(byCountry),
+      by_market: toSlices(byMarket),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/portfolios/:id/benchmarks
 router.get('/:id/benchmarks', async (req: AuthenticatedRequest, res: any) => {
   const id = req.params.id as string;
