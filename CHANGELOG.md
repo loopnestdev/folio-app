@@ -2,7 +2,7 @@
 
 All notable changes to Folio App are documented here.
 
-## [Unreleased]
+## [v0.6.3] — 2026-06-02
 
 ### Added
 
