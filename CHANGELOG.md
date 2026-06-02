@@ -2,11 +2,13 @@
 
 All notable changes to Folio App are documented here.
 
-## [Unreleased]
+## [v0.6.1] — 2026-06-02
 
 ### Changed
 
 - **Group dashboard: "Total Return" renamed to "Unrealised Gain"** — The label better describes what the metric actually is: the profit/loss on currently held open positions only (market value minus cost base), excluding closed trades and cash. The card now also shows an "Invested: A$X" subtitle indicating the current market value of open stock positions. (`frontend/src/pages/groups/GroupDashboardPage.tsx`)
+
+- **Group dashboard: "Return %" card removed** — The percentage was already shown as the trend line directly under Unrealised Gain, making the standalone card redundant. Dashboard is now 4 cards: NAV · Unrealised Gain · YTD Return · Cash. (`frontend/src/pages/groups/GroupDashboardPage.tsx`)
 
 ### Added
 
