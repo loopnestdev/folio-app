@@ -2,6 +2,16 @@
 
 All notable changes to Folio App are documented here.
 
+## [Unreleased]
+
+### Added
+
+- **Cash Flow report** — New page under Reports showing all deposits and withdrawals for any date range (YTD / 1Y / 2Y / All / Custom). Three summary cards: Total Deposited, Total Withdrawn, Net Deposited. Transactions table includes date, type badge, notes, and amount. Supports Individual / Group toggle; Group view converts all amounts to the group base currency and shows a Portfolio column. (`backend/src/routes/reports.ts`, `backend/src/routes/groups.ts`, `frontend/src/pages/reports/CashFlowPage.tsx`, `frontend/src/hooks/useReports.ts`, `frontend/src/hooks/useGroupReports.ts`, `frontend/src/components/layout/Sidebar.tsx`)
+
+### Changed
+
+- **Capital Gains: replaced FY year selector with standard date range picker** — The page now uses the same YTD / 1Y / 2Y / All / Custom picker as every other report, making it consistent and allowing arbitrary date ranges. The 50% CGT discount is still calculated based on hold period ≥ 365 days. A new `calculateCapitalGainsByRange()` function was added to the holdings calculation service; both individual and group endpoints now accept `start_date` / `end_date` params. (`backend/src/services/calculations/holdings.ts`, `backend/src/routes/reports.ts`, `backend/src/routes/groups.ts`, `frontend/src/pages/reports/CapitalGainsPage.tsx`)
+
 ## [v0.6.3] — 2026-06-02
 
 ### Added
