@@ -128,7 +128,7 @@ export function GroupDashboardPage() {
       </div>
 
       {/* Summary stats */}
-      <div className="grid grid-cols-2 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
         {/* 1. Net Asset Value */}
         <StatCard
           label="Net Asset Value"
@@ -147,16 +147,7 @@ export function GroupDashboardPage() {
           loading={summaryLoading}
         />
 
-        {/* 3. Return % */}
-        <StatCard
-          label="Return %"
-          tooltip="Unrealised gain as a percentage of the total cost base of current holdings. Reflects how much your open positions have grown relative to what you paid."
-          value={formatPercent(summary?.total_gain_pct ?? 0)}
-          trend={summary?.total_gain_pct}
-          loading={summaryLoading}
-        />
-
-        {/* 4. YTD Return — with CY / FY toggle */}
+        {/* 3. YTD Return — with CY / FY toggle */}
         {(() => {
           const isFY       = ytdMode === 'FY';
           const ytdValue   = isFY ? (summary?.fy_ytd_return ?? 0)     : (summary?.ytd_return     ?? 0);
@@ -197,7 +188,7 @@ export function GroupDashboardPage() {
           );
         })()}
 
-        {/* 5. Cash */}
+        {/* 4. Cash */}
         <StatCard
           label="Cash"
           tooltip="Uninvested cash across all portfolios (deposits minus withdrawals minus stock purchases plus sale proceeds), converted to the group base currency."
