@@ -385,19 +385,33 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
           return val;
         };
 
-        // Build per-date map.
-        // NOTE: extFlow uses extFlowByDate[date] directly (no weekend remapping).
-        // In the group context, cross-currency FX transfers (AUD withdrawal + USD
-        // deposit) are typically recorded on the same date and naturally cancel out
-        // in the combined extFlow. Weekend remapping (which shifts each flow to the
-        // next price date on its per-portfolio calendar) breaks that cancellation
-        // because the AUD and USD portfolios have different trading calendars, so
-        // the same-date flows land on different remapped dates. Using the raw date
-        // preserves same-day cancellation; non-trading-day flows are simply absent
-        // from the priceMap and thus dropped — which is acceptable for the group
-        // because getCashAt() still captures the economic effect in totalValue.
+        // ── External-flow remapping ─────────────────────────────────────────────
+        // Deposits and withdrawals recorded on non-trading days (weekends,
+        // public holidays) have no entry in priceMap for that date. Without
+        // remapping, those flows are silently dropped: getCashAt() already
+        // reflects the updated cash balance in totalValue, but the extFlow
+        // adjustment to the TWR denominator never happens. The result is a
+        // "phantom gain" on the next trading day when the portfolio's cash
+        // suddenly appears larger with no neutralising extFlow — exactly what
+        // caused the early group chart oscillations.
+        //
+        // Fix: assign every flow to the NEXT available priceMap date on or
+        // after its trade date. For same-day cross-currency FX transfers
+        // (AUD withdrawal + USD deposit) both sides are typically recorded on
+        // a weekday that IS a priceMap date for both portfolios, so they still
+        // cancel in the combined group extFlow. The rare case where a transfer
+        // falls on a day that is a holiday in one market but not the other
+        // introduces at most a 1-day mismatch — far less harmful than the
+        // current silent-drop behaviour.
+        const priceDates = Object.keys(priceMap).sort();
+        const extFlowForTWR: Record<string, number> = {};
+        for (const [flowDate, flowAmt] of Object.entries(extFlowByDate)) {
+          const target = priceDates.find(d => d >= flowDate);
+          if (target) extFlowForTWR[target] = (extFlowForTWR[target] ?? 0) + flowAmt;
+        }
+
         const dateMap: Record<string, DayEntry> = {};
-        for (const date of Object.keys(priceMap).sort()) {
+        for (const date of priceDates) {
           const dayHoldings = calculateHoldings(
             trades.filter((t) => t.trade_date <= date) as any,
             priceMap[date],
@@ -405,7 +419,7 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
           const holdingsValue = dayHoldings.reduce((s, h) => s + (h.market_value ?? 0), 0);
           dateMap[date] = {
             totalValue: (holdingsValue + getCashAt(date)) * fx,
-            extFlow:    (extFlowByDate[date] ?? 0) * fx,
+            extFlow:    (extFlowForTWR[date] ?? 0) * fx,
             netDep:     getNetDepAt(date) * fx,
           };
         }
