@@ -4,6 +4,10 @@ All notable changes to Folio App are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- **Current Holdings page: portfolio name and currency shown in subtitle** — The holdings page now displays the active portfolio name and currency directly under the "Current Holdings" title (e.g. "Moomoo Personal AUD (AUD) · 6 positions"), matching the pattern used on the Import Trades page. (`frontend/src/pages/HoldingsPage.tsx`)
+
 ### Fixed
 
 - **Group performance chart: ASX stocks looked up without exchange suffix, causing wrong prices** — The group `/performance` and drawdown endpoints called `getHistoricalPrices` without the `exchange` parameter. For ASX-listed symbols, this meant Yahoo Finance received the raw ticker (e.g. `EQR`) instead of the exchange-qualified form (`EQR.AX`), and returned the wrong company entirely — in this case Equity Residential (NYSE: EQR, ~A$61/share) instead of the small ASX stock (A$0.315/share). The 1,600-share EQR position was valued at ~A$97,600 instead of ~A$504, spiking the group TWR chart to +2250% on the day of purchase and creating a phantom –91% max drawdown when the position corrected. Fixed by passing `sec?.exchange` to all affected `getHistoricalPrices` calls, matching the pattern already used consistently in `reports.ts`. (`backend/src/routes/groups.ts`)
