@@ -2,7 +2,7 @@
 
 All notable changes to Folio App are documented here.
 
-## [Unreleased]
+## [v0.6.2] — 2026-06-02
 
 ### Fixed
 
@@ -15,6 +15,8 @@ All notable changes to Folio App are documented here.
 ### Added
 
 - **Transfer In trade type** — Shares received from another broker/account can now be recorded as `transfer_in`. Unlike a buy, no cash is deducted; unlike a deposit, shares are added to FIFO holdings at the recorded cost basis for CGT purposes. The type appears in the Add/Edit Trade form and Trades page filter dropdown. (`backend/src/routes/trades.ts`, `backend/src/types/index.ts`, `backend/src/services/calculations/holdings.ts`, `frontend/src/types/index.ts`, `frontend/src/components/forms/TradeForm.tsx`, `frontend/src/pages/TradesPage.tsx`)
+
+- **Drawdown: "Time in Drawdown" card** — The card now shows the percentage of sessions in drawdown (e.g. "82.6%") as the headline, with the raw session counts in the subtitle ("218 of 264 sessions"). Previously showed a raw count labelled "total days" which was misleading — the denominator is portfolio valuation data points, not calendar days. Card renamed from "Days in Drawdown" to "Time in Drawdown". (`frontend/src/pages/reports/DrawdownPage.tsx`)
 
 ## [v0.6.1] — 2026-06-02
 
