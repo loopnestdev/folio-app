@@ -111,13 +111,15 @@ export function parseTradesSection(section: string): ParsedTrade[] {
     }
 
     // Line 2: SYMBOL \t EXCHANGE \t CURRENCY \t YYYY/MM/DD
-    // Four known layouts:
+    // Five known layouts:
     //   Normal:     "INUV \t US \t USD \t 2025/08/09"         (4 tokens)
     //   Split:      "INUV\n" then "US \t USD \t 2025/08/08"   (symbol alone, then 3 tokens)
     //               — some PDF renders break the symbol off onto its own line
     //   Cur+Date:   "BITU \t US \t USD 2025/09/04"            (3 tokens, last = "CURR DATE")
     //               — currency and date space-merged with no tab separator
     //   Sym+Exch:   "IONQ US \t USD \t DATE"                  (symbol+exchange space-merged, 3 tokens)
+    //   SplitDate:  "BFLY \t US \t USD" then "2025/10/03"     (3 tokens, date on its own next line)
+    //               — symbol/exchange/currency together but date breaks to next line
     const line2 = lines[++i] ?? '';
     const p2 = line2.split('\t').map((s) => s.trim()).filter(Boolean);
     let symbol: string, exchange: string, currency: string, dateStr: string;
@@ -140,6 +142,13 @@ export function parseTradesSection(section: string): ParsedTrade[] {
       exchange = p2[1] ?? '';
       currency = parts[0] ?? '';
       dateStr  = parts[1] ?? '';
+    } else if (p2.length === 3 && /^\d{4}\/\d{2}\/\d{2}$/.test(lines[i + 1] ?? '')) {
+      // "SYMBOL \t EXCHANGE \t CURRENCY" then date alone on the very next line
+      // (seen e.g. "BFLY \t US \t USD" / "2025/10/03" in Oct 2025 PDF)
+      symbol   = p2[0] ?? '';
+      exchange = p2[1] ?? '';
+      currency = p2[2] ?? '';
+      dateStr  = lines[++i] ?? '';
     } else if (p2[0].includes(' ') && /^\d{4}\/\d{2}\/\d{2}$/.test(p2[2] ?? '')) {
       // "IONQ US" merged — split on last space
       const sp = p2[0].lastIndexOf(' ');

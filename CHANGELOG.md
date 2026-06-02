@@ -22,6 +22,8 @@ All notable changes to Folio App are documented here.
 
 - **PDF import: multiple same-day Bank Transfer Deposits collapsed into one** — When several bank deposits arrive on the same day for the same amount (e.g. 7× A$1,000 on 30 Dec 2025), the dedup key treated them as identical and imported only one. The cash section pattern now captures the HH:MM:SS timestamp for each row and appends it to `notes` for `Bank Transfer Deposits` entries (e.g. `"Bank Transfer Deposits 14:51:09"`), giving every transfer a unique identifier. `Cash In Out` entries already carry unique Zepto payment references and are unaffected. (`backend/src/services/pdf-parser/moomoo.ts`)
 
+- **PDF import: sell trade skipped when date appears on its own line** — Some PDF layouts render the symbol/exchange/currency together on one line (e.g. `BFLY \t US \t USD`) and the trade date alone on the very next line, rather than as a 4th tab-separated token. The parser did not recognise this layout and silently skipped those trades. The most impactful case was a Butterfly Network (BFLY) sell of 400 shares on 2025-10-03 that was entirely absent from the imported trade history. Fixed by adding a fifth layout branch: if line 2 has exactly 3 tokens (symbol, exchange, currency) and the immediately following line is a bare `YYYY/MM/DD` date, consume that line as the date. (`backend/src/services/pdf-parser/moomoo.ts`)
+
 ## [v0.5.5] — 2026-06-01
 
 ### Changed
