@@ -4,7 +4,7 @@ import { authMiddleware } from '../middleware/auth';
 import { requireApproved } from '../middleware/requireApproved';
 import { supabase } from '../lib/supabase';
 import { calculateHoldings, calculateCapitalGains, calculateCashPosition } from '../services/calculations/holdings';
-import { computeStatistics, computeMonthlyReturnMap, alignReturnMaps } from '../services/calculations/statistics';
+import { computeStatistics, computeMonthlyReturnMap, computeMonthlyReturnMapModifiedDietz, alignReturnMaps } from '../services/calculations/statistics';
 import {
   getHistoricalPrices, getBenchmarkPrices, getCurrentPrices, BENCHMARKS,
   getForexRate, enrichSecurityMetadata,
@@ -813,6 +813,36 @@ router.get('/:id/tax', async (req: AuthenticatedRequest, res: any) => {
   }
 });
 
+// ── Shared helper: group-level net external flows per calendar month ──────────
+// Used by the statistics endpoint for Modified Dietz monthly return calculation.
+// Positive = net deposit, negative = net withdrawal, in base_currency.
+async function buildGroupMonthlyFlows(
+  portfolios: any[],
+  fxRates: Record<string, number>,
+): Promise<Record<string, number>> {
+  const perPortfolioFlows = await Promise.all(
+    portfolios.map(async (portfolio) => {
+      const trades = await getPortfolioTrades(portfolio.id);
+      const fx = fxRates[portfolio.currency] ?? 1;
+      const flows: Record<string, number> = {};
+      for (const t of trades) {
+        if (t.trade_type !== 'deposit' && t.trade_type !== 'withdrawal') continue;
+        const amount = t.price * t.quantity * (t.trade_type === 'withdrawal' ? -1 : 1) * fx;
+        const month  = t.trade_date.slice(0, 7);
+        flows[month] = (flows[month] ?? 0) + amount;
+      }
+      return flows;
+    }),
+  );
+  const result: Record<string, number> = {};
+  for (const flows of perPortfolioFlows) {
+    for (const [month, amount] of Object.entries(flows)) {
+      result[month] = (result[month] ?? 0) + amount;
+    }
+  }
+  return result;
+}
+
 // ── Shared helper: combined daily portfolio value series ─────────────────────
 // Used by both the drawdown and statistics group endpoints so the aggregation
 // logic is written once. Does NOT replicate the TWR chain — it returns raw
@@ -1107,15 +1137,24 @@ router.get('/:id/statistics', async (req: AuthenticatedRequest, res: any) => {
       fxRates[cur] = await getForexRate(cur, baseCurrency, todayStr);
     }));
 
-    const dailyValues = await buildGroupDailyValues(portfolios, fxRates, toDate);
+    const [dailyValues, monthlyFlows] = await Promise.all([
+      buildGroupDailyValues(portfolios, fxRates, toDate),
+      buildGroupMonthlyFlows(portfolios, fxRates),
+    ]);
     const inRange = dailyValues.filter((d) => d.date >= fromDate && d.date <= toDate);
 
-    const portfolioReturnMap = computeMonthlyReturnMap(inRange);
+    // Modified Dietz monthly returns — adjusts for deposits/withdrawals so initial
+    // capital injections don't inflate apparent returns (which distorts CAGR and Beta).
+    const portfolioReturnMap = computeMonthlyReturnMapModifiedDietz(inRange, monthlyFlows);
     const monthlyReturns     = Object.keys(portfolioReturnMap).sort().map(m => portfolioReturnMap[m]!);
 
+    // Anchor benchmark to portfolio's actual start date — using fromDate (e.g. '2000-01-01'
+    // for "All") causes Yahoo Finance to fail silently, returning an empty series and
+    // yielding Beta = 0 / Correlation = 0.
+    const benchFrom = inRange.length > 0 ? inRange[0].date : fromDate;
     const [asx200, sp500] = await Promise.all([
-      getBenchmarkPrices(BENCHMARKS.ASX200, fromDate, toDate),
-      getBenchmarkPrices(BENCHMARKS.SP500,  fromDate, toDate),
+      getBenchmarkPrices(BENCHMARKS.ASX200, benchFrom, toDate),
+      getBenchmarkPrices(BENCHMARKS.SP500,  benchFrom, toDate),
     ]);
 
     const asx200ReturnMap = computeMonthlyReturnMap(asx200.map((d) => ({ date: d.date, value: d.close })));

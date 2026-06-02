@@ -4,7 +4,7 @@ import { authMiddleware } from '../middleware/auth';
 import { requireApproved } from '../middleware/requireApproved';
 import { supabase } from '../lib/supabase';
 import { calculateHoldings, calculateCapitalGains, calculateCashPosition } from '../services/calculations/holdings';
-import { computeStatistics, computeMonthlyReturnMap, alignReturnMaps } from '../services/calculations/statistics';
+import { computeStatistics, computeMonthlyReturnMap, computeMonthlyReturnMapModifiedDietz, alignReturnMaps } from '../services/calculations/statistics';
 import { getHistoricalPrices, getBenchmarkPrices, getCurrentPrices, BENCHMARKS, enrichSecurityMetadata } from '../services/market-data/yahoo';
 import { format, subYears, startOfYear } from 'date-fns';
 import type { AuthenticatedRequest, Trade } from '../types';
@@ -588,15 +588,29 @@ router.get('/:id/statistics', async (req: AuthenticatedRequest, res: any) => {
     // Filter to the requested date window
     const portfolioValues = allPortfolioValues.filter(v => v.date >= fromDate && v.date <= toDate);
 
+    // Net external cash flows per calendar month (deposits − withdrawals).
+    // Used for Modified Dietz monthly returns so deposits don't inflate apparent
+    // returns (e.g. first month when $200K is deposited must not look like +∞%).
+    const monthlyFlows: Record<string, number> = {};
+    for (const t of trades) {
+      if (t.trade_type !== 'deposit' && t.trade_type !== 'withdrawal') continue;
+      const amount = t.price * t.quantity * (t.trade_type === 'withdrawal' ? -1 : 1);
+      const month  = t.trade_date.slice(0, 7);
+      monthlyFlows[month] = (monthlyFlows[month] ?? 0) + amount;
+    }
+
     // Build date-keyed monthly return maps so we can date-align portfolio with benchmarks.
-    // This prevents pairing Feb-2025 portfolio returns against Jun-2024 benchmark returns.
-    const portfolioReturnMap = computeMonthlyReturnMap(portfolioValues);
+    // Uses Modified Dietz to strip out capital deposits/withdrawals from monthly returns.
+    const portfolioReturnMap = computeMonthlyReturnMapModifiedDietz(portfolioValues, monthlyFlows);
     const portfolioReturns   = Object.keys(portfolioReturnMap).sort()
       .map(m => portfolioReturnMap[m]!);
 
+    // Anchor benchmark fetch to the portfolio's actual first data date — using fromDate
+    // (e.g. '2000-01-01' for "All") causes Yahoo Finance to fail or return empty data.
+    const benchFrom = portfolioValues.length > 0 ? portfolioValues[0].date : fromDate;
     const [asx200, sp500] = await Promise.all([
-      getBenchmarkPrices(BENCHMARKS.ASX200, fromDate, toDate),
-      getBenchmarkPrices(BENCHMARKS.SP500,  fromDate, toDate),
+      getBenchmarkPrices(BENCHMARKS.ASX200, benchFrom, toDate),
+      getBenchmarkPrices(BENCHMARKS.SP500,  benchFrom, toDate),
     ]);
 
     const asx200ReturnMap = computeMonthlyReturnMap(asx200.map(d => ({ date: d.date, value: d.close })));

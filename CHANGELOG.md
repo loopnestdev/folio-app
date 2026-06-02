@@ -2,6 +2,14 @@
 
 All notable changes to Folio App are documented here.
 
+## [Unreleased]
+
+### Fixed
+
+- **Statistics: CAGR and Beta incorrect for long date ranges (2Y / All)** — Monthly returns were calculated as simple (end − start) / start on raw NAV. When portfolios were initially funded, the deposit month showed an inflated "return" (e.g. NAV $0 → $200 K appeared as a gain) which distorted cumulative CAGR and skewed the mean portfolio return, causing Beta to blow up (e.g. −18). Fixed using the Modified Dietz method: `R = (end − start − CF) / (start + CF × 0.5)` where CF is the net external cash flow per month. Both group and individual statistics endpoints updated. (`backend/src/services/calculations/statistics.ts`, `backend/src/routes/groups.ts`, `backend/src/routes/reports.ts`)
+
+- **Statistics: Beta / Correlation both 0.00 for "All" range** — Benchmark data was fetched from `2000-01-01`; Yahoo Finance fails silently for 26-year ranges, returning an empty series. `alignReturnMaps` then found no common months with the portfolio, yielding Beta = 0 and Correlation = 0. Fixed by anchoring the benchmark fetch to the portfolio's actual first data date instead of the date-range `fromDate`. (`backend/src/routes/groups.ts`, `backend/src/routes/reports.ts`)
+
 ## [v0.6.1] — 2026-06-02
 
 ### Changed

@@ -94,6 +94,46 @@ export function computeStatistics(
   };
 }
 
+/**
+ * Build a map of month-string → monthly return using the Modified Dietz method.
+ *
+ * Simple (end − start) / start is wrong when deposits or withdrawals occur in the
+ * month — the NAV jump looks like a return. Modified Dietz strips out external cash
+ * flows so the result reflects only investment performance:
+ *
+ *   R = (end − start − CF) / (start + CF × 0.5)
+ *
+ * The 0.5 weight assumes flows occur at the month midpoint (standard approximation).
+ * When CF = 0 this reduces to the simple return.
+ *
+ * @param dailyValues  Chronological { date, value } NAV series
+ * @param monthlyFlows YYYY-MM → net external flow in same currency as NAV
+ *                     (positive = deposit, negative = withdrawal)
+ */
+export function computeMonthlyReturnMapModifiedDietz(
+  dailyValues: { date: string; value: number }[],
+  monthlyFlows: Record<string, number>,
+): Record<string, number> {
+  if (dailyValues.length < 2) return {};
+
+  const lastOfMonth: Record<string, number> = {};
+  for (const { date, value } of dailyValues) {
+    lastOfMonth[date.slice(0, 7)] = value;
+  }
+
+  const months = Object.keys(lastOfMonth).sort();
+  const result: Record<string, number> = {};
+  for (let i = 1; i < months.length; i++) {
+    const prev = lastOfMonth[months[i - 1]]!;
+    const curr = lastOfMonth[months[i]]!;
+    const cf   = monthlyFlows[months[i]] ?? 0;
+    // Modified Dietz: starting value + half of net cash flows
+    const denom = prev + cf * 0.5;
+    if (denom > 0) result[months[i]] = (curr - prev - cf) / denom;
+  }
+  return result;
+}
+
 /** Build a map of month-string → monthly return from a daily value series. */
 export function computeMonthlyReturnMap(
   dailyValues: { date: string; value: number }[]
