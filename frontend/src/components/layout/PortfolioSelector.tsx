@@ -6,13 +6,14 @@ import { useGroups } from '../../hooks/useGroups';
 import { api } from '../../lib/api';
 import type { Portfolio } from '../../types';
 import { cn } from '../../lib/utils';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 export function PortfolioSelector() {
   const { activePortfolio, setActivePortfolio, setPortfolios } = usePortfolioContext();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const location = useLocation();
 
   const { data: portfolios = [] } = useQuery({
     queryKey: ['portfolios'],
@@ -46,6 +47,15 @@ export function PortfolioSelector() {
   const selectPortfolio = (p: Portfolio) => {
     setActivePortfolio(p);
     setOpen(false);
+    // If the current page is a portfolio-specific route (/portfolios/:id/...),
+    // navigate to the same sub-path for the newly selected portfolio so that the
+    // URL (and therefore useParams) stays consistent with the active portfolio.
+    // Without this, pages read the stale :id from the URL while the subtitle
+    // updates from context — data never re-fetches for the new portfolio.
+    const match = location.pathname.match(/^\/portfolios\/[^/]+(.*)/);
+    if (match) {
+      navigate(`/portfolios/${p.id}${match[1]}`);
+    }
   };
 
   // Compute grouped and ungrouped lists
