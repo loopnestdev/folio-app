@@ -2,6 +2,12 @@
 
 All notable changes to Folio App are documented here.
 
+## [Unreleased]
+
+### Added
+
+- **Holdings: Group view** — The Holdings page now has the same Individual / Group toggle used on every report page. In Group mode, holdings are aggregated across all portfolios in the selected group: the same symbol held in multiple portfolios is merged into one row, all values are converted to the group base currency via live FX rates, and cash balances across all portfolios are summed into a single CASH row. (`backend/src/routes/groups.ts`, `frontend/src/hooks/useGroupReports.ts`, `frontend/src/pages/HoldingsPage.tsx`)
+
 ## [v0.6.2] — 2026-06-02
 
 ### Fixed
