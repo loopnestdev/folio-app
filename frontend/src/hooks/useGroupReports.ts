@@ -82,23 +82,41 @@ export function useGroupMonthlyProfit({ groupId, range, customStart, customEnd }
 }
 
 // ── Group Capital Gains ──────────────────────────────────────
-interface GroupCgtOptions {
+interface GroupRangedOptions {
   groupId?: string;
-  fyStart: 'january' | 'july';
-  year: string;
+  range: DateRange;
+  customStart?: string;
+  customEnd?: string;
 }
 
-export function useGroupCapitalGains({ groupId, fyStart, year }: GroupCgtOptions) {
+export function useGroupCapitalGains({ groupId, range, customStart, customEnd }: GroupRangedOptions) {
+  const params = dateRangeToParams(range, customStart, customEnd);
   return useQuery({
-    queryKey: ['group-capital-gains', groupId, fyStart, year],
+    queryKey: ['group-capital-gains', groupId, range, customStart, customEnd],
     queryFn: async () => {
       const { data } = await api.get<GroupCapitalGain[]>(
         `/api/groups/${groupId}/capital-gains`,
-        { params: { fyStart, year } },
+        { params },
       );
       return data;
     },
-    enabled: !!groupId && !!year,
+    enabled: !!groupId,
+  });
+}
+
+// ── Group Cash Flows ─────────────────────────────────────────
+export function useGroupCashFlows({ groupId, range, customStart, customEnd }: GroupRangedOptions) {
+  const params = dateRangeToParams(range, customStart, customEnd);
+  return useQuery({
+    queryKey: ['group-cash-flows', groupId, range, customStart, customEnd],
+    queryFn: async () => {
+      const { data } = await api.get<{
+        transactions: any[];
+        summary: { total_deposited: number; total_withdrawn: number; net_deposited: number };
+      }>(`/api/groups/${groupId}/cash-flows`, { params });
+      return data;
+    },
+    enabled: !!groupId,
   });
 }
 

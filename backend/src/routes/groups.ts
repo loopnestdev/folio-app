@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth';
 import { requireApproved } from '../middleware/requireApproved';
 import { supabase } from '../lib/supabase';
-import { calculateHoldings, calculateCapitalGains, calculateCashPosition } from '../services/calculations/holdings';
+import { calculateHoldings, calculateCapitalGains, calculateCapitalGainsByRange, calculateCashPosition } from '../services/calculations/holdings';
 import { computeStatistics, computeMonthlyReturnMap, computeMonthlyReturnMapModifiedDietz, alignReturnMaps } from '../services/calculations/statistics';
 import {
   getHistoricalPrices, getBenchmarkPrices, getCurrentPrices, BENCHMARKS,
@@ -604,46 +604,40 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
 });
 
 // ── GET /api/groups/:id/capital-gains ────────────────────────
-// Combined CGT across all portfolios, with FX conversion at each disposal date
-// (ATO-compliant: the rate used is the rate on the day of each sell, not today).
+// Combined CGT across all portfolios for an arbitrary date range.
+// FX conversion uses the disposal-date rate (ATO-compliant).
+// Accepts start_date / end_date (YYYY-MM-DD). Defaults: all history → today.
 router.get('/:id/capital-gains', async (req: AuthenticatedRequest, res: any) => {
   const group = await getGroup(req.params.id as string, req.userId!);
   if (!group) { res.status(404).json({ error: 'Group not found' }); return; }
 
-  const schema = z.object({
-    fyStart: z.enum(['january', 'july']).default('july'),
-    year:    z.string().regex(/^\d{4}$/).default(String(new Date().getFullYear())),
-  });
-  const params = schema.safeParse(req.query);
-  if (!params.success) { res.status(400).json({ error: params.error.flatten() }); return; }
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const { start_date, end_date } = req.query as Record<string, string>;
+  const fromDate = start_date ?? '2000-01-01';
+  const toDate   = end_date   ?? todayStr;
 
   try {
     const portfolios = await getGroupPortfolios(req.params.id as string, req.userId!);
     const baseCurrency: string = group.base_currency ?? 'AUD';
 
-    // Step 1 — compute all CGT lots per portfolio in parallel.
+    // Step 1 — compute all CGT lots per portfolio using the date range.
     const portfolioLots = await Promise.all(
       portfolios.map(async (portfolio) => {
         const trades = await getPortfolioTrades(portfolio.id);
-        if (!trades.length) return { portfolio, lots: [] as ReturnType<typeof calculateCapitalGains> };
-        const lots = calculateCapitalGains(trades as any, params.data.fyStart, parseInt(params.data.year));
+        if (!trades.length) return { portfolio, lots: [] as ReturnType<typeof calculateCapitalGainsByRange> };
+        const lots = calculateCapitalGainsByRange(trades as any, fromDate, toDate);
         return { portfolio, lots };
       }),
     );
 
-    // Step 2 — collect every unique (currency, sell_date) pair that needs conversion.
-    // Using the disposal-date rate is an ATO requirement; the same asset sold on
-    // different days will get different FX rates.
+    // Step 2 — collect unique (currency, sell_date) pairs needing FX conversion.
     const fxPairSet = new Set<string>();
     for (const { portfolio, lots } of portfolioLots) {
       if (portfolio.currency === baseCurrency) continue;
-      for (const lot of lots) {
-        fxPairSet.add(`${portfolio.currency}|${lot.sell_date}`);
-      }
+      for (const lot of lots) fxPairSet.add(`${portfolio.currency}|${lot.sell_date}`);
     }
 
-    // Step 3 — fetch all required rates in parallel (the set already deduplicates
-    // so we never call the API twice for the same (currency, date) pair).
+    // Step 3 — fetch FX rates in parallel (deduped by pair).
     const fxCache = new Map<string, number>();
     await Promise.all(
       [...fxPairSet].map(async (key) => {
@@ -651,19 +645,16 @@ router.get('/:id/capital-gains', async (req: AuthenticatedRequest, res: any) => 
         fxCache.set(key, await getForexRate(cur, baseCurrency, date));
       }),
     );
-    const getFx = (currency: string, date: string): number => {
-      if (currency === baseCurrency) return 1;
-      return fxCache.get(`${currency}|${date}`) ?? 1;
-    };
+    const getFx = (currency: string, date: string): number =>
+      currency === baseCurrency ? 1 : (fxCache.get(`${currency}|${date}`) ?? 1);
 
-    // Step 4 — build response using the disposal-date FX for each lot.
+    // Step 4 — build response with disposal-date FX for each lot.
     const allGains: any[] = [];
     for (const { portfolio, lots } of portfolioLots) {
       for (const lot of lots) {
         const fx = getFx(portfolio.currency, lot.sell_date);
         allGains.push({
           ...lot,
-          // Map backend CgtLot fields to frontend CapitalGain shape
           is_long_term:            lot.hold_days >= 365,
           hold_period_days:        lot.hold_days,
           cgt_discount_applicable: lot.cgt_discount_eligible,
@@ -671,19 +662,82 @@ router.get('/:id/capital-gains', async (req: AuthenticatedRequest, res: any) => 
           portfolio_id:            portfolio.id,
           portfolio_name:          portfolio.name,
           portfolio_currency:      portfolio.currency,
-          // fx_rate here is the rate on the sell date, not today's rate
           fx_rate:                 fx,
-          // net_gain_base / gross_gain_base are converted at the disposal-date rate
-          // so the frontend summary stats are ATO-compliant totals.
           net_gain_base:           lot.net_gain   * fx,
           gross_gain_base:         lot.gross_gain * fx,
         });
       }
     }
 
-    // Sort by sell_date descending
     allGains.sort((a, b) => b.sell_date.localeCompare(a.sell_date));
     res.json(allGains);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/groups/:id/cash-flows ────────────────────────────
+// Deposits and withdrawals across all portfolios, converted to base currency.
+router.get('/:id/cash-flows', async (req: AuthenticatedRequest, res: any) => {
+  const group = await getGroup(req.params.id as string, req.userId!);
+  if (!group) { res.status(404).json({ error: 'Group not found' }); return; }
+
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const { start_date, end_date } = req.query as Record<string, string>;
+  const fromDate = start_date ?? '2000-01-01';
+  const toDate   = end_date   ?? todayStr;
+  const baseCurrency: string = group.base_currency ?? 'AUD';
+
+  try {
+    const portfolios = await getGroupPortfolios(req.params.id as string, req.userId!);
+
+    const uniqueCurrencies = [...new Set(portfolios.map((p) => p.currency))].filter((c) => c !== baseCurrency);
+    const fxRates: Record<string, number> = { [baseCurrency]: 1 };
+    await Promise.all(uniqueCurrencies.map(async (cur) => {
+      fxRates[cur] = await getForexRate(cur, baseCurrency, todayStr);
+    }));
+
+    // Collect all deposit/withdrawal trades across portfolios within range
+    const allTransactions: any[] = [];
+    let totalDeposited = 0;
+    let totalWithdrawn = 0;
+
+    for (const portfolio of portfolios) {
+      const fx = fxRates[portfolio.currency] ?? 1;
+
+      const { data } = await supabase
+        .from('trades')
+        .select('*, security:securities(*)')
+        .eq('portfolio_id', portfolio.id)
+        .in('trade_type', ['deposit', 'withdrawal'])
+        .gte('trade_date', fromDate)
+        .lte('trade_date', toDate)
+        .order('trade_date', { ascending: false });
+
+      for (const t of data ?? []) {
+        const nativeAmt = (t.price as number) * (t.quantity as number);
+        const baseAmt   = nativeAmt * fx;
+        allTransactions.push({
+          ...t,
+          portfolio_name:     portfolio.name,
+          portfolio_currency: portfolio.currency,
+          amount_base:        baseAmt,
+        });
+        if (t.trade_type === 'deposit')    totalDeposited += baseAmt;
+        if (t.trade_type === 'withdrawal') totalWithdrawn += baseAmt;
+      }
+    }
+
+    allTransactions.sort((a, b) => b.trade_date.localeCompare(a.trade_date));
+
+    res.json({
+      transactions: allTransactions,
+      summary: {
+        total_deposited: totalDeposited,
+        total_withdrawn: totalWithdrawn,
+        net_deposited:   totalDeposited - totalWithdrawn,
+      },
+    });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

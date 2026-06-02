@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth';
 import { requireApproved } from '../middleware/requireApproved';
 import { supabase } from '../lib/supabase';
-import { calculateHoldings, calculateCapitalGains, calculateCashPosition } from '../services/calculations/holdings';
+import { calculateHoldings, calculateCapitalGains, calculateCapitalGainsByRange, calculateCashPosition } from '../services/calculations/holdings';
 import { computeStatistics, computeMonthlyReturnMap, computeMonthlyReturnMapModifiedDietz, alignReturnMaps } from '../services/calculations/statistics';
 import { getHistoricalPrices, getBenchmarkPrices, getCurrentPrices, BENCHMARKS, enrichSecurityMetadata } from '../services/market-data/yahoo';
 import { format, subYears, startOfYear } from 'date-fns';
@@ -983,45 +983,83 @@ router.get('/:id/reports/drawdown', async (req: AuthenticatedRequest, res: any) 
 });
 
 // GET /api/portfolios/:id/reports/capital-gains
-// Returns CapitalGain[] — the frontend computes summary stats in-page.
-// Field mapping: CgtLot → CapitalGain (hold_days→hold_period_days, etc.)
+// Returns CapitalGain[] for any date range. Field mapping: CgtLot → CapitalGain.
+// Accepts start_date / end_date (YYYY-MM-DD). Defaults: all history → today.
 router.get('/:id/reports/capital-gains', async (req: AuthenticatedRequest, res: any) => {
   const id = req.params.id as string;
   if (!(await verifyOwner(id, req.userId!))) { res.status(404).json({ error: 'Portfolio not found' }); return; }
 
-  const schema = z.object({
-    fyStart: z.enum(['january', 'july']).default('july'),
-    year: z.string().regex(/^\d{4}$/).default(String(new Date().getFullYear())),
-  });
-  const params = schema.safeParse(req.query);
-  if (!params.success) { res.status(400).json({ error: params.error.flatten() }); return; }
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const { start_date, end_date } = req.query as Record<string, string>;
+  const fromDate = start_date ?? '2000-01-01';
+  const toDate   = end_date   ?? todayStr;
 
   try {
     const trades = await getPortfolioTrades(id);
-    const lots = calculateCapitalGains(trades as any, params.data.fyStart, parseInt(params.data.year));
+    const lots   = calculateCapitalGainsByRange(trades as any, fromDate, toDate);
 
     const gains = lots.map((l, idx) => ({
-      id: `${l.symbol}-${l.buy_date}-${l.sell_date}-${idx}`,
-      portfolio_id: id,
-      symbol: l.symbol,
-      security_name: l.security_name,
-      buy_date: l.buy_date,
-      sell_date: l.sell_date,
-      hold_period_days: l.hold_days,
-      quantity: l.quantity,
-      cost_base: l.cost_base,
-      proceeds: l.proceeds,
-      gross_gain: l.gross_gain,
+      id:                     `${l.symbol}-${l.buy_date}-${l.sell_date}-${idx}`,
+      portfolio_id:            id,
+      symbol:                  l.symbol,
+      security_name:           l.security_name,
+      buy_date:                l.buy_date,
+      sell_date:               l.sell_date,
+      hold_period_days:        l.hold_days,
+      quantity:                l.quantity,
+      cost_base:               l.cost_base,
+      proceeds:                l.proceeds,
+      gross_gain:              l.gross_gain,
       cgt_discount_applicable: l.cgt_discount_eligible,
-      cgt_discount_pct: l.gross_gain > 0 ? (l.cgt_discount_amount / l.gross_gain) * 100 : 0,
-      net_gain: l.net_gain,
-      is_long_term: l.hold_days >= 365,
+      cgt_discount_pct:        l.gross_gain > 0 ? (l.cgt_discount_amount / l.gross_gain) * 100 : 0,
+      net_gain:                l.net_gain,
+      is_long_term:            l.hold_days >= 365,
     }));
 
     res.json(gains);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// GET /api/portfolios/:id/reports/cash-flows
+// Returns deposit and withdrawal transactions within the date range, plus totals.
+router.get('/:id/reports/cash-flows', async (req: AuthenticatedRequest, res: any) => {
+  const id = req.params.id as string;
+  if (!(await verifyOwner(id, req.userId!))) { res.status(404).json({ error: 'Portfolio not found' }); return; }
+
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const { start_date, end_date } = req.query as Record<string, string>;
+  const fromDate = start_date ?? '2000-01-01';
+  const toDate   = end_date   ?? todayStr;
+
+  const { data, error } = await supabase
+    .from('trades')
+    .select('*, security:securities(*)')
+    .eq('portfolio_id', id)
+    .in('trade_type', ['deposit', 'withdrawal'])
+    .gte('trade_date', fromDate)
+    .lte('trade_date', toDate)
+    .order('trade_date', { ascending: false });
+
+  if (error) { res.status(500).json({ error: error.message }); return; }
+
+  const transactions = data ?? [];
+  const totalDeposited = transactions
+    .filter((t: any) => t.trade_type === 'deposit')
+    .reduce((s: number, t: any) => s + (t.price as number) * (t.quantity as number), 0);
+  const totalWithdrawn = transactions
+    .filter((t: any) => t.trade_type === 'withdrawal')
+    .reduce((s: number, t: any) => s + (t.price as number) * (t.quantity as number), 0);
+
+  res.json({
+    transactions,
+    summary: {
+      total_deposited: totalDeposited,
+      total_withdrawn: totalWithdrawn,
+      net_deposited:   totalDeposited - totalWithdrawn,
+    },
+  });
 });
 
 // GET /api/portfolios/:id/reports/tax

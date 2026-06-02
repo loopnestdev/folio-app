@@ -1,50 +1,52 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { useSettings } from '../../contexts/SettingsContext';
 import { useCapitalGains } from '../../hooks/useReports';
 import { useGroupCapitalGains } from '../../hooks/useGroupReports';
 import { useReportViewSwitcher } from '../../hooks/useReportViewSwitcher';
 import { ReportViewSwitcher } from '../../components/ui/ReportViewSwitcher';
+import { DateRangePicker } from '../../components/ui/DateRangePicker';
 import { Card } from '../../components/ui/Card';
-import { Select } from '../../components/ui/Select';
 import { Table } from '../../components/ui/Table';
 import { StatCard } from '../../components/ui/StatCard';
 import { Badge } from '../../components/ui/Badge';
 import { PageLoader } from '../../components/ui/LoadingSpinner';
 import { formatCurrency, formatDate, getValueColor } from '../../lib/utils';
-import type { CapitalGain } from '../../types';
-
-function getFinancialYears(type: 'jan-dec' | 'jul-jun') {
-  const y = new Date().getFullYear();
-  const years = [];
-  for (let i = y; i >= y - 5; i--) {
-    if (type === 'jan-dec') years.push({ label: `${i}`, value: `${i}` });
-    else years.push({ label: `${i - 1}–${i}`, value: `${i}` });
-  }
-  return years;
-}
+import type { CapitalGain, DateRange } from '../../types';
 
 export function CapitalGainsPage() {
   const { id } = useParams<{ id: string }>();
   const view = useReportViewSwitcher(id);
   const currency = view.currency;
-  const { financialYear: fyType } = useSettings();
 
-  const currentYear = new Date().getFullYear();
-  const [fyStart, setFyStart] = useState<'january' | 'july'>(fyType === 'jul-jun' ? 'july' : 'january');
-  const [year, setYear]       = useState(String(currentYear));
+  const [range, setRange]           = useState<DateRange>('ALL');
+  const [customStart, setCustomStart] = useState<string>();
+  const [customEnd, setCustomEnd]     = useState<string>();
 
-  const years = getFinancialYears(fyStart === 'july' ? 'jul-jun' : 'jan-dec');
+  const handleRangeChange = (r: DateRange, start?: string, end?: string) => {
+    setRange(r);
+    setCustomStart(start);
+    setCustomEnd(end);
+  };
 
-  const { data: indGains = [], isLoading: indLoading } = useCapitalGains({ portfolioId: view.portfolioId, fyStart, year });
-  const { data: grpRaw   = [], isLoading: grpLoading } = useGroupCapitalGains({ groupId: view.groupId, fyStart, year });
+  const { data: indGains = [], isLoading: indLoading } = useCapitalGains({
+    portfolioId: view.portfolioId, range, customStart, customEnd,
+  });
+  const { data: grpRaw = [], isLoading: grpLoading } = useGroupCapitalGains({
+    groupId: view.groupId, range, customStart, customEnd,
+  });
+
   // GroupCapitalGain has net_gain_base (in base currency); map to same shape for display
-  const grpGains = grpRaw.map((g) => ({ ...g, net_gain: g.net_gain_base ?? g.net_gain, gross_gain: g.gross_gain_base ?? g.gross_gain }));
+  const grpGains = grpRaw.map((g) => ({
+    ...g,
+    net_gain:   g.net_gain_base   ?? g.net_gain,
+    gross_gain: g.gross_gain_base ?? g.gross_gain,
+  }));
+
   const gains     = view.viewMode === 'group' ? grpGains : indGains;
   const isLoading = view.viewMode === 'group' ? grpLoading : indLoading;
 
-  const totalNet      = gains.reduce((s, g) => s + g.net_gain, 0);
-  const totalDiscount = gains.reduce((s, g) => s + (g.cgt_discount_applicable ? g.gross_gain * (g.cgt_discount_pct / 100) : 0), 0);
+  const totalNet       = gains.reduce((s, g) => s + g.net_gain, 0);
+  const totalDiscount  = gains.reduce((s, g) => s + (g.cgt_discount_applicable ? g.gross_gain * (g.cgt_discount_pct / 100) : 0), 0);
   const shortTermGains = gains.filter((g) => !g.is_long_term).reduce((s, g) => s + g.net_gain, 0);
   const longTermGains  = gains.filter((g) =>  g.is_long_term).reduce((s, g) => s + g.net_gain, 0);
 
@@ -96,11 +98,12 @@ export function CapitalGainsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Capital Gains</h1>
-          <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">CGT report for sold positions{view.displayName ? ` · ${view.displayName}` : ''}</p>
+          <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">
+            Realised gains from sold positions{view.displayName ? ` · ${view.displayName}` : ''}
+          </p>
         </div>
         {view.hasGroups && (
           <ReportViewSwitcher
@@ -110,45 +113,23 @@ export function CapitalGainsPage() {
           />
         )}
       </div>
-      <div className="flex flex-wrap gap-3 items-end">
-        <Select
-          label="FY Type"
-          options={[
-            { label: 'July – June (AU)', value: 'july' },
-            { label: 'January – December', value: 'january' },
-          ]}
-          value={fyStart}
-          onChange={(v) => {
-            setFyStart(v as 'january' | 'july');
-            setYear(String(new Date().getFullYear()));
-          }}
-          containerClassName="w-52"
-        />
-        <Select
-          label="Year"
-          options={years}
-          value={year}
-          onChange={setYear}
-          containerClassName="w-36"
-        />
-      </div>
 
-      {/* Summary */}
+      <DateRangePicker value={range} customStart={customStart} customEnd={customEnd} onChange={handleRangeChange} />
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Short-Term Gains" value={formatCurrency(shortTermGains, currency)} />
-        <StatCard label="Long-Term Gains"  value={formatCurrency(longTermGains, currency)} />
-        <StatCard label="CGT Discount"     value={formatCurrency(totalDiscount, currency)} />
-        <StatCard label="Net Taxable Gain" value={formatCurrency(totalNet, currency)} />
+        <StatCard label="Short-Term Gains" value={formatCurrency(shortTermGains, currency)} trend={shortTermGains} />
+        <StatCard label="Long-Term Gains"  value={formatCurrency(longTermGains,  currency)} trend={longTermGains} />
+        <StatCard label="CGT Discount"     value={formatCurrency(totalDiscount,  currency)} />
+        <StatCard label="Net Taxable Gain" value={formatCurrency(totalNet,       currency)} trend={totalNet} />
       </div>
 
-      {/* Table */}
       {isLoading ? <PageLoader /> : (
         <Card padding="none">
           <Table<CapitalGain>
             columns={columns as Parameters<typeof Table<CapitalGain>>[0]['columns']}
             data={gains}
             keyField="id"
-            emptyMessage="No capital gains in this period"
+            emptyMessage="No realised gains in this period"
           />
         </Card>
       )}

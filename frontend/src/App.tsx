@@ -25,6 +25,7 @@ import { StatisticsPage } from './pages/reports/StatisticsPage';
 import { TaxPage } from './pages/reports/TaxPage';
 import { DividendsPage } from './pages/reports/DividendsPage';
 import { CapitalGainsPage } from './pages/reports/CapitalGainsPage';
+import { CashFlowPage } from './pages/reports/CashFlowPage';
 import { DiversityPage } from './pages/reports/DiversityPage';
 import { DrawdownPage } from './pages/reports/DrawdownPage';
 import { AdminPage } from './pages/AdminPage';
@@ -64,6 +65,7 @@ function ProtectedRoutes() {
                 <Route path="portfolios/:id/reports/tax" element={<TaxPage />} />
                 <Route path="portfolios/:id/reports/dividends" element={<DividendsPage />} />
                 <Route path="portfolios/:id/reports/capital-gains" element={<CapitalGainsPage />} />
+                <Route path="portfolios/:id/reports/cash-flows" element={<CashFlowPage />} />
                 <Route path="portfolios/:id/reports/diversity" element={<DiversityPage />} />
                 <Route path="portfolios/:id/reports/drawdown" element={<DrawdownPage />} />
                 <Route path="groups/:id" element={<GroupDashboardPage />} />

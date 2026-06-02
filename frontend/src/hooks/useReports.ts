@@ -52,28 +52,32 @@ export function useDividends({ portfolioId, range = '1Y', customStart, customEnd
   });
 }
 
-// Capital gains report — uses FY-based params (fyStart + year) to match the backend.
-// The backend /reports/capital-gains endpoint only reads fyStart and year; the old
-// date-range params (start_date / end_date) were silently ignored.
-export function useCapitalGains({
-  portfolioId,
-  fyStart = 'july',
-  year,
-}: {
-  portfolioId?: string;
-  fyStart?: 'january' | 'july';
-  year?: string;
-}) {
-  const currentYear = String(new Date().getFullYear());
-  const y = year ?? currentYear;
-
+// Capital gains report — accepts a standard date range (same as other report hooks).
+export function useCapitalGains({ portfolioId, range = 'ALL', customStart, customEnd }: ReportOptions) {
+  const params = dateRangeToParams(range, customStart, customEnd);
   return useQuery({
-    queryKey: ['capital-gains', portfolioId, fyStart, y],
+    queryKey: ['capital-gains', portfolioId, range, customStart, customEnd],
     queryFn: async () => {
       const { data } = await api.get<CapitalGain[]>(
         `/api/portfolios/${portfolioId}/reports/capital-gains`,
-        { params: { fyStart, year: y } },
+        { params },
       );
+      return data;
+    },
+    enabled: !!portfolioId,
+  });
+}
+
+// Cash flows report — deposits and withdrawals for a date range.
+export function useCashFlows({ portfolioId, range = 'ALL', customStart, customEnd }: ReportOptions) {
+  const params = dateRangeToParams(range, customStart, customEnd);
+  return useQuery({
+    queryKey: ['cash-flows', portfolioId, range, customStart, customEnd],
+    queryFn: async () => {
+      const { data } = await api.get<{
+        transactions: any[];
+        summary: { total_deposited: number; total_withdrawn: number; net_deposited: number };
+      }>(`/api/portfolios/${portfolioId}/reports/cash-flows`, { params });
       return data;
     },
     enabled: !!portfolioId,

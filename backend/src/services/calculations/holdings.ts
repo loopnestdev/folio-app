@@ -251,3 +251,88 @@ export function calculateCapitalGains(
 
   return cgtLots;
 }
+
+/**
+ * Same FIFO CGT calculation as calculateCapitalGains but accepts an arbitrary
+ * date range instead of a financial year. All sells with sell_date within
+ * [fromDate, toDate] are included; earlier sells still consume FIFO lots so
+ * cost bases are always correct.
+ */
+export function calculateCapitalGainsByRange(
+  trades: TradeWithSecurity[],
+  fromDate: string,
+  toDate: string,
+): CgtLot[] {
+  const fifo: Record<string, FifoLot[]> = {};
+  const securityNames: Record<string, string> = {};
+  const cgtLots: CgtLot[] = [];
+
+  const sorted = [...trades].sort((a, b) => a.trade_date.localeCompare(b.trade_date));
+
+  for (const trade of sorted) {
+    if (!trade.security) continue;
+    const sym = trade.security.symbol;
+    securityNames[sym] = trade.security.name ?? sym;
+
+    if (!fifo[sym]) fifo[sym] = [];
+
+    if (trade.trade_type === 'buy' || trade.trade_type === 'drp' || trade.trade_type === 'transfer_in') {
+      const rate = trade.exchange_rate ?? 1;
+      const brok = trade.trade_type === 'transfer_in' ? 0 : (trade.brokerage ?? 0);
+      const unitCost = (trade.price * trade.quantity + brok) / trade.quantity;
+      fifo[sym].push({
+        trade_date:    trade.trade_date,
+        quantity:      trade.quantity,
+        unit_cost:     unitCost,
+        unit_cost_aud: unitCost * rate,
+        currency:      trade.currency,
+        exchange_rate: rate,
+      });
+    } else if (trade.trade_type === 'sell') {
+      const inRange   = trade.trade_date >= fromDate && trade.trade_date <= toDate;
+      const sellRate  = trade.exchange_rate ?? 1;
+      const netPricePerUnitAud = ((trade.price * trade.quantity - trade.brokerage) / trade.quantity) * sellRate;
+
+      let remaining = trade.quantity;
+      while (remaining > 0 && fifo[sym].length > 0) {
+        const lot        = fifo[sym][0];
+        const qtyFromLot = Math.min(lot.quantity, remaining);
+        const costBase   = qtyFromLot * lot.unit_cost_aud;
+        const proceeds   = qtyFromLot * netPricePerUnitAud;
+        const grossGain  = proceeds - costBase;
+
+        if (inRange) {
+          const buyDate  = new Date(lot.trade_date);
+          const sellDate = new Date(trade.trade_date);
+          const holdDays = Math.floor((sellDate.getTime() - buyDate.getTime()) / 86400000);
+          const discountEligible = holdDays >= 365 && grossGain > 0;
+          const discountAmount   = discountEligible ? grossGain * 0.5 : 0;
+          cgtLots.push({
+            symbol:               sym,
+            security_name:        securityNames[sym] ?? sym,
+            buy_date:             lot.trade_date,
+            sell_date:            trade.trade_date,
+            quantity:             qtyFromLot,
+            cost_base:            costBase,
+            proceeds,
+            gross_gain:           grossGain,
+            hold_days:            holdDays,
+            cgt_discount_eligible: discountEligible,
+            cgt_discount_amount:  discountAmount,
+            net_gain:             grossGain - discountAmount,
+          });
+        }
+
+        if (lot.quantity <= remaining) {
+          remaining -= lot.quantity;
+          fifo[sym].shift();
+        } else {
+          lot.quantity -= remaining;
+          remaining = 0;
+        }
+      }
+    }
+  }
+
+  return cgtLots;
+}

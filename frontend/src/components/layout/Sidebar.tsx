@@ -13,6 +13,7 @@ import {
   LineChart,
   Calendar,
   DollarSign,
+  Wallet,
   Settings,
   Shield,
   X,
@@ -122,6 +123,11 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           label: 'Capital Gains',
           to: `/portfolios/${portfolioId}/reports/capital-gains`,
           icon: <FileText size={18} />,
+        },
+        {
+          label: 'Cash Flow',
+          to: `/portfolios/${portfolioId}/reports/cash-flows`,
+          icon: <Wallet size={18} />,
         },
         {
           label: 'Diversity',
