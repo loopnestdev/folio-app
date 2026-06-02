@@ -20,6 +20,17 @@ const PRESETS: { label: string; value: DateRange }[] = [
   { label: 'Custom', value: 'CUSTOM' },
 ];
 
+/** Compute the current Australian Financial Year dates (Jul 1 – Jun 30). */
+function getCurrentAuFy(): { start: string; end: string } {
+  const now = new Date();
+  const year = now.getFullYear();
+  const fyStartYear = now.getMonth() < 6 ? year - 1 : year; // before July → previous FY start
+  return {
+    start: `${fyStartYear}-07-01`,
+    end:   `${fyStartYear + 1}-06-30`,
+  };
+}
+
 export function DateRangePicker({ value, customStart, customEnd, onChange, className }: DateRangePickerProps) {
   const [showCustom, setShowCustom] = useState(value === 'CUSTOM');
   const [localStart, setLocalStart] = useState(customStart || '');
@@ -33,6 +44,18 @@ export function DateRangePicker({ value, customStart, customEnd, onChange, class
       onChange(preset);
     }
   };
+
+  const handleAuFyClick = () => {
+    const { start, end } = getCurrentAuFy();
+    setShowCustom(true);
+    setLocalStart(start);
+    setLocalEnd(end);
+    onChange('CUSTOM', start, end);
+  };
+
+  // Determine if the AU FY quick-pick is currently active
+  const { start: fyStart, end: fyEnd } = getCurrentAuFy();
+  const isAuFyActive = value === 'CUSTOM' && customStart === fyStart && customEnd === fyEnd;
 
   const handleCustomApply = () => {
     if (localStart && localEnd) {
@@ -57,6 +80,19 @@ export function DateRangePicker({ value, customStart, customEnd, onChange, class
             {preset.label}
           </button>
         ))}
+        {/* AU Financial Year quick-pick — always Jul 1 to Jun 30 of the current FY */}
+        <button
+          onClick={handleAuFyClick}
+          className={cn(
+            'px-3 py-1 rounded-full text-[13px] font-medium transition-colors',
+            isAuFyActive
+              ? 'bg-[var(--c-canvas)] text-[var(--c-primary)] shadow-sm'
+              : 'text-[var(--c-ink-mute)] hover:text-[var(--c-ink)]',
+          )}
+          title={`Australian Financial Year: ${fyStart} to ${fyEnd}`}
+        >
+          AU FY
+        </button>
       </div>
 
       {showCustom && (

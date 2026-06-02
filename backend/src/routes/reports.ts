@@ -533,8 +533,18 @@ router.get('/:id/statistics', async (req: AuthenticatedRequest, res: any) => {
   const id = req.params.id as string;
   if (!(await verifyOwner(id, req.userId!))) { res.status(404).json({ error: 'Portfolio not found' }); return; }
 
-  const { range = 'ALL', from, to } = req.query as Record<string, string>;
-  const { fromDate, toDate } = getDateRange(range, from, to);
+  // Accept start_date/end_date (matching what the frontend sends) with fallback to
+  // the legacy range/from/to params so existing callers aren't broken.
+  const query = req.query as Record<string, string>;
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const fromDate = query.start_date ?? (() => {
+    const { fromDate: fd } = getDateRange(query.range ?? 'ALL', query.from, query.to);
+    return fd;
+  })();
+  const toDate = query.end_date ?? (() => {
+    const { toDate: td } = getDateRange(query.range ?? 'ALL', query.from, query.to);
+    return td;
+  })();
 
   try {
     const trades = await getPortfolioTrades(id);
@@ -542,10 +552,17 @@ router.get('/:id/statistics', async (req: AuthenticatedRequest, res: any) => {
     const investmentTrades = trades.filter(t => t.trade_type !== 'deposit' && t.trade_type !== 'withdrawal');
     const symbols = [...new Set(investmentTrades.filter(t => t.security).map(t => t.security!.symbol))];
 
+    // Only fetch prices from the earliest actual trade date (or fromDate, whichever is later)
+    // to avoid requesting decades of data for "All" ranges on young portfolios.
+    const earliestTrade = investmentTrades.length
+      ? investmentTrades.reduce((min, t) => t.trade_date < min ? t.trade_date : min, investmentTrades[0].trade_date)
+      : fromDate;
+    const fetchFrom = fromDate > earliestTrade ? fromDate : earliestTrade;
+
     const pricesBySymbol = await Promise.all(
       symbols.map(async (sym) => {
         const sec = trades.find(t => t.security?.symbol === sym)?.security;
-        return { symbol: sym, prices: await getHistoricalPrices(sym, fromDate, toDate, sec?.id, sec?.exchange) };
+        return { symbol: sym, prices: await getHistoricalPrices(sym, fetchFrom, toDate, sec?.id, sec?.exchange) };
       })
     );
 
@@ -557,11 +574,13 @@ router.get('/:id/statistics', async (req: AuthenticatedRequest, res: any) => {
       }
     }
 
-    const portfolioValues = Object.keys(priceMap).sort().map((date) => ({
+    const allPortfolioValues = Object.keys(priceMap).sort().map((date) => ({
       date,
       value: calculateHoldings(trades.filter(t => t.trade_date <= date) as any, priceMap[date]).reduce((s, h) => s + (h.market_value ?? 0), 0),
     }));
 
+    // Filter to the requested date window (fromDate may be after earliest trade date)
+    const portfolioValues = allPortfolioValues.filter(v => v.date >= fromDate && v.date <= toDate);
     const portfolioReturns = computeMonthlyReturns(portfolioValues);
 
     const [asx200, sp500] = await Promise.all([

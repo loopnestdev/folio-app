@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Info } from 'lucide-react';
+import { Info, AlertTriangle } from 'lucide-react';
 import { useStatistics } from '../../hooks/useStatistics';
 import { useGroupStatistics } from '../../hooks/useGroupReports';
 import { useReportViewSwitcher } from '../../hooks/useReportViewSwitcher';
@@ -35,7 +35,7 @@ function StatRow({ label, value, description, positive }: StatRowProps) {
               <Info size={15} />
             </button>
             {showTip && (
-              <div className="absolute left-0 bottom-full mb-2 w-64 bg-[var(--c-ink)] text-white text-[13px] rounded-xl p-3 z-10 shadow-lg">
+              <div className="absolute left-0 bottom-full mb-2 w-64 bg-gray-900 text-gray-100 text-[13px] rounded-xl p-3 z-10 shadow-lg border border-gray-700">
                 {description}
               </div>
             )}
@@ -67,10 +67,11 @@ export function StatisticsPage() {
   const [customStart, setCustomStart] = useState<string>();
   const [customEnd, setCustomEnd] = useState<string>();
 
-  const { data: indStats, isLoading: indLoading } = useStatistics({ portfolioId: view.portfolioId, range, customStart, customEnd });
-  const { data: grpStats, isLoading: grpLoading } = useGroupStatistics({ groupId: view.groupId, range, customStart, customEnd });
+  const { data: indStats, isLoading: indLoading, isError: indError } = useStatistics({ portfolioId: view.portfolioId, range, customStart, customEnd });
+  const { data: grpStats, isLoading: grpLoading, isError: grpError } = useGroupStatistics({ groupId: view.groupId, range, customStart, customEnd });
   const stats     = view.viewMode === 'group' ? grpStats : indStats;
   const isLoading = view.viewMode === 'group' ? grpLoading : indLoading;
+  const isError   = view.viewMode === 'group' ? grpError  : indError;
 
   const handleRangeChange = (r: DateRange, start?: string, end?: string) => {
     setRange(r);
@@ -79,6 +80,10 @@ export function StatisticsPage() {
   };
 
   if (isLoading) return <PageLoader />;
+
+  // Helper: safe formatPercent — guards against null/undefined/NaN from API
+  const fmtPct = (v: number | null | undefined, decimals = 2) =>
+    formatPercent(v ?? 0, decimals);
 
   return (
     <div className="space-y-6">
@@ -97,7 +102,14 @@ export function StatisticsPage() {
       </div>
       <DateRangePicker value={range} customStart={customStart} customEnd={customEnd} onChange={handleRangeChange} />
 
-      {!stats ? (
+      {isError ? (
+        <Card>
+          <div className="flex flex-col items-center gap-3 py-12 text-center">
+            <AlertTriangle size={32} className="text-[var(--c-bear)] opacity-70" />
+            <p className="text-[15px] text-[var(--c-ink-mute)]">Could not load statistics for this period.<br />Try a shorter range or custom dates.</p>
+          </div>
+        </Card>
+      ) : !stats ? (
         <Card>
           <p className="text-[15px] text-[var(--c-ink-mute)] text-center py-12">No data available for the selected period.</p>
         </Card>
@@ -109,25 +121,25 @@ export function StatisticsPage() {
             <div>
               <StatRow
                 label="Total Return Annualized"
-                value={formatPercent(stats.total_return_annualized)}
+                value={fmtPct(stats.total_return_annualized)}
                 description="Annualized compounded return (CAGR) over the selected period."
-                positive={stats.total_return_annualized >= 0}
+                positive={(stats.total_return_annualized ?? 0) >= 0}
               />
               <StatRow
                 label="Winning Months"
-                value={formatPercent(stats.winning_months_pct, 1)}
+                value={fmtPct(stats.winning_months_pct, 1)}
                 description="Percentage of months with a positive return."
-                positive={stats.winning_months_pct >= 50}
+                positive={(stats.winning_months_pct ?? 0) >= 50}
               />
               <StatRow
                 label="Max Drawdown (Monthly)"
-                value={formatPercent(stats.max_drawdown ?? 0)}
+                value={fmtPct(stats.max_drawdown)}
                 description="Largest peak-to-trough decline based on monthly returns."
                 positive={(stats.max_drawdown ?? 0) >= 0}
               />
               <StatRow
                 label="Std Dev (Monthly)"
-                value={formatPercent(stats.std_dev_monthly)}
+                value={fmtPct(stats.std_dev_monthly)}
                 description="Standard deviation of monthly returns — a measure of volatility."
               />
             </div>
@@ -140,24 +152,24 @@ export function StatisticsPage() {
               <StatRow
                 label="Sharpe Ratio"
                 value={(stats.sharpe_ratio ?? 0).toFixed(2)}
-                description="Return per unit of risk (vs risk-free rate). Higher is better."
+                description="Return per unit of total risk (vs RBA cash rate ~4.35%). Higher is better. Above 1 is good; above 2 is excellent."
                 positive={(stats.sharpe_ratio ?? 0) >= 1}
               />
               <StatRow
                 label="Sortino Ratio"
                 value={(stats.sortino_ratio ?? 0).toFixed(2)}
-                description="Return per unit of downside risk. Penalizes only negative volatility."
+                description="Return per unit of downside risk only (ignores upside volatility). Very high values (>10) occur when losing months are few and small — mathematically correct but less meaningful with short track records."
                 positive={(stats.sortino_ratio ?? 0) >= 1}
               />
               <StatRow
                 label="Beta (vs ASX 200)"
                 value={(stats.beta ?? 0).toFixed(2)}
-                description="Sensitivity to market movements. Beta > 1 means more volatile than the market."
+                description="Sensitivity to ASX 200 movements. Beta < 1 means less volatile than the market; a low Beta here reflects a US-heavy portfolio with little ASX correlation."
               />
               <StatRow
                 label="Correlation vs S&P 500"
                 value={(stats.correlation_sp500 ?? 0).toFixed(2)}
-                description="Correlation with S&P 500. 1 = perfectly correlated, 0 = uncorrelated."
+                description="How closely the portfolio moves with the S&P 500. 1 = perfectly correlated, 0 = uncorrelated, –1 = inverse."
               />
             </div>
           </Card>
