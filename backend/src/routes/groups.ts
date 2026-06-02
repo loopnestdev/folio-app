@@ -4,7 +4,7 @@ import { authMiddleware } from '../middleware/auth';
 import { requireApproved } from '../middleware/requireApproved';
 import { supabase } from '../lib/supabase';
 import { calculateHoldings, calculateCapitalGains, calculateCashPosition } from '../services/calculations/holdings';
-import { computeStatistics, computeMonthlyReturns } from '../services/calculations/statistics';
+import { computeStatistics, computeMonthlyReturnMap, alignReturnMaps } from '../services/calculations/statistics';
 import {
   getHistoricalPrices, getBenchmarkPrices, getCurrentPrices, BENCHMARKS,
   getForexRate, enrichSecurityMetadata,
@@ -1110,18 +1110,24 @@ router.get('/:id/statistics', async (req: AuthenticatedRequest, res: any) => {
     const dailyValues = await buildGroupDailyValues(portfolios, fxRates, toDate);
     const inRange = dailyValues.filter((d) => d.date >= fromDate && d.date <= toDate);
 
-    const monthlyReturns = computeMonthlyReturns(inRange);
+    const portfolioReturnMap = computeMonthlyReturnMap(inRange);
+    const monthlyReturns     = Object.keys(portfolioReturnMap).sort().map(m => portfolioReturnMap[m]!);
 
     const [asx200, sp500] = await Promise.all([
       getBenchmarkPrices(BENCHMARKS.ASX200, fromDate, toDate),
       getBenchmarkPrices(BENCHMARKS.SP500,  fromDate, toDate),
     ]);
 
-    const benchReturns = computeMonthlyReturns(asx200.map((d) => ({ date: d.date, value: d.close })));
-    const sp500Returns  = computeMonthlyReturns(sp500.map((d) => ({ date: d.date, value: d.close })));
+    const asx200ReturnMap = computeMonthlyReturnMap(asx200.map((d) => ({ date: d.date, value: d.close })));
+    const sp500ReturnMap  = computeMonthlyReturnMap(sp500.map((d) => ({ date: d.date, value: d.close })));
 
-    const stats = computeStatistics(monthlyReturns, benchReturns, sp500Returns);
-    res.json({ ...stats, total_return: 0, total_return_pct: 0 });
+    const { portfolio: portForBeta, benchmark: benchAligned } = alignReturnMaps(portfolioReturnMap, asx200ReturnMap);
+    const { portfolio: portForCorr, benchmark: sp500Aligned  } = alignReturnMaps(portfolioReturnMap, sp500ReturnMap);
+
+    const stats    = computeStatistics(monthlyReturns, benchAligned, sp500Aligned);
+    const betaStats = computeStatistics(portForBeta, benchAligned, []);
+    const corrStats = computeStatistics(portForCorr, [], sp500Aligned);
+    res.json({ ...stats, beta: betaStats.beta, correlation_sp500: corrStats.correlation_sp500, total_return: 0, total_return_pct: 0 });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

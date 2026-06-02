@@ -3,10 +3,23 @@ import type { Statistics } from '../../types';
 // RBA cash rate ~4.35% annualized → monthly
 const RF_MONTHLY = 0.0435 / 12;
 
+/**
+ * Compute statistics from monthly return arrays.
+ *
+ * `portfolioReturns`  — full portfolio monthly returns (used for CAGR, Sharpe,
+ *                       Sortino, Max Drawdown, Std Dev, Winning Months).
+ * `benchmarkReturns`  — ASX 200 monthly returns, DATE-ALIGNED with `portfolioReturns`
+ *                       (same months, same order) for Beta computation.
+ * `sp500Returns`      — S&P 500 monthly returns, DATE-ALIGNED with `portfolioReturns`
+ *                       for Correlation computation.
+ *
+ * Call sites should date-align the benchmark arrays to the portfolio's months
+ * using `alignReturnMaps` before passing them here.
+ */
 export function computeStatistics(
   portfolioReturns: number[],
   benchmarkReturns: number[],
-  sp500Returns: number[]
+  sp500Returns: number[],
 ): Statistics {
   const n = portfolioReturns.length;
   if (n < 2) {
@@ -25,7 +38,8 @@ export function computeStatistics(
   const winning = portfolioReturns.filter((r) => r > 0).length;
   const winningMonthsPct = (winning / n) * 100;
 
-  // Max drawdown (monthly, based on cumulative wealth)
+  // Max drawdown (monthly, based on cumulative wealth index) — always a positive
+  // magnitude; displayed as negative in the UI (it represents a loss from peak).
   let peak = 1;
   let cumVal = 1;
   let maxDrawdown = 0;
@@ -41,7 +55,7 @@ export function computeStatistics(
   const avgExcess = mean(excessReturns);
   const sharpeRatio = stdDev > 0 ? (avgExcess / stdDev) * Math.sqrt(12) : 0;
 
-  // Sortino ratio (downside deviation)
+  // Sortino ratio (downside deviation, denominator uses n so infrequent losses dilute it)
   const downsideSquares = portfolioReturns
     .filter((r) => r < RF_MONTHLY)
     .map((r) => Math.pow(r - RF_MONTHLY, 2));
@@ -50,17 +64,23 @@ export function computeStatistics(
     : 0;
   const sortinoRatio = downsideStd > 0 ? (avgExcess / downsideStd) * Math.sqrt(12) : 0;
 
-  // Beta vs ASX 200 benchmark
-  const benchAvg = mean(benchmarkReturns);
-  const benchVar = variance(benchmarkReturns);
-  const cov = covariance(portfolioReturns, benchmarkReturns);
+  // Beta vs ASX 200 — use only the date-aligned pairs.
+  // benchmarkReturns must have the same length and cover the same months as portfolioReturns.
+  const nBeta = Math.min(portfolioReturns.length, benchmarkReturns.length);
+  const benchAligned = benchmarkReturns.slice(0, nBeta);
+  const portAlignedBeta = portfolioReturns.slice(0, nBeta);
+  const benchVar = variance(benchAligned);
+  const cov = covariance(portAlignedBeta, benchAligned);
   const beta = benchVar > 0 ? cov / benchVar : 0;
 
-  // Correlation vs S&P 500
-  const sp500Avg = mean(sp500Returns);
-  const sp500Std = standardDeviation(sp500Returns);
-  const covSP500 = covariance(portfolioReturns, sp500Returns);
-  const correlationSp500 = sp500Std > 0 && stdDev > 0 ? covSP500 / (stdDev * sp500Std) : 0;
+  // Correlation vs S&P 500 — date-aligned pairs.
+  const nCorr = Math.min(portfolioReturns.length, sp500Returns.length);
+  const sp500Aligned = sp500Returns.slice(0, nCorr);
+  const portAlignedCorr = portfolioReturns.slice(0, nCorr);
+  const sp500Std = standardDeviation(sp500Aligned);
+  const portStdCorr = standardDeviation(portAlignedCorr);
+  const covSP500 = covariance(portAlignedCorr, sp500Aligned);
+  const correlationSp500 = sp500Std > 0 && portStdCorr > 0 ? covSP500 / (portStdCorr * sp500Std) : 0;
 
   return {
     total_return_annualized: totalReturnAnnualized,
@@ -72,6 +92,69 @@ export function computeStatistics(
     beta,
     correlation_sp500: correlationSp500,
   };
+}
+
+/** Build a map of month-string → monthly return from a daily value series. */
+export function computeMonthlyReturnMap(
+  dailyValues: { date: string; value: number }[]
+): Record<string, number> {
+  if (dailyValues.length < 2) return {};
+
+  // Keep the LAST value seen per month
+  const lastOfMonth: Record<string, number> = {};
+  for (const { date, value } of dailyValues) {
+    lastOfMonth[date.slice(0, 7)] = value;
+  }
+
+  const months = Object.keys(lastOfMonth).sort();
+  const result: Record<string, number> = {};
+  for (let i = 1; i < months.length; i++) {
+    const prev = lastOfMonth[months[i - 1]]!;
+    const curr = lastOfMonth[months[i]]!;
+    if (prev > 0) result[months[i]] = (curr - prev) / prev;
+  }
+  return result;
+}
+
+/**
+ * Given portfolio and benchmark monthly return maps (keyed by "YYYY-MM"),
+ * return arrays covering only the months that appear in BOTH maps, in date order.
+ * This ensures Beta / Correlation are computed on the same calendar periods.
+ */
+export function alignReturnMaps(
+  portfolioMap: Record<string, number>,
+  benchmarkMap: Record<string, number>,
+): { portfolio: number[]; benchmark: number[] } {
+  const commonMonths = Object.keys(portfolioMap)
+    .filter((m) => m in benchmarkMap)
+    .sort();
+  return {
+    portfolio: commonMonths.map((m) => portfolioMap[m]!),
+    benchmark: commonMonths.map((m) => benchmarkMap[m]!),
+  };
+}
+
+/** @deprecated Use computeMonthlyReturnMap for date-aligned statistics. */
+export function computeMonthlyReturns(
+  dailyValues: { date: string; value: number }[]
+): number[] {
+  if (dailyValues.length < 2) return [];
+
+  const byMonth: Record<string, { first: number; last: number }> = {};
+  for (const { date, value } of dailyValues) {
+    const month = date.slice(0, 7);
+    if (!byMonth[month]) byMonth[month] = { first: value, last: value };
+    byMonth[month].last = value;
+  }
+
+  const months = Object.keys(byMonth).sort();
+  const returns: number[] = [];
+  for (let i = 1; i < months.length; i++) {
+    const prev = byMonth[months[i - 1]]!.last;
+    const curr = byMonth[months[i]]!.last;
+    if (prev > 0) returns.push((curr - prev) / prev);
+  }
+  return returns;
 }
 
 function mean(arr: number[]): number {
@@ -94,26 +177,4 @@ function covariance(a: number[], b: number[]): number {
   const avgA = mean(a.slice(0, n));
   const avgB = mean(b.slice(0, n));
   return a.slice(0, n).reduce((s, v, i) => s + (v - avgA) * ((b[i] ?? 0) - avgB), 0) / n;
-}
-
-export function computeMonthlyReturns(
-  dailyValues: { date: string; value: number }[]
-): number[] {
-  if (dailyValues.length < 2) return [];
-
-  const byMonth: Record<string, { first: number; last: number }> = {};
-  for (const { date, value } of dailyValues) {
-    const month = date.slice(0, 7); // "YYYY-MM"
-    if (!byMonth[month]) byMonth[month] = { first: value, last: value };
-    byMonth[month].last = value;
-  }
-
-  const months = Object.keys(byMonth).sort();
-  const returns: number[] = [];
-  for (let i = 1; i < months.length; i++) {
-    const prev = byMonth[months[i - 1]]!.last;
-    const curr = byMonth[months[i]]!.last;
-    if (prev > 0) returns.push((curr - prev) / prev);
-  }
-  return returns;
 }

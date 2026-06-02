@@ -133,9 +133,9 @@ export function StatisticsPage() {
               />
               <StatRow
                 label="Max Drawdown (Monthly)"
-                value={fmtPct(stats.max_drawdown)}
-                description="Largest peak-to-trough decline based on monthly returns."
-                positive={(stats.max_drawdown ?? 0) >= 0}
+                value={fmtPct(-(stats.max_drawdown ?? 0))}
+                description="Largest peak-to-trough decline in a single month-end-to-month-end run. Always negative — a lower (more negative) value means a deeper loss from peak."
+                positive={(stats.max_drawdown ?? 0) === 0 ? undefined : false}
               />
               <StatRow
                 label="Std Dev (Monthly)"

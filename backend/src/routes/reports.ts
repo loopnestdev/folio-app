@@ -4,7 +4,7 @@ import { authMiddleware } from '../middleware/auth';
 import { requireApproved } from '../middleware/requireApproved';
 import { supabase } from '../lib/supabase';
 import { calculateHoldings, calculateCapitalGains, calculateCashPosition } from '../services/calculations/holdings';
-import { computeStatistics, computeMonthlyReturns } from '../services/calculations/statistics';
+import { computeStatistics, computeMonthlyReturnMap, alignReturnMaps } from '../services/calculations/statistics';
 import { getHistoricalPrices, getBenchmarkPrices, getCurrentPrices, BENCHMARKS, enrichSecurityMetadata } from '../services/market-data/yahoo';
 import { format, subYears, startOfYear } from 'date-fns';
 import type { AuthenticatedRequest, Trade } from '../types';
@@ -574,25 +574,47 @@ router.get('/:id/statistics', async (req: AuthenticatedRequest, res: any) => {
       }
     }
 
-    const allPortfolioValues = Object.keys(priceMap).sort().map((date) => ({
-      date,
-      value: calculateHoldings(trades.filter(t => t.trade_date <= date) as any, priceMap[date]).reduce((s, h) => s + (h.market_value ?? 0), 0),
-    }));
+    const allPortfolioValues = Object.keys(priceMap).sort().map((date) => {
+      const tradesUpToDate = trades.filter(t => t.trade_date <= date) as any;
+      // Include cash so NAV = holdings market value + uninvested cash.
+      // Without cash, selling a stock appears as a "loss" (holdings drop) even though
+      // proceeds move to cash — producing distorted CAGR and drawdown figures.
+      const holdingsValue = calculateHoldings(tradesUpToDate, priceMap[date])
+        .reduce((s, h) => s + (h.market_value ?? 0), 0);
+      const { cash_balance } = calculateCashPosition(tradesUpToDate);
+      return { date, value: holdingsValue + cash_balance };
+    });
 
-    // Filter to the requested date window (fromDate may be after earliest trade date)
+    // Filter to the requested date window
     const portfolioValues = allPortfolioValues.filter(v => v.date >= fromDate && v.date <= toDate);
-    const portfolioReturns = computeMonthlyReturns(portfolioValues);
+
+    // Build date-keyed monthly return maps so we can date-align portfolio with benchmarks.
+    // This prevents pairing Feb-2025 portfolio returns against Jun-2024 benchmark returns.
+    const portfolioReturnMap = computeMonthlyReturnMap(portfolioValues);
+    const portfolioReturns   = Object.keys(portfolioReturnMap).sort()
+      .map(m => portfolioReturnMap[m]!);
 
     const [asx200, sp500] = await Promise.all([
       getBenchmarkPrices(BENCHMARKS.ASX200, fromDate, toDate),
-      getBenchmarkPrices(BENCHMARKS.SP500, fromDate, toDate),
+      getBenchmarkPrices(BENCHMARKS.SP500,  fromDate, toDate),
     ]);
 
-    const benchReturns = computeMonthlyReturns(asx200.map(d => ({ date: d.date, value: d.close })));
-    const sp500Returns = computeMonthlyReturns(sp500.map(d => ({ date: d.date, value: d.close })));
+    const asx200ReturnMap = computeMonthlyReturnMap(asx200.map(d => ({ date: d.date, value: d.close })));
+    const sp500ReturnMap  = computeMonthlyReturnMap(sp500.map(d => ({ date: d.date, value: d.close })));
 
-    const stats = computeStatistics(portfolioReturns, benchReturns, sp500Returns);
-    res.json(stats);
+    // Align benchmark arrays to only the months where portfolio also has returns
+    const { portfolio: portForBeta, benchmark: benchAligned } = alignReturnMaps(portfolioReturnMap, asx200ReturnMap);
+    const { portfolio: portForCorr, benchmark: sp500Aligned  } = alignReturnMaps(portfolioReturnMap, sp500ReturnMap);
+
+    const stats = computeStatistics(portfolioReturns, benchAligned, sp500Aligned);
+    // Beta and correlation were computed with aligned benchmark arrays above; override them
+    // by re-running the relevant parts via a helper — actually computeStatistics already uses
+    // the passed arrays in order, so we call it once more just for beta/corr with aligned data.
+    // Simpler: computeStatistics with portForBeta/portForCorr as the portfolio array,
+    // then take only beta/correlation from that result.
+    const betaStats = computeStatistics(portForBeta, benchAligned, []);
+    const corrStats = computeStatistics(portForCorr, [], sp500Aligned);
+    res.json({ ...stats, beta: betaStats.beta, correlation_sp500: corrStats.correlation_sp500 });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
