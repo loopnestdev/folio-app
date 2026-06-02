@@ -6,7 +6,7 @@ All notable changes to Folio App are documented here.
 
 ### Added
 
-- **Cash Flow report** — New page under Reports showing all deposits and withdrawals for any date range (YTD / 1Y / 2Y / All / Custom). Three summary cards: Total Deposited, Total Withdrawn, Net Deposited. Transactions table includes date, type badge, notes, and amount. Supports Individual / Group toggle; Group view converts all amounts to the group base currency and shows a Portfolio column. (`backend/src/routes/reports.ts`, `backend/src/routes/groups.ts`, `frontend/src/pages/reports/CashFlowPage.tsx`, `frontend/src/hooks/useReports.ts`, `frontend/src/hooks/useGroupReports.ts`, `frontend/src/components/layout/Sidebar.tsx`)
+- **Cash Flow report** — New page under Reports showing all deposits and withdrawals for any date range (YTD / 1Y / 2Y / All / Custom). Transactions are auto-classified from their notes: "Bank Transfer" and "FX Transfer" are detected by keyword; anything else falls into "Other". Summary cards show Bank Transfer Deposits, FX Transfer Deposits, and FX Transfer Withdrawals separately. A category filter dropdown lets users drill into each type. A "Category" column is shown in the table. Supports Individual / Group toggle; Group view converts all amounts to the group base currency and shows a Portfolio column. (`backend/src/routes/reports.ts`, `backend/src/routes/groups.ts`, `frontend/src/pages/reports/CashFlowPage.tsx`, `frontend/src/hooks/useReports.ts`, `frontend/src/hooks/useGroupReports.ts`, `frontend/src/components/layout/Sidebar.tsx`)
 
 ### Changed
 
