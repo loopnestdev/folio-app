@@ -123,7 +123,15 @@ export function HoldingsPage() {
       <div>
         <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Current Holdings</h1>
         <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">
-          {holdings.length} position{holdings.length !== 1 ? 's' : ''} &mdash; Total value:{' '}
+          {activePortfolio ? (
+            <span className="font-semibold text-[var(--c-ink)]">{activePortfolio.name}</span>
+          ) : (
+            <span>Portfolio</span>
+          )}
+          {activePortfolio?.currency && (
+            <span className="ml-1 text-[var(--c-ink-mute)]">({activePortfolio.currency})</span>
+          )}
+          {' '}· {holdings.length} position{holdings.length !== 1 ? 's' : ''} &mdash; Total value:{' '}
           <strong>{formatCurrency(totalValue, currency)}</strong>
         </p>
       </div>
