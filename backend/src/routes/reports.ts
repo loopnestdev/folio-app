@@ -129,7 +129,7 @@ router.get('/:id/summary', async (req: AuthenticatedRequest, res: any) => {
     const trades = await getPortfolioTrades(id);
 
     if (!trades.length) {
-      res.json({ total_value: 0, total_cost: 0, total_gain: 0, total_gain_pct: 0, cash_balance: 0, ytd_return: 0, ytd_return_pct: 0 });
+      res.json({ total_value: 0, total_cost: 0, total_gain: 0, total_gain_pct: 0, cash_balance: 0, ytd_return: 0, ytd_return_pct: 0, fy_ytd_return: 0, fy_ytd_return_pct: 0, fy_start_date: null });
       return;
     }
 
@@ -151,20 +151,41 @@ router.get('/:id/summary', async (req: AuthenticatedRequest, res: any) => {
     // YTD: compare current value against portfolio value at the start of this year.
     // Must use HISTORICAL prices at Jan 1 (not today's prices) for the start valuation —
     // otherwise if there are no trades in the current year, ytdReturn is always 0.
-    const thisYear = new Date().getFullYear();
+    const now       = new Date();
+    const thisYear  = now.getFullYear();
+    const thisMonth = now.getMonth(); // 0 = Jan … 11 = Dec
+
     const ytdStartDate = `${thisYear}-01-01`;
     const ytdEndDate   = `${thisYear}-01-10`; // fetch first 10 days to catch first trading day
-    const tradesBeforeYTD = trades.filter(t => t.trade_date < ytdStartDate);
 
-    const ytdPriceEntries = await Promise.all(
-      Array.from(securitiesMap.entries()).map(async ([sym, exchange]) => {
+    // Australian FY: Jul 1 – Jun 30. If current month < 6 (before July), FY started Jul 1 of the prev year.
+    const fyStartYear = thisMonth < 6 ? thisYear - 1 : thisYear;
+    const fyStartDate = `${fyStartYear}-07-01`;
+    const fyEndDate   = `${fyStartYear}-07-15`;
+
+    const tradesBeforeYTD = trades.filter(t => t.trade_date < ytdStartDate);
+    const tradesBeforeFY  = trades.filter(t => t.trade_date < fyStartDate);
+
+    const secEntries = Array.from(securitiesMap.entries());
+
+    const [ytdPriceEntries, fyPriceEntries] = await Promise.all([
+      Promise.all(secEntries.map(async ([sym, exchange]) => {
         const prices = await getHistoricalPrices(sym, ytdStartDate, ytdEndDate, undefined, exchange);
         return [sym, prices[0]?.close ?? null] as [string, number | null];
-      })
-    );
+      })),
+      Promise.all(secEntries.map(async ([sym, exchange]) => {
+        const prices = await getHistoricalPrices(sym, fyStartDate, fyEndDate, undefined, exchange);
+        return [sym, prices[0]?.close ?? null] as [string, number | null];
+      })),
+    ]);
+
     const ytdPrices: Record<string, number> = {};
     for (const [sym, price] of ytdPriceEntries) {
       if (price !== null) ytdPrices[sym] = price as number;
+    }
+    const fyPrices: Record<string, number> = {};
+    for (const [sym, price] of fyPriceEntries) {
+      if (price !== null) fyPrices[sym] = price as number;
     }
 
     const holdingsAtYTDStart = calculateHoldings(tradesBeforeYTD as any, ytdPrices);
@@ -172,21 +193,28 @@ router.get('/:id/summary', async (req: AuthenticatedRequest, res: any) => {
     const valueAtYTDStart = holdingsAtYTDStart.reduce((s, h) => s + (h.market_value ?? 0), 0) + cashAtYTDStart;
     const ytdReturn = totalValue - valueAtYTDStart;
 
+    const holdingsAtFYStart = calculateHoldings(tradesBeforeFY as any, fyPrices);
+    const { cash_balance: cashAtFYStart } = calculateCashPosition(tradesBeforeFY as any);
+    const valueAtFYStart = holdingsAtFYStart.reduce((s, h) => s + (h.market_value ?? 0), 0) + cashAtFYStart;
+    const fyYtdReturn = totalValue - valueAtFYStart;
+
     res.json({
-      total_value:      totalValue,
-      invested_value:   investedValue,
-      total_cost:       totalCost,
-      total_gain:       totalGain,
-      total_gain_pct:   totalCost > 0 ? (totalGain / totalCost) * 100 : 0,
+      total_value:        totalValue,
+      invested_value:     investedValue,
+      total_cost:         totalCost,
+      total_gain:         totalGain,
+      total_gain_pct:     totalCost > 0 ? (totalGain / totalCost) * 100 : 0,
       cash_balance,
       total_deposited,
       total_withdrawn,
-      net_deposited:    netDeposited,
-      overall_gain:     overallGain,
-      overall_gain_pct: overallGainPct,
-      ytd_return:       ytdReturn,
-      // null when YTD start value ≤ 0 (e.g. portfolio funded by FX transfers) — "—" in UI
-      ytd_return_pct:   valueAtYTDStart > 0 ? (ytdReturn / valueAtYTDStart) * 100 : null,
+      net_deposited:      netDeposited,
+      overall_gain:       overallGain,
+      overall_gain_pct:   overallGainPct,
+      ytd_return:         ytdReturn,
+      ytd_return_pct:     valueAtYTDStart > 0 ? (ytdReturn / valueAtYTDStart) * 100 : null,
+      fy_ytd_return:      fyYtdReturn,
+      fy_ytd_return_pct:  valueAtFYStart > 0 ? (fyYtdReturn / valueAtFYStart) * 100 : null,
+      fy_start_date:      fyStartDate,
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, ArrowRight, TrendingUp, TrendingDown } from 'lucide-react';
+import { Plus, ArrowRight, TrendingUp, TrendingDown, Wallet } from 'lucide-react';
 import { usePortfolioContext } from '../contexts/PortfolioContext';
 import { useActivePortfolioSummary, useHoldings, useTrades } from '../hooks/usePortfolio';
 import { usePerformance } from '../hooks/usePerformance';
@@ -12,7 +12,7 @@ import { PerformanceChart } from '../components/charts/PerformanceChart';
 import { PortfolioForm } from '../components/forms/PortfolioForm';
 import { useCreatePortfolio } from '../hooks/usePortfolio';
 import { useToast } from '../components/ui/Toast';
-import { formatCurrency, formatPercent, formatDate, getValueColor } from '../lib/utils';
+import { formatCurrency, formatDate, getValueColor, cn } from '../lib/utils';
 import type { Holding, Trade, BenchmarkToggle } from '../types';
 
 export function DashboardPage() {
@@ -28,6 +28,7 @@ export function DashboardPage() {
   });
 
   const [createOpen, setCreateOpen] = useState(false);
+  const [ytdMode, setYtdMode] = useState<'CY' | 'FY'>('CY');
   const [benchmarks, setBenchmarks] = useState<BenchmarkToggle>({ sp500: false, nasdaq: true, asx200: false });
   const toggleBenchmark = (key: keyof BenchmarkToggle) =>
     setBenchmarks(prev => ({ ...prev, [key]: !prev[key] }));
@@ -149,30 +150,77 @@ export function DashboardPage() {
       </div>
 
       {/* Stats row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+        {/* 1. Net Asset Value */}
         <StatCard
           label="Net Asset Value"
+          tooltip="Total portfolio value: current market value of all holdings plus uninvested cash."
           value={formatCurrency(summary?.total_value ?? 0, activePortfolio.currency)}
-          subtitle={`Cash: ${formatCurrency(summary?.cash_balance ?? 0, activePortfolio.currency)}`}
           loading={summaryLoading}
         />
+
+        {/* 2. Unrealised Gain */}
         <StatCard
-          label="Overall Gain"
-          value={formatCurrency(summary?.overall_gain ?? 0, activePortfolio.currency)}
-          trend={summary?.overall_gain_pct ?? undefined}
-          subtitle={`Deposited: ${formatCurrency(summary?.total_deposited ?? 0, activePortfolio.currency)}`}
-          loading={summaryLoading}
-        />
-        <StatCard
-          label="Invested Return"
+          label="Unrealised Gain"
+          tooltip="Profit or loss on currently held positions: market value of open holdings minus their original cost base. Does not include closed trades or cash."
           value={formatCurrency(summary?.total_gain ?? 0, activePortfolio.currency)}
           trend={summary?.total_gain_pct}
+          subtitle={summary ? `Invested: ${formatCurrency(summary.invested_value ?? 0, activePortfolio.currency)}` : undefined}
           loading={summaryLoading}
         />
+
+        {/* 3. YTD Return — with CY / FY toggle */}
+        {(() => {
+          const isFY        = ytdMode === 'FY';
+          const ytdValue    = isFY ? (summary?.fy_ytd_return ?? 0)     : (summary?.ytd_return     ?? 0);
+          const ytdPct      = isFY ? (summary?.fy_ytd_return_pct ?? 0) : (summary?.ytd_return_pct ?? 0);
+          const fyYear      = summary?.fy_start_date ? summary.fy_start_date.slice(0, 4) : '';
+          const periodLabel = isFY
+            ? `AU FY${fyYear ? ` (Jul ${fyYear})` : ''}`
+            : `Calendar year (Jan ${new Date().getFullYear()})`;
+          return (
+            <StatCard
+              label="YTD Return"
+              tooltip="Change in total portfolio value since the start of the selected period (calendar year Jan 1 or Australian financial year Jul 1). Includes stocks and cash at both the start and end dates."
+              value={formatCurrency(ytdValue, activePortfolio.currency)}
+              trend={ytdPct ?? undefined}
+              loading={summaryLoading}
+              footer={
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-[var(--c-ink-mute)]">{periodLabel}</span>
+                  <div className="flex rounded-lg overflow-hidden border border-[var(--c-border)] text-[11px] font-semibold">
+                    {(['CY', 'FY'] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        onClick={() => setYtdMode(mode)}
+                        className={cn(
+                          'px-2 py-0.5 transition-colors',
+                          ytdMode === mode
+                            ? 'bg-[var(--c-primary)] text-white'
+                            : 'text-[var(--c-ink-mute)] hover:bg-[var(--c-canvas-soft)]',
+                        )}
+                      >
+                        {mode}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              }
+            />
+          );
+        })()}
+
+        {/* 4. Cash */}
         <StatCard
-          label={`YTD Return (${new Date().getFullYear()})`}
-          value={formatCurrency(summary?.ytd_return ?? 0, activePortfolio.currency)}
-          trend={summary?.ytd_return_pct ?? undefined}
+          label="Cash"
+          tooltip="Uninvested cash balance (deposits minus withdrawals minus stock purchases plus sale proceeds)."
+          value={formatCurrency(summary?.cash_balance ?? 0, activePortfolio.currency)}
+          icon={<Wallet size={16} />}
+          subtitle={
+            summary && summary.total_value > 0
+              ? `${((summary.cash_balance ?? 0) / summary.total_value * 100).toFixed(1)}% of portfolio`
+              : undefined
+          }
           loading={summaryLoading}
         />
       </div>

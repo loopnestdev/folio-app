@@ -108,19 +108,22 @@ export interface Portfolio {
 }
 
 export interface PortfolioSummary {
-  total_value:      number;
-  invested_value:   number;
-  total_cost:       number;
-  total_gain:       number;
-  total_gain_pct:   number;
-  cash_balance:     number;
-  total_deposited:  number;
-  total_withdrawn:  number;
-  net_deposited:    number;
-  overall_gain:     number;
-  overall_gain_pct: number;
-  ytd_return:       number;
-  ytd_return_pct:   number;
+  total_value:        number;
+  invested_value:     number;
+  total_cost:         number;
+  total_gain:         number;
+  total_gain_pct:     number;
+  cash_balance:       number;
+  total_deposited:    number;
+  total_withdrawn:    number;
+  net_deposited:      number;
+  overall_gain:       number;
+  overall_gain_pct:   number;
+  ytd_return:         number;
+  ytd_return_pct:     number | null;
+  fy_ytd_return:      number;
+  fy_ytd_return_pct:  number | null;
+  fy_start_date:      string | null;
 }
 
 // Trade Types — match backend schema exactly

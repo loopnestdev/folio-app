@@ -39,10 +39,15 @@ export function TradesPage() {
   const [filterSymbol, setFilterSymbol] = useState('');
   const [filterType, setFilterType] = useState<BackendTradeType | ''>('');
 
-  const { data: trades = [], isLoading } = useTrades(portfolioId, {
-    symbol:     filterSymbol || undefined,
-    trade_type: filterType   || undefined,
+  // Fetch trades server-side by type only; symbol filtering is done client-side so
+  // that typing a symbol doesn't trigger a new network request on every keystroke.
+  const { data: allTrades = [], isLoading } = useTrades(portfolioId, {
+    trade_type: filterType || undefined,
   });
+
+  const trades = filterSymbol
+    ? allTrades.filter((t) => t.security?.symbol?.toUpperCase().includes(filterSymbol))
+    : allTrades;
 
   const addTrade    = useAddTrade(portfolioId);
   const updateTrade = useUpdateTrade(portfolioId);
