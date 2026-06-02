@@ -65,9 +65,16 @@ export function CashFlowPage() {
   }));
 
   // ── Summary buckets ────────────────────────────────────────────────────────
-  const bankDeposits = classified
+  const bankDepositsOnly = classified
     .filter((t: any) => t.trade_type === 'deposit' && t._category === 'bank_transfer')
     .reduce((s: number, t: any) => s + t._amount, 0);
+
+  const otherDeposits = classified
+    .filter((t: any) => t.trade_type === 'deposit' && t._category === 'other')
+    .reduce((s: number, t: any) => s + t._amount, 0);
+
+  // Combined: "Bank Transfer" + "Other" deposits are both cash inflows from your bank
+  const bankDeposits = bankDepositsOnly + otherDeposits;
 
   const fxDeposits = classified
     .filter((t: any) => t.trade_type === 'deposit' && t._category === 'fx_transfer')
@@ -75,10 +82,6 @@ export function CashFlowPage() {
 
   const fxWithdrawals = classified
     .filter((t: any) => t.trade_type === 'withdrawal' && t._category === 'fx_transfer')
-    .reduce((s: number, t: any) => s + t._amount, 0);
-
-  const otherDeposits = classified
-    .filter((t: any) => t.trade_type === 'deposit' && t._category === 'other')
     .reduce((s: number, t: any) => s + t._amount, 0);
 
   // ── Filtered rows for table ────────────────────────────────────────────────
@@ -168,16 +171,18 @@ export function CashFlowPage() {
           label="Bank Transfer Deposits"
           value={formatCurrency(bankDeposits, currency)}
           trend={bankDeposits}
-          subtitle={otherDeposits > 0 ? `+${formatCurrency(otherDeposits, currency)} other` : undefined}
+          tooltip="Total cash deposited from your bank — includes labelled bank transfers and other direct deposits (e.g. Zepto payments)"
         />
         <StatCard
           label="FX Transfer Deposits"
           value={formatCurrency(fxDeposits, currency)}
           trend={fxDeposits}
+          tooltip="Foreign currency converted into this account — e.g. AUD → USD or USD → AUD inflows"
         />
         <StatCard
           label="FX Transfer Withdrawals"
           value={formatCurrency(fxWithdrawals, currency)}
+          tooltip="Foreign currency converted out of this account — e.g. AUD → USD or USD → AUD outflows"
         />
       </div>
 
