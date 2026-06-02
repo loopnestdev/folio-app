@@ -35,20 +35,28 @@ export interface GroupPortfolioBreakdown {
   name: string;
   currency: string;
   fx_rate: number;
-  total_value: number;      total_value_base: number;
-  total_cost: number;       total_cost_base: number;
-  total_gain: number;       total_gain_base: number;
-  ytd_return: number;       ytd_return_base: number;
+  total_value: number;       total_value_base: number;
+  invested_value: number;    invested_value_base: number;
+  cash_balance: number;      cash_balance_base: number;
+  total_cost: number;        total_cost_base: number;
+  total_gain: number;        total_gain_base: number;
+  ytd_return: number;        ytd_return_base: number;
+  fy_ytd_return: number;     fy_ytd_return_base: number;
 }
 
 export interface GroupSummary {
   base_currency: string;
   total_value: number;
+  invested_value: number;
+  cash_balance: number;
   total_cost: number;
   total_gain: number;
   total_gain_pct: number;
   ytd_return: number;
   ytd_return_pct: number;
+  fy_ytd_return: number;
+  fy_ytd_return_pct: number;
+  fy_start_date: string;
   portfolios: GroupPortfolioBreakdown[];
 }
 

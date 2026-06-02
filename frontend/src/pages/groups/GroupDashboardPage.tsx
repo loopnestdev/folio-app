@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowRight, Layers, FileText, Receipt, BarChart3 } from 'lucide-react';
+import { ArrowRight, Layers, FileText, Receipt, BarChart3, Wallet } from 'lucide-react';
 import { useGroups } from '../../hooks/useGroups';
 import { useGroupSummary, useGroupPerformance } from '../../hooks/useGroupReports';
 import { StatCard } from '../../components/ui/StatCard';
@@ -20,6 +20,8 @@ export function GroupDashboardPage() {
   const [benchmarks, setBenchmarks] = useState<BenchmarkToggle>({
     sp500: false, nasdaq: true, asx200: false,
   });
+  // YTD mode: calendar year (Jan 1) or Australian financial year (Jul 1)
+  const [ytdMode, setYtdMode] = useState<'CY' | 'FY'>('CY');
   const toggleBenchmark = (key: keyof BenchmarkToggle) =>
     setBenchmarks((prev) => ({ ...prev, [key]: !prev[key] }));
 
@@ -126,28 +128,86 @@ export function GroupDashboardPage() {
       </div>
 
       {/* Summary stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 xl:grid-cols-5 gap-4">
+        {/* 1. Net Asset Value */}
         <StatCard
           label="Net Asset Value"
+          tooltip="Total portfolio value: current market value of all holdings plus uninvested cash, converted to the group base currency at today's forex rates."
           value={formatCurrency(summary?.total_value ?? 0, baseCurrency)}
           loading={summaryLoading}
         />
+
+        {/* 2. Unrealised Gain */}
         <StatCard
-          label="Total Return"
+          label="Unrealised Gain"
+          tooltip="Profit or loss on currently held positions: market value of open holdings minus their original cost base. Does not include closed trades or cash."
           value={formatCurrency(summary?.total_gain ?? 0, baseCurrency)}
           trend={summary?.total_gain_pct}
+          subtitle={summary ? `Invested: ${formatCurrency(summary.invested_value ?? 0, baseCurrency)}` : undefined}
           loading={summaryLoading}
         />
+
+        {/* 3. Return % */}
         <StatCard
           label="Return %"
+          tooltip="Unrealised gain as a percentage of the total cost base of current holdings. Reflects how much your open positions have grown relative to what you paid."
           value={formatPercent(summary?.total_gain_pct ?? 0)}
           trend={summary?.total_gain_pct}
           loading={summaryLoading}
         />
+
+        {/* 4. YTD Return — with CY / FY toggle */}
+        {(() => {
+          const isFY       = ytdMode === 'FY';
+          const ytdValue   = isFY ? (summary?.fy_ytd_return ?? 0)     : (summary?.ytd_return     ?? 0);
+          const ytdPct     = isFY ? (summary?.fy_ytd_return_pct ?? 0) : (summary?.ytd_return_pct ?? 0);
+          const fyYear     = summary?.fy_start_date ? summary.fy_start_date.slice(0, 4) : '';
+          const periodLabel = isFY
+            ? `AU FY${fyYear ? ` (Jul ${fyYear})` : ''}`
+            : `Calendar year (Jan ${new Date().getFullYear()})`;
+          return (
+            <StatCard
+              label="YTD Return"
+              tooltip="Change in total portfolio value since the start of the selected period (calendar year Jan 1 or Australian financial year Jul 1). Includes stocks and cash at both the start and end dates."
+              value={formatCurrency(ytdValue, baseCurrency)}
+              trend={ytdPct}
+              loading={summaryLoading}
+              footer={
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-[var(--c-ink-mute)]">{periodLabel}</span>
+                  <div className="flex rounded-lg overflow-hidden border border-[var(--c-border)] text-[11px] font-semibold">
+                    {(['CY', 'FY'] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        onClick={() => setYtdMode(mode)}
+                        className={cn(
+                          'px-2 py-0.5 transition-colors',
+                          ytdMode === mode
+                            ? 'bg-[var(--c-primary)] text-white'
+                            : 'text-[var(--c-ink-mute)] hover:bg-[var(--c-canvas-soft)]',
+                        )}
+                      >
+                        {mode}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              }
+            />
+          );
+        })()}
+
+        {/* 5. Cash */}
         <StatCard
-          label="YTD Return"
-          value={formatCurrency(summary?.ytd_return ?? 0, baseCurrency)}
-          trend={summary?.ytd_return_pct}
+          label="Cash"
+          tooltip="Uninvested cash across all portfolios (deposits minus withdrawals minus stock purchases plus sale proceeds), converted to the group base currency."
+          value={formatCurrency(summary?.cash_balance ?? 0, baseCurrency)}
+          icon={<Wallet size={16} />}
+          subtitle={
+            summary && summary.total_value > 0
+              ? `${((summary.cash_balance ?? 0) / summary.total_value * 100).toFixed(1)}% of portfolio`
+              : undefined
+          }
           loading={summaryLoading}
         />
       </div>

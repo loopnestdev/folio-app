@@ -2,6 +2,20 @@
 
 All notable changes to Folio App are documented here.
 
+## [Unreleased]
+
+### Changed
+
+- **Group dashboard: "Total Return" renamed to "Unrealised Gain"** — The label better describes what the metric actually is: the profit/loss on currently held open positions only (market value minus cost base), excluding closed trades and cash. The card now also shows an "Invested: A$X" subtitle indicating the current market value of open stock positions. (`frontend/src/pages/groups/GroupDashboardPage.tsx`)
+
+### Added
+
+- **Group dashboard: tooltips on all summary cards** — Hovering the ⓘ icon next to any card label shows a plain-English explanation of how the metric is calculated (NAV, Unrealised Gain, Return %, YTD Return, Cash). (`frontend/src/components/ui/StatCard.tsx`, `frontend/src/pages/groups/GroupDashboardPage.tsx`)
+
+- **Group dashboard: Cash balance card** — A fifth summary card now shows total uninvested cash across all portfolios (converted to the group base currency) and its percentage of total portfolio value, so you can see your cash position at a glance. (`backend/src/routes/groups.ts`, `frontend/src/pages/groups/GroupDashboardPage.tsx`)
+
+- **Group dashboard: Australian Financial Year (FY) YTD toggle** — The YTD Return card now has a CY/FY toggle. CY measures return from Jan 1 of the current calendar year; FY measures return from Jul 1 of the current Australian financial year (e.g. Jul 2025 for FY2026). Both values are computed server-side and returned in the summary payload. (`backend/src/routes/groups.ts`, `frontend/src/pages/groups/GroupDashboardPage.tsx`)
+
 ## [v0.6.0] — 2026-06-02
 
 ### Changed

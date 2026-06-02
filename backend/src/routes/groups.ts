@@ -178,9 +178,19 @@ router.get('/:id/summary', async (req: AuthenticatedRequest, res: any) => {
       }),
     );
 
-    const thisYear     = new Date().getFullYear();
+    const now        = new Date();
+    const thisYear   = now.getFullYear();
+    const thisMonth  = now.getMonth(); // 0 = Jan … 11 = Dec
+
+    // Calendar-year YTD: Jan 1 of current year
     const ytdStartDate = `${thisYear}-01-01`;
-    const ytdEndDate   = `${thisYear}-01-10`; // fetch first 10 days to catch first trading day
+    const ytdEndDate   = `${thisYear}-01-10`; // first 10 days → catches first trading day
+
+    // Financial-year YTD (Australian FY Jul 1 – Jun 30):
+    // If we're before July the current FY started on Jul 1 last year; otherwise Jul 1 this year.
+    const fyStartYear  = thisMonth < 6 ? thisYear - 1 : thisYear;
+    const fyStartDate  = `${fyStartYear}-07-01`;
+    const fyEndDate    = `${fyStartYear}-07-15`; // first 15 days of July → first trading day
 
     const portfolioBreakdowns = await Promise.all(
       portfolios.map(async (portfolio) => {
@@ -190,9 +200,12 @@ router.get('/:id/summary', async (req: AuthenticatedRequest, res: any) => {
             id: portfolio.id, name: portfolio.name,
             currency: portfolio.currency, fx_rate: fxRates[portfolio.currency] ?? 1,
             total_value: 0, total_value_base: 0,
+            invested_value: 0, invested_value_base: 0,
+            cash_balance: 0, cash_balance_base: 0,
             total_cost: 0, total_cost_base: 0,
             total_gain: 0, total_gain_base: 0,
             ytd_return: 0, ytd_return_base: 0,
+            fy_ytd_return: 0, fy_ytd_return_base: 0,
           };
         }
 
@@ -200,16 +213,21 @@ router.get('/:id/summary', async (req: AuthenticatedRequest, res: any) => {
         trades.filter(t => t.security).forEach(t => securitiesMap.set(t.security!.symbol, t.security!.exchange ?? ''));
         const secEntries = Array.from(securitiesMap.entries()).map(([symbol, exchange]) => ({ symbol, exchange }));
 
-        // Fetch current prices and YTD-start prices in parallel.
-        // YTD-start prices use the first available trading day in Jan so the
-        // YTD return reflects actual price movement, not just composition changes.
-        const [currentPrices, ytdPriceEntries] = await Promise.all([
+        // Fetch current prices, CY-YTD-start prices, and FY-YTD-start prices in parallel.
+        // Start-of-period prices use a short window after the target date so the first
+        // available trading day is captured even if the target itself is a holiday/weekend.
+        const [currentPrices, ytdPriceEntries, fyPriceEntries] = await Promise.all([
           getCurrentPrices(secEntries),
           Promise.all(
             secEntries.map(async ({ symbol, exchange }) => {
               const prices = await getHistoricalPrices(symbol, ytdStartDate, ytdEndDate, undefined, exchange);
-              const first = prices[0];
-              return [symbol, first?.close ?? null] as [string, number | null];
+              return [symbol, prices[0]?.close ?? null] as [string, number | null];
+            }),
+          ),
+          Promise.all(
+            secEntries.map(async ({ symbol, exchange }) => {
+              const prices = await getHistoricalPrices(symbol, fyStartDate, fyEndDate, undefined, exchange);
+              return [symbol, prices[0]?.close ?? null] as [string, number | null];
             }),
           ),
         ]);
@@ -218,51 +236,71 @@ router.get('/:id/summary', async (req: AuthenticatedRequest, res: any) => {
         for (const [sym, price] of ytdPriceEntries) {
           if (price !== null) ytdPrices[sym] = price;
         }
+        const fyPrices: Record<string, number> = {};
+        for (const [sym, price] of fyPriceEntries) {
+          if (price !== null) fyPrices[sym] = price;
+        }
 
         const holdings = calculateHoldings(trades as any, currentPrices);
         const { cash_balance } = calculateCashPosition(trades as any);
 
         const fx = fxRates[portfolio.currency] ?? 1;
-        // totalValue = stock market values + cash balance (mirrors individual portfolio logic)
         const investedValue = holdings.reduce((s, h) => s + (h.market_value ?? 0), 0);
-        const totalValue = investedValue + cash_balance;
-        const totalCost  = holdings.reduce((s, h) => s + h.cost_base, 0);
-        const totalGain  = investedValue - totalCost;   // unrealised gain on stocks only
+        const totalValue    = investedValue + cash_balance;
+        const totalCost     = holdings.reduce((s, h) => s + h.cost_base, 0);
+        const totalGain     = investedValue - totalCost; // unrealised gain on stocks only
 
-        // YTD: compare current total value (stocks + cash) against portfolio value at Jan 1,
-        // also including the cash balance at that point. This prevents large selloffs from
-        // appearing as losses simply because the cash proceeds aren't counted.
-        const tradesBeforeYTD   = trades.filter(t => t.trade_date < ytdStartDate);
+        // CY YTD: portfolio value now vs Jan 1 (stocks + cash both ends)
+        const tradesBeforeYTD    = trades.filter(t => t.trade_date < ytdStartDate);
         const holdingsAtYTDStart = calculateHoldings(tradesBeforeYTD as any, ytdPrices);
         const { cash_balance: cashAtYTDStart } = calculateCashPosition(tradesBeforeYTD as any);
         const ytdStartValue = holdingsAtYTDStart.reduce((s, h) => s + (h.market_value ?? 0), 0) + cashAtYTDStart;
-        const ytdReturn = totalValue - ytdStartValue;
+        const ytdReturn     = totalValue - ytdStartValue;
+
+        // FY YTD: portfolio value now vs Jul 1 of current Australian FY
+        const tradesBeforeFY    = trades.filter(t => t.trade_date < fyStartDate);
+        const holdingsAtFYStart = calculateHoldings(tradesBeforeFY as any, fyPrices);
+        const { cash_balance: cashAtFYStart } = calculateCashPosition(tradesBeforeFY as any);
+        const fyStartValue  = holdingsAtFYStart.reduce((s, h) => s + (h.market_value ?? 0), 0) + cashAtFYStart;
+        const fyYtdReturn   = totalValue - fyStartValue;
 
         return {
           id: portfolio.id, name: portfolio.name,
           currency: portfolio.currency, fx_rate: fx,
-          total_value: totalValue,       total_value_base: totalValue * fx,
-          total_cost:  totalCost,        total_cost_base:  totalCost  * fx,
-          total_gain:  totalGain,        total_gain_base:  totalGain  * fx,
-          ytd_return:  ytdReturn,        ytd_return_base:  ytdReturn  * fx,
+          total_value:       totalValue,    total_value_base:       totalValue    * fx,
+          invested_value:    investedValue, invested_value_base:    investedValue * fx,
+          cash_balance:      cash_balance,  cash_balance_base:      cash_balance  * fx,
+          total_cost:        totalCost,     total_cost_base:        totalCost     * fx,
+          total_gain:        totalGain,     total_gain_base:        totalGain     * fx,
+          ytd_return:        ytdReturn,     ytd_return_base:        ytdReturn     * fx,
+          fy_ytd_return:     fyYtdReturn,   fy_ytd_return_base:     fyYtdReturn   * fx,
         };
       }),
     );
 
-    const totalValue = portfolioBreakdowns.reduce((s, p) => s + p.total_value_base, 0);
-    const totalCost  = portfolioBreakdowns.reduce((s, p) => s + p.total_cost_base, 0);
-    const totalGain  = portfolioBreakdowns.reduce((s, p) => s + p.total_gain_base, 0);
-    const ytdReturn  = portfolioBreakdowns.reduce((s, p) => s + p.ytd_return_base, 0);
-    const ytdStartValue = portfolioBreakdowns.reduce((s, p) => s + (p.total_value_base - p.ytd_return_base), 0);
+    const totalValue     = portfolioBreakdowns.reduce((s, p) => s + p.total_value_base,    0);
+    const investedValue  = portfolioBreakdowns.reduce((s, p) => s + p.invested_value_base, 0);
+    const cashBalance    = portfolioBreakdowns.reduce((s, p) => s + p.cash_balance_base,   0);
+    const totalCost      = portfolioBreakdowns.reduce((s, p) => s + p.total_cost_base,     0);
+    const totalGain      = portfolioBreakdowns.reduce((s, p) => s + p.total_gain_base,     0);
+    const ytdReturn      = portfolioBreakdowns.reduce((s, p) => s + p.ytd_return_base,     0);
+    const fyYtdReturn    = portfolioBreakdowns.reduce((s, p) => s + p.fy_ytd_return_base,  0);
+    const ytdStartValue  = portfolioBreakdowns.reduce((s, p) => s + (p.total_value_base - p.ytd_return_base),    0);
+    const fyStartValue   = portfolioBreakdowns.reduce((s, p) => s + (p.total_value_base - p.fy_ytd_return_base), 0);
 
     res.json({
-      base_currency: baseCurrency,
-      total_value:    totalValue,
-      total_cost:     totalCost,
-      total_gain:     totalGain,
-      total_gain_pct: totalCost > 0 ? (totalGain / totalCost) * 100 : 0,
-      ytd_return:     ytdReturn,
-      ytd_return_pct: ytdStartValue > 0 ? (ytdReturn / ytdStartValue) * 100 : 0,
+      base_currency:    baseCurrency,
+      total_value:      totalValue,
+      invested_value:   investedValue,
+      cash_balance:     cashBalance,
+      total_cost:       totalCost,
+      total_gain:       totalGain,
+      total_gain_pct:   totalCost     > 0 ? (totalGain   / totalCost)    * 100 : 0,
+      ytd_return:       ytdReturn,
+      ytd_return_pct:   ytdStartValue > 0 ? (ytdReturn   / ytdStartValue) * 100 : 0,
+      fy_ytd_return:    fyYtdReturn,
+      fy_ytd_return_pct: fyStartValue > 0 ? (fyYtdReturn / fyStartValue)  * 100 : 0,
+      fy_start_date:    fyStartDate,
       portfolios: portfolioBreakdowns,
     });
   } catch (err: any) {
