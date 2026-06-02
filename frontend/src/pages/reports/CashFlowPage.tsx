@@ -24,6 +24,12 @@ function classifyTx(notes: string | null | undefined): TxCategory {
   return 'other';
 }
 
+/** Parse "USD → AUD" from notes like "FX Transfer (USD → AUD, rate 0.724…)" */
+function extractFxDirection(notes: string | null | undefined): string | null {
+  const m = (notes ?? '').match(/\(([A-Z]{3})\s*→\s*([A-Z]{3})/i);
+  return m ? `${m[1].toUpperCase()} → ${m[2].toUpperCase()}` : null;
+}
+
 function getTxAmount(t: any, isGroup: boolean): number {
   return isGroup ? (t.amount_base as number) : (t.price as number) * (t.quantity as number);
 }
@@ -38,7 +44,7 @@ export function CashFlowPage() {
   const [range, setRange]             = useState<DateRange>('ALL');
   const [customStart, setCustomStart] = useState<string>();
   const [customEnd, setCustomEnd]     = useState<string>();
-  const [filterCategory, setFilterCategory] = useState<TxCategory | 'all'>('all');
+  const [filterCategory, setFilterCategory] = useState<string>('all');
 
   const handleRangeChange = (r: DateRange, start?: string, end?: string) => {
     setRange(r);
@@ -58,11 +64,15 @@ export function CashFlowPage() {
   const transactions = result?.transactions ?? [];
 
   // ── Classify all transactions ──────────────────────────────────────────────
-  const classified = transactions.map((t: any) => ({
-    ...t,
-    _category: classifyTx(t.notes),
-    _amount:   getTxAmount(t, isGroup),
-  }));
+  const classified = transactions.map((t: any) => {
+    const _category = classifyTx(t.notes);
+    return {
+      ...t,
+      _category,
+      _amount:      getTxAmount(t, isGroup),
+      _fxDirection: _category === 'fx_transfer' ? extractFxDirection(t.notes) : null,
+    };
+  });
 
   // ── Summary buckets ────────────────────────────────────────────────────────
   const bankDepositsOnly = classified
@@ -76,18 +86,29 @@ export function CashFlowPage() {
   // Combined: "Bank Transfer" + "Other" deposits are both cash inflows from your bank
   const bankDeposits = bankDepositsOnly + otherDeposits;
 
-  const fxDeposits = classified
-    .filter((t: any) => t.trade_type === 'deposit' && t._category === 'fx_transfer')
-    .reduce((s: number, t: any) => s + t._amount, 0);
+  // FX: unique directions found in the data, sorted for stable card order
+  const fxDirections = [...new Set(
+    classified
+      .filter((t: any) => t._category === 'fx_transfer' && t._fxDirection)
+      .map((t: any) => t._fxDirection as string),
+  )].sort();
 
-  const fxWithdrawals = classified
-    .filter((t: any) => t.trade_type === 'withdrawal' && t._category === 'fx_transfer')
-    .reduce((s: number, t: any) => s + t._amount, 0);
+  // For each direction sum the DEPOSIT side — that's what arrived in the destination currency
+  const fxDepositsByDirection: Record<string, number> = Object.fromEntries(
+    fxDirections.map((dir) => [
+      dir,
+      classified
+        .filter((t: any) => t._category === 'fx_transfer' && t.trade_type === 'deposit' && t._fxDirection === dir)
+        .reduce((s: number, t: any) => s + t._amount, 0),
+    ]),
+  );
 
   // ── Filtered rows for table ────────────────────────────────────────────────
   const visibleTx = filterCategory === 'all'
     ? classified
-    : classified.filter((t: any) => t._category === filterCategory);
+    : filterCategory.startsWith('fx:')
+      ? classified.filter((t: any) => t._fxDirection === filterCategory.slice(3))
+      : classified.filter((t: any) => t._category === filterCategory);
 
   const columns = [
     {
@@ -108,9 +129,13 @@ export function CashFlowPage() {
     {
       key: '_category',
       label: 'Category',
-      render: (v: unknown) => {
-        if (v === 'bank_transfer') return <span className="text-[13px] text-[var(--c-ink-mute)]">Bank Transfer</span>;
-        if (v === 'fx_transfer')   return <span className="text-[13px] text-[var(--c-ink-mute)]">FX Transfer</span>;
+      render: (v: unknown, row: any) => {
+        if (v === 'bank_transfer')
+          return <span className="text-[13px] text-[var(--c-ink-mute)]">Bank Transfer</span>;
+        if (v === 'fx_transfer' && row._fxDirection)
+          return <span className="text-[13px] text-[var(--c-ink-mute)]">FX ({row._fxDirection})</span>;
+        if (v === 'fx_transfer')
+          return <span className="text-[13px] text-[var(--c-ink-mute)]">FX Transfer</span>;
         return <span className="text-[13px] text-[var(--c-ink-mute)]">Other</span>;
       },
     },
@@ -166,24 +191,25 @@ export function CashFlowPage() {
       <DateRangePicker value={range} customStart={customStart} customEnd={customEnd} onChange={handleRangeChange} />
 
       {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard
           label="Bank Transfer Deposits"
           value={formatCurrency(bankDeposits, currency)}
           trend={bankDeposits}
           tooltip="Total cash deposited from your bank — includes labelled bank transfers and other direct deposits (e.g. Zepto payments)"
         />
-        <StatCard
-          label="FX Transfer Deposits"
-          value={formatCurrency(fxDeposits, currency)}
-          trend={fxDeposits}
-          tooltip="Foreign currency converted into this account — e.g. AUD → USD or USD → AUD inflows"
-        />
-        <StatCard
-          label="FX Transfer Withdrawals"
-          value={formatCurrency(fxWithdrawals, currency)}
-          tooltip="Foreign currency converted out of this account — e.g. AUD → USD or USD → AUD outflows"
-        />
+        {fxDirections.map((dir) => {
+          const [from, to] = dir.split(' → ');
+          return (
+            <StatCard
+              key={dir}
+              label={`FX Transfer (${dir})`}
+              value={formatCurrency(fxDepositsByDirection[dir] ?? 0, currency)}
+              trend={fxDepositsByDirection[dir] ?? 0}
+              tooltip={`${from} converted to ${to} — total ${to} received across all conversions in this direction (deposit side, shown in base currency)`}
+            />
+          );
+        })}
       </div>
 
       {/* Transactions table */}
@@ -197,12 +223,12 @@ export function CashFlowPage() {
               options={[
                 { label: 'All categories', value: 'all' },
                 { label: 'Bank Transfer',  value: 'bank_transfer' },
-                { label: 'FX Transfer',    value: 'fx_transfer' },
+                ...fxDirections.map((dir) => ({ label: `FX (${dir})`, value: `fx:${dir}` })),
                 { label: 'Other',          value: 'other' },
               ]}
               value={filterCategory}
-              onChange={(v) => setFilterCategory(v as TxCategory | 'all')}
-              containerClassName="w-44"
+              onChange={(v) => setFilterCategory(v)}
+              containerClassName="w-52"
             />
           </div>
           <Table
