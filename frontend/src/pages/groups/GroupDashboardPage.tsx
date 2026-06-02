@@ -9,7 +9,7 @@ import { Table } from '../../components/ui/Table';
 import { PerformanceChart } from '../../components/charts/PerformanceChart';
 import { DateRangePicker } from '../../components/ui/DateRangePicker';
 import { PageLoader } from '../../components/ui/LoadingSpinner';
-import { formatCurrency, formatPercent, getValueColor, cn } from '../../lib/utils';
+import { formatCurrency, getValueColor, cn } from '../../lib/utils';
 import type { DateRange, BenchmarkToggle, GroupPortfolioBreakdown } from '../../types';
 
 export function GroupDashboardPage() {
