@@ -12,7 +12,7 @@ import { PerformanceChart } from '../components/charts/PerformanceChart';
 import { PortfolioForm } from '../components/forms/PortfolioForm';
 import { useCreatePortfolio } from '../hooks/usePortfolio';
 import { useToast } from '../components/ui/Toast';
-import { formatCurrency, formatDate, getValueColor, cn } from '../lib/utils';
+import { formatCurrency, formatPercent, formatDate, getValueColor, cn } from '../lib/utils';
 import type { Holding, Trade, BenchmarkToggle } from '../types';
 
 export function DashboardPage() {
