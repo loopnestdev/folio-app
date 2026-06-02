@@ -36,7 +36,10 @@ export function DrawdownPage() {
     drawdownData.length > 0
       ? drawdownData.reduce((s, d) => s + d.drawdown, 0) / drawdownData.length
       : 0;
-  const daysInDrawdown = drawdownData.filter((d) => d.drawdown < 0).length;
+  const daysInDrawdown  = drawdownData.filter((d) => d.drawdown < 0).length;
+  const drawdownPct     = drawdownData.length > 0
+    ? (daysInDrawdown / drawdownData.length) * 100
+    : 0;
 
   if (isLoading) return <PageLoader />;
 
@@ -69,9 +72,9 @@ export function DrawdownPage() {
           trend={avgDrawdown}
         />
         <StatCard
-          label="Days in Drawdown"
-          value={`${daysInDrawdown}`}
-          subtitle={`of ${drawdownData.length} total days`}
+          label="Time in Drawdown"
+          value={`${drawdownPct.toFixed(1)}%`}
+          subtitle={`${daysInDrawdown} of ${drawdownData.length} sessions`}
         />
       </div>
 
