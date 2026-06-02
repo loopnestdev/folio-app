@@ -992,6 +992,129 @@ router.get('/:id/dividends', async (req: AuthenticatedRequest, res: any) => {
   }
 });
 
+// ── GET /api/groups/:id/holdings ──────────────────────────────────────────────
+// Aggregated holdings across all portfolios in the group, converted to base currency.
+// Same symbol held in multiple portfolios is merged into one row.
+router.get('/:id/holdings', async (req: AuthenticatedRequest, res: any) => {
+  const group = await getGroup(req.params.id as string, req.userId!);
+  if (!group) { res.status(404).json({ error: 'Group not found' }); return; }
+
+  const todayStr      = format(new Date(), 'yyyy-MM-dd');
+  const baseCurrency: string = group.base_currency ?? 'AUD';
+
+  try {
+    const portfolios = await getGroupPortfolios(req.params.id as string, req.userId!);
+    if (!portfolios.length) { res.json({ holdings: [], summary: { total_value: 0, total_cost: 0, total_gain: 0, total_gain_pct: 0, cash_balance: 0 } }); return; }
+
+    const uniqueCurrencies = [...new Set(portfolios.map((p) => p.currency))].filter((c) => c !== baseCurrency);
+    const fxRates: Record<string, number> = { [baseCurrency]: 1 };
+    await Promise.all(uniqueCurrencies.map(async (cur) => {
+      fxRates[cur] = await getForexRate(cur, baseCurrency, todayStr);
+    }));
+
+    // Aggregate: symbol → merged row in base currency
+    const agg: Record<string, {
+      symbol: string; security_name: string | null; exchange: string | null;
+      quantity: number; total_cost: number; market_value: number | null;
+      unrealized_gain: number | null; current_price: number | null;
+    }> = {};
+    let totalCash = 0;
+
+    for (const portfolio of portfolios) {
+      const trades = await getPortfolioTrades(portfolio.id);
+      const fx = fxRates[portfolio.currency] ?? 1;
+
+      const securitiesMap = new Map<string, string>();
+      trades.filter((t) => t.security).forEach((t) => securitiesMap.set(t.security!.symbol, t.security!.exchange ?? ''));
+      const currentPrices = await getCurrentPrices(
+        Array.from(securitiesMap.entries()).map(([symbol, exchange]) => ({ symbol, exchange })),
+      );
+
+      const holdings = calculateHoldings(trades as any, currentPrices);
+
+      for (const h of holdings) {
+        const costBase  = h.cost_base  * fx;
+        const mv        = h.market_value  != null ? h.market_value  * fx : null;
+        const ug        = h.unrealized_gain != null ? h.unrealized_gain * fx : null;
+
+        if (!agg[h.symbol]) {
+          agg[h.symbol] = {
+            symbol:        h.symbol,
+            security_name: h.security_name,
+            exchange:      h.exchange,
+            quantity:      h.quantity,
+            total_cost:    costBase,
+            market_value:  mv,
+            unrealized_gain: ug,
+            current_price: h.current_price,   // native price for display
+          };
+        } else {
+          agg[h.symbol].quantity      += h.quantity;
+          agg[h.symbol].total_cost    += costBase;
+          if (mv != null) agg[h.symbol].market_value = (agg[h.symbol].market_value ?? 0) + mv;
+          if (ug != null) agg[h.symbol].unrealized_gain = (agg[h.symbol].unrealized_gain ?? 0) + ug;
+        }
+      }
+
+      const { cash_balance } = calculateCashPosition(trades as any);
+      totalCash += cash_balance * fx;
+    }
+
+    // Build final holdings array with derived fields
+    const holdingsList = Object.values(agg).map((h) => ({
+      security_id:         h.symbol,
+      symbol:              h.symbol,
+      security_name:       h.security_name,
+      exchange:            h.exchange,
+      currency:            baseCurrency,
+      quantity:            h.quantity,
+      avg_cost:            h.quantity > 0 ? h.total_cost / h.quantity : 0,
+      cost_base:           h.total_cost,
+      total_cost:          h.total_cost,
+      current_price:       h.current_price,
+      market_value:        h.market_value,
+      unrealized_gain:     h.unrealized_gain,
+      unrealized_gain_pct: h.total_cost > 0 && h.unrealized_gain != null
+        ? (h.unrealized_gain / h.total_cost) * 100 : null,
+    }));
+
+    // Sort by market value descending
+    holdingsList.sort((a, b) => (b.market_value ?? 0) - (a.market_value ?? 0));
+
+    // Append cash row
+    if (totalCash !== 0) {
+      holdingsList.push({
+        security_id:         'cash',
+        symbol:              'CASH',
+        security_name:       'Cash',
+        exchange:            '',
+        currency:            baseCurrency,
+        quantity:            totalCash,
+        avg_cost:            1,
+        cost_base:           totalCash,
+        total_cost:          totalCash,
+        current_price:       1,
+        market_value:        totalCash,
+        unrealized_gain:     0,
+        unrealized_gain_pct: 0,
+      });
+    }
+
+    // Summary (exclude cash from gain calc)
+    const totalValue   = holdingsList.reduce((s, h) => s + (h.market_value ?? 0), 0);
+    const equityCost   = holdingsList.filter((h) => h.symbol !== 'CASH').reduce((s, h) => s + h.total_cost, 0);
+    const totalGain    = totalValue - equityCost - totalCash;
+    const totalGainPct = equityCost > 0 ? (totalGain / equityCost) * 100 : 0;
+
+    res.json({
+      holdings: holdingsList,
+      summary: { total_value: totalValue, total_cost: equityCost, total_gain: totalGain, total_gain_pct: totalGainPct, cash_balance: totalCash },
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── GET /api/groups/:id/diversity ─────────────────────────────────────────────
 // Aggregated portfolio allocation across all portfolios, converted to base currency.
 router.get('/:id/diversity', async (req: AuthenticatedRequest, res: any) => {

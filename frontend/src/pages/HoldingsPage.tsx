@@ -1,6 +1,8 @@
 import { useParams } from 'react-router-dom';
 import { useHoldings } from '../hooks/usePortfolio';
-import { usePortfolioContext } from '../contexts/PortfolioContext';
+import { useGroupHoldings } from '../hooks/useGroupReports';
+import { useReportViewSwitcher } from '../hooks/useReportViewSwitcher';
+import { ReportViewSwitcher } from '../components/ui/ReportViewSwitcher';
 import { Card } from '../components/ui/Card';
 import { Table } from '../components/ui/Table';
 import { PageLoader } from '../components/ui/LoadingSpinner';
@@ -9,17 +11,22 @@ import type { Holding } from '../types';
 
 export function HoldingsPage() {
   const { id } = useParams<{ id: string }>();
-  const { activePortfolio } = usePortfolioContext();
-  const portfolioId = id || activePortfolio?.id;
-  const currency = activePortfolio?.currency || 'USD';
+  const view = useReportViewSwitcher(id);
 
-  const { data: holdings = [], isLoading } = useHoldings(portfolioId);
+  const { data: indHoldings = [], isLoading: indLoading } = useHoldings(view.portfolioId);
+  const { data: grpHoldings = [], isLoading: grpLoading } = useGroupHoldings(view.groupId);
+
+  const holdings  = view.viewMode === 'group' ? grpHoldings : indHoldings;
+  const isLoading = view.viewMode === 'group' ? grpLoading  : indLoading;
+  const currency  = view.currency;
 
   if (isLoading) return <PageLoader />;
 
+  // Summary totals — exclude CASH row from cost/gain calc
+  const equityHoldings = holdings.filter((h) => h.symbol !== 'CASH');
   const totalValue = holdings.reduce((sum, h) => sum + (h.market_value ?? 0), 0);
-  const totalCost  = holdings.reduce((sum, h) => sum + (h.total_cost ?? 0), 0);
-  const totalGain = totalValue - totalCost;
+  const totalCost  = equityHoldings.reduce((sum, h) => sum + (h.total_cost ?? 0), 0);
+  const totalGain    = equityHoldings.reduce((sum, h) => sum + (h.unrealized_gain ?? 0), 0);
   const totalGainPct = totalCost > 0 ? (totalGain / totalCost) * 100 : 0;
 
   const columns = [
@@ -120,28 +127,40 @@ export function HoldingsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Current Holdings</h1>
-        <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">
-          {activePortfolio ? (
-            <span className="font-semibold text-[var(--c-ink)]">{activePortfolio.name}</span>
-          ) : (
-            <span>Portfolio</span>
-          )}
-          {activePortfolio?.currency && (
-            <span className="ml-1 text-[var(--c-ink-mute)]">({activePortfolio.currency})</span>
-          )}
-          {' '}· {holdings.length} position{holdings.length !== 1 ? 's' : ''} &mdash; Total value:{' '}
-          <strong>{formatCurrency(totalValue, currency)}</strong>
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+        <div>
+          <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Current Holdings</h1>
+          <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">
+            {view.displayName && (
+              <span className="font-semibold text-[var(--c-ink)]">{view.displayName}</span>
+            )}
+            {currency && (
+              <span className="ml-1 text-[var(--c-ink-mute)]">({currency})</span>
+            )}
+            {' '}· {equityHoldings.length} position{equityHoldings.length !== 1 ? 's' : ''} &mdash; Total value:{' '}
+            <strong>{formatCurrency(totalValue, currency)}</strong>
+          </p>
+        </div>
+        {view.hasGroups && (
+          <ReportViewSwitcher
+            viewMode={view.viewMode}
+            portfolios={view.portfolios}
+            groups={view.groups}
+            activePortfolioId={view.activePortfolioId}
+            activeGroupId={view.activeGroupId}
+            onViewModeChange={view.onViewModeChange}
+            onPortfolioChange={view.onPortfolioChange}
+            onGroupChange={view.onGroupChange}
+          />
+        )}
       </div>
 
       <Card padding="none">
         <Table<Holding>
           columns={columns as Parameters<typeof Table<Holding>>[0]['columns']}
           data={holdings}
-          keyField="id"
-          emptyMessage="No holdings in this portfolio"
+          keyField="symbol"
+          emptyMessage="No holdings found"
           footer={
             holdings.length > 0 ? (
               <>

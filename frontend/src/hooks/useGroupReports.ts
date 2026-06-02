@@ -2,10 +2,24 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import type {
   GroupSummary, GroupCapitalGain, GroupTaxReport, PerformancePoint,
-  MonthlyProfit, DividendSummary, PortfolioDiversity, PortfolioStatistics,
+  MonthlyProfit, DividendSummary, PortfolioDiversity, PortfolioStatistics, Holding,
 } from '../types';
 import { dateRangeToParams } from '../lib/utils';
 import type { DateRange } from '../types';
+
+// ── Group Holdings ───────────────────────────────────────────
+export function useGroupHoldings(groupId?: string) {
+  return useQuery({
+    queryKey: ['group-holdings', groupId],
+    queryFn: async () => {
+      const { data } = await api.get<{ holdings: Holding[]; summary: unknown }>(
+        `/api/groups/${groupId}/holdings`,
+      );
+      return data.holdings ?? [];
+    },
+    enabled: !!groupId,
+  });
+}
 
 // ── Group Summary ────────────────────────────────────────────
 export function useGroupSummary(groupId?: string) {
