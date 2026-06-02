@@ -92,9 +92,12 @@ export function calculateHoldings(
 
     if (!fifo[sym]) fifo[sym] = [];
 
-    if (trade.trade_type === 'buy' || trade.trade_type === 'drp') {
+    if (trade.trade_type === 'buy' || trade.trade_type === 'drp' || trade.trade_type === 'transfer_in') {
+      // transfer_in: shares received with a recorded cost basis, no cash outflow.
+      // The price field holds the cost-basis per share (for CGT). Brokerage is 0.
       const rate = trade.exchange_rate ?? 1;
-      const unitCost = (trade.price * trade.quantity + trade.brokerage) / trade.quantity;
+      const brok = trade.trade_type === 'transfer_in' ? 0 : (trade.brokerage ?? 0);
+      const unitCost = (trade.price * trade.quantity + brok) / trade.quantity;
       fifo[sym].push({
         trade_date: trade.trade_date,
         quantity: trade.quantity,
@@ -183,9 +186,11 @@ export function calculateCapitalGains(
 
     if (!fifo[sym]) fifo[sym] = [];
 
-    if (trade.trade_type === 'buy' || trade.trade_type === 'drp') {
+    if (trade.trade_type === 'buy' || trade.trade_type === 'drp' || trade.trade_type === 'transfer_in') {
+      // transfer_in: shares received with a recorded cost basis, no cash outflow.
       const rate = trade.exchange_rate ?? 1;
-      const unitCost = (trade.price * trade.quantity + trade.brokerage) / trade.quantity;
+      const brok = trade.trade_type === 'transfer_in' ? 0 : (trade.brokerage ?? 0);
+      const unitCost = (trade.price * trade.quantity + brok) / trade.quantity;
       fifo[sym].push({
         trade_date: trade.trade_date,
         quantity: trade.quantity,

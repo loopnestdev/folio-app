@@ -46,7 +46,7 @@ async function upsertSecurity(symbol: string, name: string, exchange: string, cu
 
 const tradeSchema = z.object({
   trade_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  trade_type: z.enum(['buy', 'sell', 'dividend', 'interest', 'drp', 'split', 'deposit', 'withdrawal']),
+  trade_type: z.enum(['buy', 'sell', 'dividend', 'interest', 'drp', 'split', 'deposit', 'withdrawal', 'transfer_in']),
   symbol: z.string().min(1).max(20),
   security_name: z.string().optional(),
   exchange: z.string().optional().default('ASX'),
@@ -69,7 +69,7 @@ router.get('/:portfolioId/trades', async (req: AuthenticatedRequest, res: any) =
 
   const { from, to, page = '1', limit = '50' } = req.query as Record<string, string>;
   const pageNum = Math.max(1, parseInt(page));
-  const limitNum = Math.min(200, Math.max(1, parseInt(limit)));
+  const limitNum = Math.min(2000, Math.max(1, parseInt(limit)));
   const offset = (pageNum - 1) * limitNum;
 
   let query = supabase
@@ -320,7 +320,7 @@ router.post('/:portfolioId/import/confirm', async (req: AuthenticatedRequest, re
   const schema = z.object({
     trades: z.array(z.object({
       trade_date: z.string(),
-      trade_type: z.enum(['buy', 'sell', 'dividend', 'interest', 'drp', 'split', 'deposit', 'withdrawal']),
+      trade_type: z.enum(['buy', 'sell', 'dividend', 'interest', 'drp', 'split', 'deposit', 'withdrawal', 'transfer_in']),
       symbol: z.string(),
       security_name: z.string(),
       exchange: z.string(),

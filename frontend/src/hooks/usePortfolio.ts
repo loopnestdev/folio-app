@@ -47,14 +47,16 @@ export function useHoldings(portfolioId?: string) {
   });
 }
 
-// Fetch trades for a portfolio — backend returns paginated { data, total, page, limit }
-export function useTrades(portfolioId?: string, filters?: TradeFilter) {
+// Fetch trades for a portfolio — always requests up to 2000 so the full history
+// is available for client-side filtering (symbol, type). Backend paginates at
+// 2000 max; portfolios with more trades would need proper pagination in future.
+export function useTrades(portfolioId?: string, filters?: Omit<TradeFilter, 'trade_type'>) {
   return useQuery({
     queryKey: ['trades', portfolioId, filters],
     queryFn: async () => {
       const { data } = await api.get<{ data: Trade[]; total: number; page: number; limit: number }>(
         `/api/portfolios/${portfolioId}/trades`,
-        { params: filters },
+        { params: { ...filters, limit: 2000 } },
       );
       return data.data; // extract the array from the paginated wrapper
     },

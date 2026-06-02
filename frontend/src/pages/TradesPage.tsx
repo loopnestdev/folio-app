@@ -17,14 +17,15 @@ import { formatCurrency, formatDate } from '../lib/utils';
 import type { Trade, BackendTradeType } from '../types';
 
 const TRADE_TYPE_BADGE: Record<BackendTradeType, 'success' | 'info' | 'warning' | 'neutral'> = {
-  buy:        'info',
-  sell:       'warning',
-  dividend:   'success',
-  interest:   'success',
-  drp:        'info',
-  split:      'neutral',
-  deposit:    'success',
-  withdrawal: 'warning',
+  buy:         'info',
+  sell:        'warning',
+  dividend:    'success',
+  interest:    'success',
+  drp:         'info',
+  split:       'neutral',
+  deposit:     'success',
+  withdrawal:  'warning',
+  transfer_in: 'info',
 };
 
 export function TradesPage() {
@@ -39,15 +40,14 @@ export function TradesPage() {
   const [filterSymbol, setFilterSymbol] = useState('');
   const [filterType, setFilterType] = useState<BackendTradeType | ''>('');
 
-  // Fetch trades server-side by type only; symbol filtering is done client-side so
-  // that typing a symbol doesn't trigger a new network request on every keystroke.
-  const { data: allTrades = [], isLoading } = useTrades(portfolioId, {
-    trade_type: filterType || undefined,
-  });
+  // Fetch the full trade history in one request (limit 2000).
+  // Both type and symbol filtering are applied client-side to avoid network
+  // round-trips on every keystroke or dropdown change.
+  const { data: allTrades = [], isLoading } = useTrades(portfolioId);
 
-  const trades = filterSymbol
-    ? allTrades.filter((t) => t.security?.symbol?.toUpperCase().includes(filterSymbol))
-    : allTrades;
+  const trades = allTrades
+    .filter((t) => !filterType   || t.trade_type === filterType)
+    .filter((t) => !filterSymbol || (t.security?.symbol?.toUpperCase().includes(filterSymbol)));
 
   const addTrade    = useAddTrade(portfolioId);
   const updateTrade = useUpdateTrade(portfolioId);
@@ -224,15 +224,16 @@ export function TradesPage() {
         />
         <Select
           options={[
-            { label: 'All types',   value: '' },
-            { label: 'Buy',         value: 'buy' },
-            { label: 'Sell',        value: 'sell' },
-            { label: 'Dividend',    value: 'dividend' },
-            { label: 'Interest',    value: 'interest' },
-            { label: 'DRP',         value: 'drp' },
-            { label: 'Split',       value: 'split' },
-            { label: 'Deposit',     value: 'deposit' },
-            { label: 'Withdrawal',  value: 'withdrawal' },
+            { label: 'All types',    value: '' },
+            { label: 'Buy',          value: 'buy' },
+            { label: 'Sell',         value: 'sell' },
+            { label: 'Transfer In',  value: 'transfer_in' },
+            { label: 'Dividend',     value: 'dividend' },
+            { label: 'Interest',     value: 'interest' },
+            { label: 'DRP',          value: 'drp' },
+            { label: 'Split',        value: 'split' },
+            { label: 'Deposit',      value: 'deposit' },
+            { label: 'Withdrawal',   value: 'withdrawal' },
           ]}
           value={filterType}
           onChange={(v) => setFilterType(v as BackendTradeType | '')}

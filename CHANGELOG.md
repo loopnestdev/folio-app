@@ -10,6 +10,12 @@ All notable changes to Folio App are documented here.
 
 - **Statistics: Beta / Correlation both 0.00 for "All" range** — Benchmark data was fetched from `2000-01-01`; Yahoo Finance fails silently for 26-year ranges, returning an empty series. `alignReturnMaps` then found no common months with the portfolio, yielding Beta = 0 and Correlation = 0. Fixed by anchoring the benchmark fetch to the portfolio's actual first data date instead of the date-range `fromDate`. (`backend/src/routes/groups.ts`, `backend/src/routes/reports.ts`)
 
+- **Trades page: type filter and pagination broken** — The backend `trade_type` query param was silently ignored (only `from`, `to`, `page`, `limit` were read). The default limit was 50, capped at 200, so older trades never appeared. Both filters are now applied client-side after fetching up to 2 000 trades in a single request. (`backend/src/routes/trades.ts`, `frontend/src/hooks/usePortfolio.ts`, `frontend/src/pages/TradesPage.tsx`)
+
+### Added
+
+- **Transfer In trade type** — Shares received from another broker/account can now be recorded as `transfer_in`. Unlike a buy, no cash is deducted; unlike a deposit, shares are added to FIFO holdings at the recorded cost basis for CGT purposes. The type appears in the Add/Edit Trade form and Trades page filter dropdown. (`backend/src/routes/trades.ts`, `backend/src/types/index.ts`, `backend/src/services/calculations/holdings.ts`, `frontend/src/types/index.ts`, `frontend/src/components/forms/TradeForm.tsx`, `frontend/src/pages/TradesPage.tsx`)
+
 ## [v0.6.1] — 2026-06-02
 
 ### Changed

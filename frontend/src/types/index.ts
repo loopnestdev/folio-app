@@ -127,7 +127,7 @@ export interface PortfolioSummary {
 }
 
 // Trade Types — match backend schema exactly
-export type BackendTradeType = 'buy' | 'sell' | 'dividend' | 'interest' | 'drp' | 'split' | 'deposit' | 'withdrawal';
+export type BackendTradeType = 'buy' | 'sell' | 'dividend' | 'interest' | 'drp' | 'split' | 'deposit' | 'withdrawal' | 'transfer_in';
 
 // Legacy aliases kept so existing UI code that renders direction labels compiles
 export type TradeDirection = 'BUY' | 'SELL';
