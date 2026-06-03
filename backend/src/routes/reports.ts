@@ -280,41 +280,27 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
       }
     }
 
-    // ── Time-Weighted Return (TWR) — Invested-Value-Only ────────────────────────
-    // We track performance using ONLY the market value of held securities.
-    // Cash (bank deposits, FX transfers, withdrawals) is excluded from both the
-    // portfolio value and the external-flow adjustment.
+    // ── Time-Weighted Return (TWR) ────────────────────────────────────────────
+    // TWR chains daily returns and neutralises the effect of external cash flows
+    // (deposits, withdrawals) and in-specie Transfer-In events (shares received
+    // at $0 cost). This is the industry standard for performance measurement and
+    // fixes two problems with simpler formulas:
     //
-    // Why this matters for SMSF / FX-active portfolios:
+    //   1. "(total − net_dep) / net_dep" is sensitive to denominator size — a small
+    //      net_deposited + large position = extreme % swings on normal price moves.
+    //   2. Large deposits/withdrawals (e.g. FX transfers) would spike the chart.
     //
-    //   Problem with cash-inclusive TWR:
-    //     When a large FX deposit parks in the AUD portfolio waiting to be invested,
-    //     the cash weight dilutes the impact of position moves on the %-return chart.
-    //     When that cash leaves via FX withdrawal, the sensitivity jumps back up —
-    //     creating apparent "spikes" even though the investment performance is flat.
-    //     Even with correct external-flow adjustment the denominator can turn briefly
-    //     negative (cash overdraft > total NAV) causing chain-break gaps or oscillation.
+    // Formula per day:
+    //   daily_factor = value_t / (value_{t−1} + external_flows_on_t)
+    //   TWR_t        = (Π daily_factors − 1) × 100
     //
-    //   Solution — invested-value-only:
-    //     portfolio_value_t = Σ(qty × market_price)   (securities only, no cash)
-    //     external_flow_t   = buy_cost − sell_proceeds  (cash ↔ position transfers)
-    //     daily_factor_t    = portfolio_value_t / (portfolio_value_{t-1} + ext_flow_t)
-    //     TWR_t             = (Π daily_factors − 1) × 100
-    //
-    //   Bank deposits, withdrawals, and FX transfers are completely invisible to
-    //   this calculation — they only affect cash, not the invested bucket.
-    //   Brokerage is embedded in buy/sell flows, so it shows as a small drag on
-    //   the chart (as it should be).
-    //
-    //   Transfer-In shares at $0 cost: external flow = market value on trade date,
-    //   so "free" shares don't inflate performance (same intent as before).
-    //
-    // To revert to cash-inclusive TWR, git-revert the commit that added this comment.
+    // External flows excluded from return (capital movements, not performance):
+    //   • deposit / withdrawal trades
+    //   • buy trades at price=0 (Transfer-In from broker, value added "for free")
 
     const sortedTrades = [...trades].sort((a, b) => a.trade_date.localeCompare(b.trade_date));
 
-    // Running cash — used only to compute totalValue in portfolioValues for NAV
-    // display (not for the TWR chain itself).
+    // Running cash (for portfolio value calculation)
     const runningCash: [string, number][] = (() => {
       let cash = 0;
       return sortedTrades.map(t => {
@@ -336,6 +322,26 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
       return val;
     };
 
+    // External flows by date (deposits + withdrawals + transfer-in market value)
+    const externalFlowsByDate: Record<string, number> = {};
+    for (const t of sortedTrades) {
+      const qty   = Number(t.quantity) || 0;
+      const price = Number(t.price)    || 0;
+      if (t.trade_type === 'deposit') {
+        externalFlowsByDate[t.trade_date] = (externalFlowsByDate[t.trade_date] ?? 0) + price * qty;
+      } else if (t.trade_type === 'withdrawal') {
+        externalFlowsByDate[t.trade_date] = (externalFlowsByDate[t.trade_date] ?? 0) - price * qty;
+      } else if (t.trade_type === 'buy' && price === 0 && qty > 0) {
+        // Transfer-In at $0: treat as external inflow at market value so the
+        // "free" shares do not inflate TWR performance.
+        const sym      = (t as any).security?.symbol ?? '';
+        const mktPrice = priceMap[t.trade_date]?.[sym] ?? 0;
+        if (mktPrice > 0) {
+          externalFlowsByDate[t.trade_date] = (externalFlowsByDate[t.trade_date] ?? 0) + mktPrice * qty;
+        }
+      }
+    }
+
     const portfolioValues = Object.keys(priceMap).sort().map((date) => {
       const dayPrices   = priceMap[date];
       const dayHoldings = calculateHoldings(
@@ -343,117 +349,127 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
       );
       const investedValue = dayHoldings.reduce((s, h) => s + (h.market_value ?? 0), 0);
       const cashBalance   = getCashAt(date);
-      return { date, totalValue: investedValue + cashBalance, cashBalance, investedValue };
+      // Store cashBalance separately so the TWR loop can detect overdraft states.
+      return { date, totalValue: investedValue + cashBalance, cashBalance };
     });
 
-    // ── Position changes for invested-only TWR (qty × symbol, NOT dollar flows) ──
-    // We store quantity changes rather than executed-price dollar flows so that we
-    // can price them at the CLOSE price on the remapped trading day.
+    // ── TWR start: find first price-date with BOTH positive net deposits AND
+    //    positive total portfolio value.
     //
-    // Why close prices instead of executed prices?
-    //   investedValue uses close prices (from priceMap).
-    //   If extFlow also uses close prices, numerator = investedValue − extFlow
-    //   measures ONLY the price return of positions held across the day boundary,
-    //   which is exactly what TWR should capture.
-    //
-    //   Using executed prices instead causes a mismatch:
-    //     • Buy at executed ≈ close  →  numerator ≈ 0  →  factor ≈ 0  →  CRASH
-    //     • Sell at executed < close →  adjustedBase goes negative       →  CRASH
-    //   Both crashes permanently zero the multiplier for all future dates.
-    //
-    // Deposits, withdrawals, and FX transfers: NOT here — invisible to TWR.
-    const positionChanges: { date: string; symbol: string; qty: number }[] = [];
-    for (const t of sortedTrades) {
-      const qty = Number(t.quantity) || 0;
-      const sym = (t as any).security?.symbol ?? '';
-      if (!sym || qty <= 0) continue;
-      if (t.trade_type === 'buy' || t.trade_type === 'drp') {
-        positionChanges.push({ date: t.trade_date, symbol: sym, qty: +qty });
-      } else if (t.trade_type === 'sell') {
-        positionChanges.push({ date: t.trade_date, symbol: sym, qty: -qty });
-      }
-    }
+    //    TWR is mathematically undefined (or inverted) when portfolio value is ≤ 0:
+    //      - negative / negative  = "positive" factor even when portfolio worsened
+    //      - positive / negative  = negative factor (explodes the chain)
+    //    Skipping the pre-deposit / temporarily-negative period ensures the chain
+    //    starts on a meaningful, stable baseline.
 
-    // ── TWR start: first trading day with any open positions ──────────────────
-    const chartStartIdx = portfolioValues.findIndex(({ investedValue }) => investedValue > 0);
+    const runningNetDep: [string, number][] = (() => {
+      let net = 0;
+      return sortedTrades
+        .filter(t => t.trade_type === 'deposit' || t.trade_type === 'withdrawal')
+        .map(t => {
+          const qty = Number(t.quantity) || 0;
+          const price = Number(t.price) || 0;
+          net += t.trade_type === 'deposit' ? price * qty : -(price * qty);
+          return [t.trade_date, net] as [string, number];
+        });
+    })();
+    const getNetDepAt = (date: string): number => {
+      let val = 0;
+      for (const [d, v] of runningNetDep) { if (d <= date) val = v; else break; }
+      return val;
+    };
+
+    const chartStartIdx = portfolioValues.findIndex(
+      ({ date, totalValue }) => getNetDepAt(date) > 0 && totalValue > 0
+    );
     if (chartStartIdx === -1) { res.json([]); return; }
+
     const chartStart = portfolioValues[chartStartIdx].date;
 
-    // ── Build extFlow map using close prices on the remapped trading day ───────
-    // Each position change is remapped to the nearest price date on or after its
-    // trade date, then priced at that date's close.  This guarantees extFlow and
-    // investedValue share the same price basis — a necessary condition for the
-    // numerator form of TWR to be stable.
-    // Changes on or before chartStart are already baked into prevInvested.
-    const priceDates = portfolioValues.map(v => v.date);
-    const investedExtFlowForTWR: Record<string, number> = {};
-    for (const { date: flowDate, symbol, qty } of positionChanges) {
-      if (flowDate <= chartStart) continue;
+    // ── External-flow remapping ─────────────────────────────────────────────
+    // Deposits and withdrawals can be recorded on weekends or public holidays
+    // when markets are closed and there is no entry in portfolioValues for that
+    // date. If we look up externalFlowsByDate[priceDate] only for exact price
+    // dates, those non-trading-day flows are silently dropped: getCashAt()
+    // already reflects the updated cash balance, but the TWR denominator
+    // (adjustedBase) isn't adjusted — producing a phantom gain or loss on the
+    // following trading day.
+    //
+    // Fix: assign every flow to the NEXT available price date on or after its
+    // trade date so the denominator and the cash balance always match.
+    // Flows on or before chartStart are skipped because they are already baked
+    // into prevValue = portfolioValues[chartStartIdx].totalValue.
+    const priceDates   = portfolioValues.map(v => v.date);
+    const extFlowForTWR: Record<string, number> = {};
+    for (const [flowDate, flowAmt] of Object.entries(externalFlowsByDate)) {
+      if (flowDate <= chartStart) continue; // already absorbed into prevValue
       const target = priceDates.find(d => d >= flowDate);
-      if (!target) continue;
-      const closePrice = priceMap[target]?.[symbol];
-      if (closePrice != null && closePrice > 0) {
-        investedExtFlowForTWR[target] = (investedExtFlowForTWR[target] ?? 0) + qty * closePrice;
-      }
-      // No close price available: skip. The position appears in investedValue
-      // but not in extFlow, producing a one-day spike. Acceptable edge case —
-      // it resolves the next day when prices are available.
+      if (target) extFlowForTWR[target] = (extFlowForTWR[target] ?? 0) + flowAmt;
     }
 
-    // ── Chain daily TWR factors from chartStart ───────────────────────────────
+    // Chain daily TWR factors from chartStart.
+    // When adjustedBase ≤ 0 OR totalValue ≤ 0 the formula is undefined — push null
+    // (chart gap) so the line is broken rather than showing inverted/exploded values.
     //
-    // Formula:  factor = (investedValue − extFlow) / prevInvested
+    // CHAIN-BREAK rule: if a withdrawal drives adjustedBase ≤ 0 (the withdrawal
+    // exceeded the portfolio's last valid value), set chainBroken = true and push
+    // nulls for ALL remaining dates.
     //
-    // With extFlow priced at today's close:
-    //   numerator = investedValue − extFlow
-    //             = (all_positions_at_close) − (new_or_closed_positions_at_close)
-    //             = (unchanged_positions_at_close)
-    //
-    // So factor = (unchanged positions today) / (all positions yesterday)
-    //           = price_return on the positions you held overnight — exactly TWR.
-    //
-    // New positions bought today contribute 0% on their first day (extFlow cancels
-    // investedValue for them).  Positions sold today contribute their overnight
-    // return up to the close (at which point they leave the invested bucket).
-
-    let multiplier   = 1.0;
-    let prevInvested = portfolioValues[chartStartIdx].investedValue;
+    // Why this matters: after an overdraft withdrawal the portfolio's NAV can be
+    // permanently negative (cash deeply negative, small holdings). Stock price
+    // fluctuations may occasionally push totalValue briefly above zero. Without
+    // chainBroken, the chain would "resume" comparing that tiny positive value
+    // against a large frozen prevValue (from before the withdrawal), producing an
+    // astronomical downward factor (e.g. −87% or −95%). chainBroken prevents that.
+    let multiplier  = 1.0;
+    let prevValue   = portfolioValues[chartStartIdx].totalValue;
+    let chainBroken = false; // true once a withdrawal exceeds the portfolio's value
 
     const portfolioGain: { date: string; value: number | null }[] = [
       { date: chartStart, value: 0.0 },
     ];
 
     for (let i = chartStartIdx + 1; i < portfolioValues.length; i++) {
-      const { date, investedValue } = portfolioValues[i];
-      const extFlow  = investedExtFlowForTWR[date] ?? 0;
+      const { date, totalValue, cashBalance } = portfolioValues[i];
+      const extFlow      = extFlowForTWR[date] ?? 0;
+      const adjustedBase = prevValue + extFlow;
 
-      if (prevInvested <= 0) {
-        // No invested base: either positions were fully exited or this is a
-        // fresh-start after a gap.  When new positions are opened, resume the
-        // chain from today's invested value without changing the multiplier
-        // (the accumulated return up to this point is preserved).
-        if (investedValue > 0) {
-          portfolioGain.push({ date, value: (multiplier - 1) * 100 });
-          prevInvested = investedValue;
-        } else {
-          portfolioGain.push({ date, value: null });
-        }
-        continue;
+      // ── Chain-break detection (evaluated before every step) ────────────────
+      // All three conditions are checked here — not only in the null branch —
+      // so that condition 3 can fire even when both adjustedBase and totalValue
+      // are technically positive (the scenario that caused the −99% crash).
+      if (!chainBroken) {
+        // 1. Withdrawal directly made adjustedBase ≤ 0 (withdrawal > prevValue).
+        if (extFlow < 0 && adjustedBase <= 0) chainBroken = true;
+
+        // 2. Permanent overdraft: more withdrawn than deposited AND portfolio is
+        //    underwater. Any brief stock-price recovery would resume the chain
+        //    comparing a tiny totalValue against a large frozen prevValue.
+        if (totalValue <= 0 && getNetDepAt(date) < 0) chainBroken = true;
+
+        // 3. Cash overdraft dominates the portfolio value.
+        //    Fires when negative cash (from any source — withdrawal, buy overdraft,
+        //    settlement timing) is LARGER than the total portfolio value. In this
+        //    leveraged state each 1% stock move causes extreme amplified TWR swings;
+        //    the chain produces oscillating zombie data if allowed to continue.
+        //
+        //    Example (AUD portfolio after FX transfer):
+        //      cashBalance = −A$13,522 · stocks = A$14,000 · totalValue = A$478
+        //      totalValue (A$478) < -cashBalance (A$13,522) → chain breaks cleanly.
+        //
+        //    Note: this may also fire on T+2 settlement timing or a buy that
+        //    temporarily exceeded available cash. That is an acceptable trade-off —
+        //    the alternative (zombie oscillation) is far more misleading.
+        if (cashBalance < 0 && totalValue < -cashBalance) chainBroken = true;
       }
 
-      const numerator = investedValue - extFlow;
-
-      if (numerator >= 0) {
-        // Normal case: factor = (investedValue − extFlow) / prevInvested
-        multiplier   *= numerator / prevInvested;
+      if (!chainBroken && adjustedBase > 0 && totalValue > 0) {
+        multiplier *= totalValue / adjustedBase;
         portfolioGain.push({ date, value: (multiplier - 1) * 100 });
-        prevInvested  = investedValue;
+        prevValue = totalValue;
       } else {
-        // numerator < 0 should not occur in valid data (would require selling
-        // positions for more than their current market value AND having no
-        // remaining positions). Treat as a data error — push null gap.
+        // Cannot compute a valid TWR factor. Show a null gap and freeze prevValue.
         portfolioGain.push({ date, value: null });
-        // Don't update prevInvested; keep frozen so chain can attempt to resume.
       }
     }
 
