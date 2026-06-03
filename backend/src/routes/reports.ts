@@ -346,30 +346,31 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
       return { date, totalValue: investedValue + cashBalance, cashBalance, investedValue };
     });
 
-    // ── Invested-only external flows: buy costs and sell proceeds ──────────────
-    // A buy transfers cash into the invested bucket (positive inflow).
-    // A sell transfers positions back to cash (negative outflow).
-    // Transfer-In at $0 (broker gift): use market value as inflow so free shares
-    // don't appear as instant performance gain.
-    // Deposits, withdrawals, and FX transfers: NOT in this map — invisible to TWR.
-    const investedFlowsByDate: Record<string, number> = {};
+    // ── Position changes for invested-only TWR (qty × symbol, NOT dollar flows) ──
+    // We store quantity changes rather than executed-price dollar flows so that we
+    // can price them at the CLOSE price on the remapped trading day.
+    //
+    // Why close prices instead of executed prices?
+    //   investedValue uses close prices (from priceMap).
+    //   If extFlow also uses close prices, numerator = investedValue − extFlow
+    //   measures ONLY the price return of positions held across the day boundary,
+    //   which is exactly what TWR should capture.
+    //
+    //   Using executed prices instead causes a mismatch:
+    //     • Buy at executed ≈ close  →  numerator ≈ 0  →  factor ≈ 0  →  CRASH
+    //     • Sell at executed < close →  adjustedBase goes negative       →  CRASH
+    //   Both crashes permanently zero the multiplier for all future dates.
+    //
+    // Deposits, withdrawals, and FX transfers: NOT here — invisible to TWR.
+    const positionChanges: { date: string; symbol: string; qty: number }[] = [];
     for (const t of sortedTrades) {
-      const qty   = Number(t.quantity)  || 0;
-      const price = Number(t.price)     || 0;
-      const brok  = Number(t.brokerage) || 0;
+      const qty = Number(t.quantity) || 0;
+      const sym = (t as any).security?.symbol ?? '';
+      if (!sym || qty <= 0) continue;
       if (t.trade_type === 'buy' || t.trade_type === 'drp') {
-        if (price === 0 && qty > 0) {
-          // Transfer-In at $0: use market value on trade date as the inflow.
-          const sym      = (t as any).security?.symbol ?? '';
-          const mktPrice = priceMap[t.trade_date]?.[sym] ?? 0;
-          if (mktPrice > 0) {
-            investedFlowsByDate[t.trade_date] = (investedFlowsByDate[t.trade_date] ?? 0) + mktPrice * qty;
-          }
-        } else {
-          investedFlowsByDate[t.trade_date] = (investedFlowsByDate[t.trade_date] ?? 0) + price * qty + brok;
-        }
+        positionChanges.push({ date: t.trade_date, symbol: sym, qty: +qty });
       } else if (t.trade_type === 'sell') {
-        investedFlowsByDate[t.trade_date] = (investedFlowsByDate[t.trade_date] ?? 0) - (price * qty - brok);
+        positionChanges.push({ date: t.trade_date, symbol: sym, qty: -qty });
       }
     }
 
@@ -378,40 +379,42 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
     if (chartStartIdx === -1) { res.json([]); return; }
     const chartStart = portfolioValues[chartStartIdx].date;
 
-    // ── Remap invested flows to nearest trading day on or after chartStart ─────
-    // Buys/sells are normally on trading days, but remap handles any edge cases
-    // (settlement dates, non-trading-day imports).
-    // Flows on or before chartStart are already baked into prevInvested.
+    // ── Build extFlow map using close prices on the remapped trading day ───────
+    // Each position change is remapped to the nearest price date on or after its
+    // trade date, then priced at that date's close.  This guarantees extFlow and
+    // investedValue share the same price basis — a necessary condition for the
+    // numerator form of TWR to be stable.
+    // Changes on or before chartStart are already baked into prevInvested.
     const priceDates = portfolioValues.map(v => v.date);
     const investedExtFlowForTWR: Record<string, number> = {};
-    for (const [flowDate, flowAmt] of Object.entries(investedFlowsByDate)) {
+    for (const { date: flowDate, symbol, qty } of positionChanges) {
       if (flowDate <= chartStart) continue;
       const target = priceDates.find(d => d >= flowDate);
-      if (target) investedExtFlowForTWR[target] = (investedExtFlowForTWR[target] ?? 0) + flowAmt;
+      if (!target) continue;
+      const closePrice = priceMap[target]?.[symbol];
+      if (closePrice != null && closePrice > 0) {
+        investedExtFlowForTWR[target] = (investedExtFlowForTWR[target] ?? 0) + qty * closePrice;
+      }
+      // No close price available: skip. The position appears in investedValue
+      // but not in extFlow, producing a one-day spike. Acceptable edge case —
+      // it resolves the next day when prices are available.
     }
 
     // ── Chain daily TWR factors from chartStart ───────────────────────────────
     //
     // Formula:  factor = (investedValue − extFlow) / prevInvested
     //
-    // This is the correct form for portfolios where executed trade prices differ
-    // from daily close prices (which is always the case for intraday trades).
-    //
-    // Why NOT the "adjustedBase" form (value_t / (prev + flow)):
-    //   adjustedBase = prevInvested + extFlow  is correct only when extFlow uses
-    //   the same prices as prevInvested (i.e. close prices).
-    //   But extFlow uses EXECUTED prices (from the trade record) while investedValue
-    //   uses close prices. When a large position is sold at an executed price that
-    //   differs from the previous close — even slightly — adjustedBase can go
-    //   negative (proceeds > prevInvested), causing factor = 0 and permanently
-    //   zeroing the multiplier for all future dates.
-    //
-    // The numerator form avoids this:
+    // With extFlow priced at today's close:
     //   numerator = investedValue − extFlow
-    //   • On a pure sell: numerator = 0 − (−proceeds) = proceeds (always ≥ 0)
-    //   • On a pure buy:  numerator = newPositions − buyCost ≈ price-gain on new lot
-    //   • prevInvested is always > 0 when we reach this branch (guarded below)
-    //   → factor is always ≥ 0; can only reach 0 when all positions are liquidated
+    //             = (all_positions_at_close) − (new_or_closed_positions_at_close)
+    //             = (unchanged_positions_at_close)
+    //
+    // So factor = (unchanged positions today) / (all positions yesterday)
+    //           = price_return on the positions you held overnight — exactly TWR.
+    //
+    // New positions bought today contribute 0% on their first day (extFlow cancels
+    // investedValue for them).  Positions sold today contribute their overnight
+    // return up to the close (at which point they leave the invested bucket).
 
     let multiplier   = 1.0;
     let prevInvested = portfolioValues[chartStartIdx].investedValue;
