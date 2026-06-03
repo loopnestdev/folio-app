@@ -391,11 +391,28 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
     }
 
     // ── Chain daily TWR factors from chartStart ───────────────────────────────
-    // When adjustedBase ≤ 0 (data error or degenerate state) push null so the
-    // chart shows a gap rather than an exploded value.
-    // When all positions are exited cleanly (adjustedBase = 0 AND investedValue = 0),
-    // record a flat return and reset the invested base to 0 so the chain can resume
-    // correctly when new positions are opened.
+    //
+    // Formula:  factor = (investedValue − extFlow) / prevInvested
+    //
+    // This is the correct form for portfolios where executed trade prices differ
+    // from daily close prices (which is always the case for intraday trades).
+    //
+    // Why NOT the "adjustedBase" form (value_t / (prev + flow)):
+    //   adjustedBase = prevInvested + extFlow  is correct only when extFlow uses
+    //   the same prices as prevInvested (i.e. close prices).
+    //   But extFlow uses EXECUTED prices (from the trade record) while investedValue
+    //   uses close prices. When a large position is sold at an executed price that
+    //   differs from the previous close — even slightly — adjustedBase can go
+    //   negative (proceeds > prevInvested), causing factor = 0 and permanently
+    //   zeroing the multiplier for all future dates.
+    //
+    // The numerator form avoids this:
+    //   numerator = investedValue − extFlow
+    //   • On a pure sell: numerator = 0 − (−proceeds) = proceeds (always ≥ 0)
+    //   • On a pure buy:  numerator = newPositions − buyCost ≈ price-gain on new lot
+    //   • prevInvested is always > 0 when we reach this branch (guarded below)
+    //   → factor is always ≥ 0; can only reach 0 when all positions are liquidated
+
     let multiplier   = 1.0;
     let prevInvested = portfolioValues[chartStartIdx].investedValue;
 
@@ -405,21 +422,35 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
 
     for (let i = chartStartIdx + 1; i < portfolioValues.length; i++) {
       const { date, investedValue } = portfolioValues[i];
-      const extFlow      = investedExtFlowForTWR[date] ?? 0;
-      const adjustedBase = prevInvested + extFlow;
+      const extFlow  = investedExtFlowForTWR[date] ?? 0;
 
-      if (adjustedBase === 0 && investedValue === 0) {
-        // All positions cleanly exited — flat return, reset base.
-        portfolioGain.push({ date, value: (multiplier - 1) * 100 });
-        prevInvested = 0;
-      } else if (adjustedBase > 0 && investedValue >= 0) {
-        multiplier   *= investedValue / adjustedBase;
+      if (prevInvested <= 0) {
+        // No invested base: either positions were fully exited or this is a
+        // fresh-start after a gap.  When new positions are opened, resume the
+        // chain from today's invested value without changing the multiplier
+        // (the accumulated return up to this point is preserved).
+        if (investedValue > 0) {
+          portfolioGain.push({ date, value: (multiplier - 1) * 100 });
+          prevInvested = investedValue;
+        } else {
+          portfolioGain.push({ date, value: null });
+        }
+        continue;
+      }
+
+      const numerator = investedValue - extFlow;
+
+      if (numerator >= 0) {
+        // Normal case: factor = (investedValue − extFlow) / prevInvested
+        multiplier   *= numerator / prevInvested;
         portfolioGain.push({ date, value: (multiplier - 1) * 100 });
         prevInvested  = investedValue;
       } else {
-        // Degenerate state — show null gap, keep prevInvested frozen so chain
-        // can resume if investedValue becomes positive again.
+        // numerator < 0 should not occur in valid data (would require selling
+        // positions for more than their current market value AND having no
+        // remaining positions). Treat as a data error — push null gap.
         portfolioGain.push({ date, value: null });
+        // Don't update prevInvested; keep frozen so chain can attempt to resume.
       }
     }
 
