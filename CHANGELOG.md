@@ -8,6 +8,10 @@ All notable changes to Folio App are documented here.
 
 - **Performance chart: switched to invested-value-only TWR** — The chart now tracks `Σ(qty × market_price)` (securities only) instead of total NAV (securities + cash). Buy costs and sell proceeds are the only external flows; bank deposits, withdrawals, and FX transfers are completely invisible to the calculation. This eliminates the "dampened-then-suddenly-volatile" distortion that occurred when large FX deposits sat idle in the AUD portfolio and then exited via FX withdrawal — previously the cash weight diluted position moves while idle, then full volatility resumed on withdrawal, creating apparent spikes even though investment performance was flat. Cash Flows page and all other reports are unaffected. (`backend/src/routes/reports.ts`)
 
+### Fixed
+
+- **Performance chart: crash to −100% after any sell trade** — The invested-only TWR used the `adjustedBase` form (`factor = investedValue / (prevInvested + extFlow)`). When an executed sell price was below the previous day's close price, `extFlow` (proceeds at executed price) exceeded `prevInvested` (at close price), making `adjustedBase` negative. A null was pushed and `prevInvested` stayed frozen. On the next trading day, with no positions remaining, `factor = 0 / prevInvested = 0`, permanently zeroing the multiplier and pinning the chart at −100% for all future dates. Fixed by switching to the numerator form: `factor = (investedValue − extFlow) / prevInvested`. On any sell, the numerator equals `investedValue + |proceeds| ≥ 0` regardless of whether the executed price is above or below the previous close. (`backend/src/routes/reports.ts`)
+
 ## [v0.6.4] — 2026-06-02
 
 ### Added
