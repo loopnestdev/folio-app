@@ -2,6 +2,12 @@
 
 All notable changes to Folio App are documented here.
 
+## [Unreleased]
+
+### Changed
+
+- **Performance chart: switched to invested-value-only TWR** — The chart now tracks `Σ(qty × market_price)` (securities only) instead of total NAV (securities + cash). Buy costs and sell proceeds are the only external flows; bank deposits, withdrawals, and FX transfers are completely invisible to the calculation. This eliminates the "dampened-then-suddenly-volatile" distortion that occurred when large FX deposits sat idle in the AUD portfolio and then exited via FX withdrawal — previously the cash weight diluted position moves while idle, then full volatility resumed on withdrawal, creating apparent spikes even though investment performance was flat. Cash Flows page and all other reports are unaffected. (`backend/src/routes/reports.ts`)
+
 ## [v0.6.4] — 2026-06-02
 
 ### Added
