@@ -19,6 +19,7 @@ import {
   X,
   Package,
   Layers,
+  Target,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { usePortfolioContext } from '../../contexts/PortfolioContext';
@@ -67,6 +68,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
   const mainItems: NavItem[] = [
     { label: 'Dashboard', to: '/', icon: <LayoutDashboard size={18} /> },
     { label: 'Portfolios', to: '/portfolios', icon: <Briefcase size={18} /> },
+    { label: 'Target Portfolios', to: '/target-portfolios', icon: <Target size={18} /> },
   ];
 
   const portfolioItems: NavItem[] = portfolioId

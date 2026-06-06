@@ -363,6 +363,71 @@ export interface TradeFilter {
   end_date?: string;
 }
 
+// ── Target Portfolio Types ────────────────────────────────────
+export interface TargetPortfolioItem {
+  id: string;
+  target_portfolio_id: string;
+  user_id: string;
+  symbol: string;
+  exchange: string | null;
+  category: string | null;
+  allocation_pct: number;
+  sort_order: number;
+  created_at: string;
+}
+
+export interface TargetPortfolio {
+  id: string;
+  user_id: string;
+  name: string;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  items: TargetPortfolioItem[];
+}
+
+export type RebalanceAction = 'BUY' | 'SELL' | 'HOLD' | 'EXIT';
+export type TaxTier = 'long_term' | 'short_term' | 'loss' | 'none';
+
+export interface RebalanceRow {
+  symbol: string;
+  category: string | null;
+  sort_order: number;
+  allocation_pct: number;
+  target_value: number;
+  current_value: number;
+  current_price: number | null;
+  diff: number;
+  action: RebalanceAction;
+  short_term_gain: number;
+  long_term_gain: number;
+  tax_tier: TaxTier;
+}
+
+export interface RebalanceTaxSummary {
+  total_short_term_gain: number;
+  total_long_term_gain: number;
+  estimated_tax_short_term: number;
+  estimated_tax_long_term: number;
+  estimated_tax_total: number;
+  sell_order: {
+    loss_symbols: string[];
+    long_term_symbols: string[];
+    short_term_symbols: string[];
+  };
+}
+
+export interface RebalanceResult {
+  target_portfolio: { id: string; name: string; is_active: boolean };
+  portfolio: { id: string; name: string; currency: string };
+  total_value: number;
+  cash_balance: number;
+  invested_value: number;
+  rows: RebalanceRow[];
+  tax_summary: RebalanceTaxSummary;
+}
+
 // Expected dividend
 export interface ExpectedDividend {
   symbol: string;
