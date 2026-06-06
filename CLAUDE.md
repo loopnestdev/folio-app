@@ -6,7 +6,7 @@ This file is for AI coding assistants. It documents the project architecture, co
 
 ## Project Overview
 
-**Folio App** is a full-stack portfolio tracking web application for self-directed investors. It supports trade management (manual + Moomoo PDF import), performance analytics, CGT reporting (Australian rules), and multi-portfolio management.
+**Folio App** is a full-stack portfolio tracking web application for self-directed investors. It supports trade management (manual + Moomoo PDF import), performance analytics, CGT reporting (Australian rules), multi-portfolio management, and target portfolio rebalancing with SMSF CGT estimation.
 
 **Production URL:** https://folio.ailab.build
 
@@ -51,7 +51,8 @@ folio-app/
 │   │   │   ├── HoldingsPage.tsx
 │   │   │   ├── SettingsPage.tsx
 │   │   │   ├── AdminPage.tsx
-│   │   │   └── reports/               # Performance, Statistics, CGT, Tax, etc.
+│   │   │   ├── reports/               # Performance, Statistics, CGT, Tax, etc.
+│   │   │   └── targets/               # Target portfolio list, detail, rebalance
 │   │   ├── components/
 │   │   │   ├── charts/                # Recharts + ECharts dual implementations
 │   │   │   ├── forms/                 # Trade form, portfolio form
@@ -62,7 +63,8 @@ folio-app/
 │   │   │   ├── usePortfolio.ts
 │   │   │   ├── usePerformance.ts
 │   │   │   ├── useReports.ts
-│   │   │   └── useStatistics.ts
+│   │   │   ├── useStatistics.ts
+│   │   │   └── useTargetPortfolios.ts # Target portfolio CRUD + rebalance hook
 │   │   ├── lib/
 │   │   │   ├── api.ts                 # Axios instance with JWT interceptor
 │   │   │   └── supabase.ts            # Supabase client (folio schema)
@@ -85,6 +87,7 @@ folio-app/
 │   │   │   ├── portfolios.ts          # CRUD + holdings + performance
 │   │   │   ├── trades.ts              # CRUD + PDF import
 │   │   │   ├── reports.ts             # CGT, tax, diversity, statistics, etc.
+│   │   │   ├── targetPortfolios.ts    # Target portfolio CRUD + rebalance analysis
 │   │   │   └── admin.ts               # User management (admin only)
 │   │   ├── services/
 │   │   │   ├── calculations/

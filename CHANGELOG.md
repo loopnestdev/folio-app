@@ -3,6 +3,21 @@
 All notable changes to Folio App are documented here.
 
 
+## [Unreleased]
+
+### Added
+
+- **Target Portfolios** — New menu section to define named ideal stock allocations and compare them against actual holdings for rebalancing guidance. Key capabilities:
+  - Create multiple target portfolios, each with a list of stocks, allocation percentages (must total 100%), exchange, and category labels.
+  - One portfolio is active at a time; clicking **Set Active** deactivates all others.
+  - **Rebalance analysis** (GET `/api/target-portfolios/:id/rebalance?portfolioId=xxx`) — compares target allocations against live holdings. Each stock is classified as BUY / SELL / HOLD / EXIT (±1% tolerance). For sells and exits, FIFO lot matching estimates short-term and long-term capital gains separately. Tax is estimated at SMSF accumulation-phase rates (15% short-term, ~10% long-term after 1/3 discount). Recommended sell order is: losses first → long-term gains → short-term gains (least tax first).
+  - Three frontend pages: list view (`/target-portfolios`), detail/edit view (`/target-portfolios/:id`), and rebalance view (`/target-portfolios/:id/rebalance`).
+  - SQL migration: `supabase-central/migrations/010_target_portfolios.sql` — **must be run manually in Supabase Dashboard** (creates `folio.target_portfolios` and `folio.target_portfolio_items` with RLS).
+  - New API routes: `backend/src/routes/targetPortfolios.ts` registered at `/api/target-portfolios`.
+  - New hooks: `frontend/src/hooks/useTargetPortfolios.ts`.
+  - New types: `TargetPortfolio`, `TargetPortfolioItem`, `RebalanceAction`, `TaxTier`, `RebalanceRow`, `RebalanceTaxSummary`, `RebalanceResult` in `frontend/src/types/index.ts`.
+
+
 ## [v0.6.4] — 2026-06-02
 
 ### Added
