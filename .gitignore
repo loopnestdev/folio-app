@@ -40,3 +40,6 @@ logs/
 .idea/
 *.swp
 *.swo
+
+# Diagnostic / debugging scripts (never commit)
+diagnostic-scripts/
