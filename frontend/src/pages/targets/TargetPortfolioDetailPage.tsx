@@ -206,7 +206,7 @@ export function TargetPortfolioDetailPage() {
 
         {/* Column headers */}
         {items.length > 0 && (
-          <div className="grid grid-cols-[2fr_1.5fr_2fr_1.2fr_auto] gap-2 px-1">
+          <div className="grid grid-cols-[2fr_1.5fr_2fr_1.2fr_auto] gap-2">
             <span className="text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-wide">Symbol</span>
             <span className="text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-wide">Exchange</span>
             <span className="text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-wide">Category</span>
