@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2, Save, BarChart2, CheckCircle, AlertTriangle } from 'lucide-react';
 import {
@@ -204,41 +204,42 @@ export function TargetPortfolioDetailPage() {
           </div>
         )}
 
-        {/* Column headers */}
-        {items.length > 0 && (
-          <div className="grid grid-cols-[2fr_1.5fr_2fr_1.2fr_auto] gap-2">
-            <span className="pl-3 text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-wide">Symbol</span>
-            <span className="pl-3 text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-wide">Exchange</span>
-            <span className="pl-3 text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-wide">Category</span>
-            <span className="pr-3 text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-wide text-right">Alloc %</span>
-            <span />
-          </div>
-        )}
+        {/* Single flat grid — headers and inputs share identical column widths */}
+        <div className="grid grid-cols-[2fr_1.5fr_2fr_1.2fr_2rem] gap-x-2 gap-y-2 items-center">
+          {/* Column headers */}
+          {items.length > 0 && (
+            <>
+              <span className="pl-3 text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-wide">Symbol</span>
+              <span className="pl-3 text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-wide">Exchange</span>
+              <span className="pl-3 text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-wide">Category</span>
+              <span className="pr-3 text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-wide text-right">Alloc %</span>
+              <span />
+            </>
+          )}
 
-        {/* Rows */}
-        <div className="space-y-2">
+          {/* Data rows */}
           {items.map((item) => (
-            <div key={item.key} className="grid grid-cols-[2fr_1.5fr_2fr_1.2fr_auto] gap-2 items-center">
+            <Fragment key={item.key}>
               <input
-                className="h-9 px-3 rounded-lg border border-[var(--c-border)] bg-[var(--c-canvas)] text-[14px] text-[var(--c-ink)] focus:outline-none focus:border-[var(--c-primary)] uppercase"
+                className="w-full h-9 px-3 rounded-lg border border-[var(--c-border)] bg-[var(--c-canvas)] text-[14px] text-[var(--c-ink)] focus:outline-none focus:border-[var(--c-primary)] uppercase"
                 placeholder="NVDA"
                 value={item.symbol}
                 onChange={(e) => updateItem(item.key, 'symbol', e.target.value)}
               />
               <input
-                className="h-9 px-3 rounded-lg border border-[var(--c-border)] bg-[var(--c-canvas)] text-[14px] text-[var(--c-ink)] focus:outline-none focus:border-[var(--c-primary)]"
+                className="w-full h-9 px-3 rounded-lg border border-[var(--c-border)] bg-[var(--c-canvas)] text-[14px] text-[var(--c-ink)] focus:outline-none focus:border-[var(--c-primary)]"
                 placeholder="NASDAQ"
                 value={item.exchange}
                 onChange={(e) => updateItem(item.key, 'exchange', e.target.value)}
               />
               <input
-                className="h-9 px-3 rounded-lg border border-[var(--c-border)] bg-[var(--c-canvas)] text-[14px] text-[var(--c-ink)] focus:outline-none focus:border-[var(--c-primary)]"
+                className="w-full h-9 px-3 rounded-lg border border-[var(--c-border)] bg-[var(--c-canvas)] text-[14px] text-[var(--c-ink)] focus:outline-none focus:border-[var(--c-primary)]"
                 placeholder="Semi"
                 value={item.category}
                 onChange={(e) => updateItem(item.key, 'category', e.target.value)}
               />
               <input
-                className="h-9 px-3 rounded-lg border border-[var(--c-border)] bg-[var(--c-canvas)] text-[14px] text-[var(--c-ink)] focus:outline-none focus:border-[var(--c-primary)] text-right"
+                className="w-full h-9 px-3 rounded-lg border border-[var(--c-border)] bg-[var(--c-canvas)] text-[14px] text-[var(--c-ink)] focus:outline-none focus:border-[var(--c-primary)] text-right"
                 placeholder="9"
                 type="number"
                 min="0"
@@ -249,15 +250,15 @@ export function TargetPortfolioDetailPage() {
               />
               <button
                 onClick={() => removeItem(item.key)}
-                className="p-2 text-[var(--c-ink-mute)] hover:text-[var(--c-bear)] transition-colors"
+                className="flex items-center justify-center w-8 h-8 text-[var(--c-ink-mute)] hover:text-[var(--c-bear)] transition-colors"
               >
                 <Trash2 size={14} />
               </button>
-            </div>
+            </Fragment>
           ))}
 
           {items.length === 0 && (
-            <div className="text-center py-8 text-[14px] text-[var(--c-ink-mute)]">
+            <div className="col-span-5 text-center py-8 text-[14px] text-[var(--c-ink-mute)]">
               No stocks added yet. Click "Add Row" to start.
             </div>
           )}
