@@ -207,10 +207,10 @@ export function TargetPortfolioDetailPage() {
         {/* Column headers */}
         {items.length > 0 && (
           <div className="grid grid-cols-[2fr_1.5fr_2fr_1.2fr_auto] gap-2">
-            <span className="text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-wide">Symbol</span>
-            <span className="text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-wide">Exchange</span>
-            <span className="text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-wide">Category</span>
-            <span className="text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-wide text-right">Alloc %</span>
+            <span className="pl-3 text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-wide">Symbol</span>
+            <span className="pl-3 text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-wide">Exchange</span>
+            <span className="pl-3 text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-wide">Category</span>
+            <span className="pr-3 text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-wide text-right">Alloc %</span>
             <span />
           </div>
         )}
