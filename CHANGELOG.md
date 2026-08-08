@@ -3,6 +3,18 @@
 All notable changes to Folio App are documented here.
 
 
+## [v0.6.6] — 2026-08-08
+
+### Security
+
+- **Dependency vulnerability patching** — Ran a full `npm audit` sweep across both projects and applied all in-range fixes:
+  - Backend: 9 advisories → 1 remaining (`multer` 2.1.1 → 2.2.0 fixes two DoS advisories; `ip-address`, transitively pulled in by `express-rate-limit`, patched for SSRF/trust-boundary bypass advisories; `js-yaml`, `esbuild`, `brace-expansion`, `form-data` patched in the `jest`/`ts-jest`/`tsx` dev toolchain).
+  - Frontend: 10 advisories → 0 remaining (`axios` 1.16.1 → 1.19.0 fixes prototype-pollution and proxy-leakage advisories; `react-router`/`react-router-dom` 7.15.1 → 7.18.2 fixes a DoS and a CSRF-bypass advisory; `vite` 8.0.14 → 8.2.1 fixes a dev-server path-traversal advisory; `undici`, `nanoid`, `postcss`, `@babel/core`, `brace-expansion`, `form-data` patched in the `eslint`/`jsdom`/`vite` dev toolchain).
+  - All fixes landed inside existing `package.json` semver ranges (lockfile-only changes); `tsc --noEmit` and both test suites verified clean on each side.
+- **Known issue — `xlsx` (SheetJS) has no fix available on npm**: `backend/package.json` pins `xlsx@^0.18.5`, used by [`moomoo-xlsx.ts`](backend/src/services/pdf-parser/moomoo-xlsx.ts) to parse user-uploaded Moomoo statement exports. Two high-severity advisories (prototype pollution, ReDoS) affect all npm-published releases — SheetJS stopped publishing fixed versions (0.20.2+) to npm and only distributes them via `cdn.sheetjs.com`. Remediation (CDN pin or migration to `exceljs`) is still open — tracked here rather than applied, since it needs verification against the Moomoo export format.
+- Checked for recent supply-chain compromises (Axios RAT campaign, March 2026; Shai-Hulud "keyv/cacheable" worm, August 2026) — confirmed not applicable, all installed versions predate the compromised releases and no dependency range can resolve into them on a fresh install.
+
+
 ## [v0.6.5] — 2026-06-06
 
 ### Added
