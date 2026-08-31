@@ -3,6 +3,13 @@
 All notable changes to Folio App are documented here.
 
 
+## [Unreleased]
+
+### Added
+
+- **Target Portfolio holdings — sortable columns** — On the target portfolio detail/edit page (`/target-portfolios/:id`), the **Category** and **Alloc %** column headers are now clickable to sort the holdings rows; clicking again toggles ascending/descending. Sorting is a one-shot reorder (rows don't jump while a cell is being edited) and the new order persists on **Save** via `sort_order`. Rows with a blank category always sort to the bottom. Sort logic is a pure `sortDraftItems` helper with unit coverage. (`frontend/src/pages/targets/TargetPortfolioDetailPage.tsx`, `frontend/src/pages/targets/sortDraftItems.test.ts`)
+
+
 ## [v0.6.6] — 2026-08-08
 
 ### Security

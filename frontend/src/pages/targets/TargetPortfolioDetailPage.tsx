@@ -1,6 +1,9 @@
 import { useState, useEffect, Fragment } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Save, BarChart2, CheckCircle, AlertTriangle } from 'lucide-react';
+import {
+  ArrowLeft, Plus, Trash2, Save, BarChart2, CheckCircle, AlertTriangle,
+  ChevronUp, ChevronDown, ChevronsUpDown,
+} from 'lucide-react';
 import {
   useTargetPortfolio,
   useUpdateTargetPortfolio,
@@ -24,6 +27,31 @@ interface DraftItem {
 let _nextKey = 0;
 const newKey = () => String(++_nextKey);
 
+export type SortKey = 'category' | 'allocation';
+export type SortDir = 'asc' | 'desc';
+
+// Pure reorder helper — sorts a copy of the draft rows by category (alpha) or
+// allocation (numeric). Rows with a blank category always sink to the bottom,
+// regardless of direction, so half-filled rows don't wander into the middle.
+export function sortDraftItems<T extends { category: string; allocation_pct: string }>(
+  rows: T[],
+  key: SortKey,
+  dir: SortDir,
+): T[] {
+  const factor = dir === 'asc' ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    if (key === 'allocation') {
+      return factor * ((parseFloat(a.allocation_pct) || 0) - (parseFloat(b.allocation_pct) || 0));
+    }
+    const av = a.category.trim().toLowerCase();
+    const bv = b.category.trim().toLowerCase();
+    if (!av && !bv) return 0;
+    if (!av) return 1;
+    if (!bv) return -1;
+    return factor * av.localeCompare(bv);
+  });
+}
+
 export function TargetPortfolioDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -38,6 +66,7 @@ export function TargetPortfolioDetailPage() {
   const [desc, setDesc]     = useState('');
   const [items, setItems]   = useState<DraftItem[]>([]);
   const [dirty, setDirty]   = useState(false);
+  const [sort, setSort]     = useState<{ key: SortKey; dir: SortDir } | null>(null);
 
   // Initialise form from loaded data
   useEffect(() => {
@@ -54,6 +83,7 @@ export function TargetPortfolioDetailPage() {
       })),
     );
     setDirty(false);
+    setSort(null);
   }, [tp]);
 
   const totalAlloc = items.reduce((s, i) => s + (parseFloat(i.allocation_pct) || 0), 0);
@@ -79,6 +109,22 @@ export function TargetPortfolioDetailPage() {
   const removeItem = (key: string) => {
     setItems((prev) => prev.filter((i) => i.key !== key));
     setDirty(true);
+  };
+
+  // Header click: sort by that column, toggling asc → desc on repeat clicks.
+  // A one-shot reorder (not a live sorted view) so editing a cell mid-sort
+  // doesn't make rows jump around under the cursor. New order persists on save
+  // via sort_order.
+  const handleSort = (key: SortKey) => {
+    const dir: SortDir = sort?.key === key && sort.dir === 'asc' ? 'desc' : 'asc';
+    setSort({ key, dir });
+    setItems((prev) => sortDraftItems(prev, key, dir));
+    setDirty(true);
+  };
+
+  const sortIcon = (key: SortKey) => {
+    if (sort?.key !== key) return <ChevronsUpDown size={12} className="opacity-40" />;
+    return sort.dir === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />;
   };
 
   const handleSave = async () => {
@@ -211,8 +257,20 @@ export function TargetPortfolioDetailPage() {
             <>
               <span className="pl-3 text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-wide">Symbol</span>
               <span className="pl-3 text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-wide">Exchange</span>
-              <span className="pl-3 text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-wide">Category</span>
-              <span className="pr-3 text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-wide text-right">Alloc %</span>
+              <button
+                type="button"
+                onClick={() => handleSort('category')}
+                className="pl-3 flex items-center gap-1 text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-wide hover:text-[var(--c-ink)] transition-colors"
+              >
+                Category {sortIcon('category')}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSort('allocation')}
+                className="pr-3 flex items-center justify-end gap-1 text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-wide hover:text-[var(--c-ink)] transition-colors"
+              >
+                Alloc % {sortIcon('allocation')}
+              </button>
               <span />
             </>
           )}
