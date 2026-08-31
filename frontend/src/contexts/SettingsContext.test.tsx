@@ -133,14 +133,14 @@ describe('SettingsContext', () => {
     expect(localStorage.getItem('folio_chart_library')).toBe('echarts');
   });
 
-  it('provides default jan-dec financial year', async () => {
+  it('provides default jul-jun financial year', async () => {
     render(
       <TestWrapper>
         <TestComponent />
       </TestWrapper>,
     );
     await waitFor(() => {
-      expect(screen.getByTestId('financial-year').textContent).toBe('jan-dec');
+      expect(screen.getByTestId('financial-year').textContent).toBe('jul-jun');
     });
   });
 
