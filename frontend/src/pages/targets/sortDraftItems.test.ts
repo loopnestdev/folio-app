@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sortDraftItems } from './TargetPortfolioDetailPage';
+import { sortDraftItems, allocationValue } from './TargetPortfolioDetailPage';
 
 type Row = { key: string; category: string; allocation_pct: string };
 
@@ -46,5 +46,28 @@ describe('sortDraftItems', () => {
     const snapshot = keys(input);
     sortDraftItems(input, 'category', 'asc');
     expect(keys(input)).toEqual(snapshot);
+  });
+});
+
+describe('allocationValue', () => {
+  it('computes pct/100 * capital', () => {
+    expect(allocationValue('9', 100_000)).toBe(9_000);
+    expect(allocationValue('7.5', 100_000)).toBe(7_500);
+    expect(allocationValue(100, 250_000)).toBe(250_000);
+  });
+
+  it('accepts a numeric or string percentage', () => {
+    expect(allocationValue(12.5, 80_000)).toBe(10_000);
+    expect(allocationValue('12.5', 80_000)).toBe(10_000);
+  });
+
+  it('treats blank / non-numeric percentages as 0', () => {
+    expect(allocationValue('', 100_000)).toBe(0);
+    expect(allocationValue('abc', 100_000)).toBe(0);
+    expect(allocationValue(NaN, 100_000)).toBe(0);
+  });
+
+  it('returns 0 when capital is 0', () => {
+    expect(allocationValue('50', 0)).toBe(0);
   });
 });

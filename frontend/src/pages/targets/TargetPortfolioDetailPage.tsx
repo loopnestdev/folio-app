@@ -15,6 +15,7 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { PageLoader } from '../../components/ui/LoadingSpinner';
 import { useToast } from '../../components/ui/Toast';
+import { formatCurrency } from '../../lib/utils';
 
 interface DraftItem {
   key: string; // local-only stable key for list rendering
@@ -26,6 +27,10 @@ interface DraftItem {
 
 let _nextKey = 0;
 const newKey = () => String(++_nextKey);
+
+// Per-portfolio localStorage key prefix for the "investable capital" what-if figure
+const STORAGE_KEY_INVESTABLE = 'folio_target_investable_';
+const DEFAULT_INVESTABLE = '100000';
 
 export type SortKey = 'category' | 'allocation';
 export type SortDir = 'asc' | 'desc';
@@ -52,6 +57,13 @@ export function sortDraftItems<T extends { category: string; allocation_pct: str
   });
 }
 
+// Dollar value of an allocation percentage against a hypothetical investable
+// capital — simply pct/100 * capital, with non-numeric input treated as 0.
+export function allocationValue(pct: string | number, capital: number): number {
+  const p = typeof pct === 'string' ? parseFloat(pct) : pct;
+  return ((Number.isFinite(p) ? p : 0) / 100) * capital;
+}
+
 export function TargetPortfolioDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -67,6 +79,7 @@ export function TargetPortfolioDetailPage() {
   const [items, setItems]   = useState<DraftItem[]>([]);
   const [dirty, setDirty]   = useState(false);
   const [sort, setSort]     = useState<{ key: SortKey; dir: SortDir } | null>(null);
+  const [investable, setInvestable] = useState(DEFAULT_INVESTABLE);
 
   // Initialise form from loaded data
   useEffect(() => {
@@ -86,8 +99,21 @@ export function TargetPortfolioDetailPage() {
     setSort(null);
   }, [tp]);
 
+  // Investable capital is a local "what-if" figure (not part of the saved
+  // portfolio) — persisted per-portfolio in localStorage so it survives reloads.
+  useEffect(() => {
+    if (!id) return;
+    setInvestable(localStorage.getItem(`${STORAGE_KEY_INVESTABLE}${id}`) ?? DEFAULT_INVESTABLE);
+  }, [id]);
+
   const totalAlloc = items.reduce((s, i) => s + (parseFloat(i.allocation_pct) || 0), 0);
   const allocOk    = Math.abs(totalAlloc - 100) < 0.01;
+  const investableNum = Math.max(parseFloat(investable) || 0, 0);
+
+  const handleInvestableChange = (v: string) => {
+    setInvestable(v);
+    if (id) localStorage.setItem(`${STORAGE_KEY_INVESTABLE}${id}`, v);
+  };
 
   const addRow = () => {
     setItems((prev) => [
@@ -180,6 +206,23 @@ export function TargetPortfolioDetailPage() {
           <h1 className="text-xl font-bold text-[var(--c-ink)] truncate">{tp.name}</h1>
           <p className="text-[13px] text-[var(--c-ink-mute)]">Target Portfolio</p>
         </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <label htmlFor="investable" className="text-[12px] text-[var(--c-ink-mute)] whitespace-nowrap">
+            Investable
+          </label>
+          <div className="relative">
+            <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[13px] text-[var(--c-ink-mute)]">$</span>
+            <input
+              id="investable"
+              type="number"
+              min="0"
+              step="1000"
+              value={investable}
+              onChange={(e) => handleInvestableChange(e.target.value)}
+              className="w-28 h-9 pl-5 pr-2 rounded-lg border border-[var(--c-border)] bg-[var(--c-canvas)] text-[14px] text-[var(--c-ink)] text-right tnum focus:outline-none focus:border-[var(--c-primary)]"
+            />
+          </div>
+        </div>
         <div className="flex items-center gap-2">
           {tp.is_active ? (
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[12px] font-semibold bg-[var(--c-primary-bg)] text-[var(--c-primary)]">
@@ -222,6 +265,12 @@ export function TargetPortfolioDetailPage() {
         <div className="flex items-center justify-between">
           <h2 className="font-semibold text-[15px] text-[var(--c-ink)]">Holdings</h2>
           <div className="flex items-center gap-3">
+            {/* Allocated dollars vs investable capital */}
+            <span className="hidden sm:inline text-[12px] text-[var(--c-ink-mute)] tnum">
+              {formatCurrency(allocationValue(totalAlloc, investableNum), 'USD', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+              {' of '}
+              {formatCurrency(investableNum, 'USD', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+            </span>
             {/* Allocation total badge */}
             <span
               className={[
@@ -251,7 +300,7 @@ export function TargetPortfolioDetailPage() {
         )}
 
         {/* Single flat grid — headers and inputs share identical column widths */}
-        <div className="grid grid-cols-[2fr_1.5fr_2fr_1.2fr_2rem] gap-x-2 gap-y-2 items-center">
+        <div className="grid grid-cols-[1.6fr_1.3fr_1.6fr_0.9fr_1fr_2rem] gap-x-2 gap-y-2 items-center">
           {/* Column headers */}
           {items.length > 0 && (
             <>
@@ -271,6 +320,7 @@ export function TargetPortfolioDetailPage() {
               >
                 Alloc % {sortIcon('allocation')}
               </button>
+              <span className="pr-3 text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-wide text-right">Alloc $</span>
               <span />
             </>
           )}
@@ -306,6 +356,9 @@ export function TargetPortfolioDetailPage() {
                 value={item.allocation_pct}
                 onChange={(e) => updateItem(item.key, 'allocation_pct', e.target.value)}
               />
+              <span className="h-9 flex items-center justify-end px-3 text-[14px] text-[var(--c-ink-sec)] tnum">
+                {formatCurrency(allocationValue(item.allocation_pct, investableNum), 'USD', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+              </span>
               <button
                 onClick={() => removeItem(item.key)}
                 className="flex items-center justify-center w-8 h-8 text-[var(--c-ink-mute)] hover:text-[var(--c-bear)] transition-colors"
@@ -316,7 +369,7 @@ export function TargetPortfolioDetailPage() {
           ))}
 
           {items.length === 0 && (
-            <div className="col-span-5 text-center py-8 text-[14px] text-[var(--c-ink-mute)]">
+            <div className="col-span-6 text-center py-8 text-[14px] text-[var(--c-ink-mute)]">
               No stocks added yet. Click "Add Row" to start.
             </div>
           )}
