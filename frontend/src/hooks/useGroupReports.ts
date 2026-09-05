@@ -141,6 +141,34 @@ export function useGroupTax({ groupId, fyStart, year }: GroupTaxOptions) {
   });
 }
 
+// ── Group Tax Export (xlsx / pdf) ─────────────────────────────
+// Not a query — a one-off download action, so it's a plain async function
+// rather than a useQuery hook. Returns the file so the caller can trigger
+// a browser save with downloadBlob().
+interface GroupTaxExportOptions {
+  groupId: string;
+  fyStart: 'january' | 'july';
+  year: string;
+  format: 'xlsx' | 'pdf';
+}
+
+export async function fetchGroupTaxExport(
+  { groupId, fyStart, year, format }: GroupTaxExportOptions,
+): Promise<{ blob: Blob; filename: string }> {
+  const response = await api.get(`/api/groups/${groupId}/tax/export`, {
+    params: { fyStart, year, format },
+    responseType: 'blob',
+  });
+
+  // Prefer the server-supplied filename (Content-Disposition); fall back to a
+  // sensible default if the header is missing or unparsable.
+  const disposition = response.headers['content-disposition'] as string | undefined;
+  const match = disposition?.match(/filename="([^"]+)"/);
+  const filename = match?.[1] ?? `group-tax-report.${format}`;
+
+  return { blob: response.data as Blob, filename };
+}
+
 // ── Group Dividends ──────────────────────────────────────────
 interface GroupRangeOptions {
   groupId?: string;

@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Download } from 'lucide-react';
 import { useGroups } from '../../hooks/useGroups';
-import { useGroupTax } from '../../hooks/useGroupReports';
+import { useGroupTax, fetchGroupTaxExport } from '../../hooks/useGroupReports';
 import { useSettings } from '../../contexts/SettingsContext';
 import { Card, CardHeader } from '../../components/ui/Card';
 import { Select } from '../../components/ui/Select';
+import { Button } from '../../components/ui/Button';
 import { StatCard } from '../../components/ui/StatCard';
 import { PageLoader } from '../../components/ui/LoadingSpinner';
-import { formatCurrency, getValueColor } from '../../lib/utils';
+import { useToast } from '../../components/ui/Toast';
+import { formatCurrency, getValueColor, downloadBlob } from '../../lib/utils';
 import type { GroupPortfolioTax } from '../../types';
 
 function getFinancialYears(type: 'jan-dec' | 'jul-jun') {
@@ -35,6 +37,21 @@ export function GroupTaxPage() {
   const years = getFinancialYears(fyStart === 'july' ? 'jul-jun' : 'jan-dec');
 
   const { data: taxData, isLoading } = useGroupTax({ groupId: id, fyStart, year });
+  const { error: toastError } = useToast();
+  const [exporting, setExporting] = useState<'xlsx' | 'pdf' | null>(null);
+
+  const handleExport = async (format: 'xlsx' | 'pdf') => {
+    if (!id) return;
+    setExporting(format);
+    try {
+      const { blob, filename } = await fetchGroupTaxExport({ groupId: id, fyStart, year, format });
+      downloadBlob(blob, filename);
+    } catch {
+      toastError('Export failed', 'Could not generate the tax report file. Please try again.');
+    } finally {
+      setExporting(null);
+    }
+  };
 
   const taxRows = [
     { label: 'Dividend income',           value: taxData?.dividends_received ?? 0 },
@@ -79,6 +96,22 @@ export function GroupTaxPage() {
             onChange={setYear}
             containerClassName="w-36"
           />
+          <div className="flex items-end gap-2">
+            <Button
+              variant="secondary" size="sm" icon={<Download size={14} />}
+              loading={exporting === 'xlsx'} disabled={!taxData || isLoading}
+              onClick={() => handleExport('xlsx')}
+            >
+              XLSX
+            </Button>
+            <Button
+              variant="secondary" size="sm" icon={<Download size={14} />}
+              loading={exporting === 'pdf'} disabled={!taxData || isLoading}
+              onClick={() => handleExport('pdf')}
+            >
+              PDF
+            </Button>
+          </div>
         </div>
       </div>
 

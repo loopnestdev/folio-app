@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth';
 import { requireApproved } from '../middleware/requireApproved';
 import { supabase } from '../lib/supabase';
-import { calculateHoldings, calculateCapitalGains, calculateCapitalGainsByRange, calculateCashPosition } from '../services/calculations/holdings';
+import { calculateHoldings, calculateCapitalGainsByRange, calculateCashPosition } from '../services/calculations/holdings';
 import { computeStatistics, computeMonthlyReturnMap, computeMonthlyReturnMapModifiedDietz, alignReturnMaps } from '../services/calculations/statistics';
 import {
   getHistoricalPrices, getBenchmarkPrices, getCurrentPrices, BENCHMARKS,
@@ -11,6 +11,8 @@ import {
 } from '../services/market-data/yahoo';
 import { format, subYears, startOfYear } from 'date-fns';
 import type { AuthenticatedRequest, Trade } from '../types';
+import { buildGroupTaxData } from '../services/reports/groupTax';
+import { buildGroupTaxWorkbook, buildGroupTaxPdf } from '../services/export/groupTaxExport';
 
 const router = Router();
 const use = (fn: any) => (req: any, res: any, next: any) => fn(req, res, next);
@@ -745,123 +747,58 @@ router.get('/:id/cash-flows', async (req: AuthenticatedRequest, res: any) => {
 
 // ── GET /api/groups/:id/tax ───────────────────────────────────
 // Consolidated tax report across all portfolios, expressed in base_currency.
-router.get('/:id/tax', async (req: AuthenticatedRequest, res: any) => {
-  const group = await getGroup(req.params.id as string, req.userId!);
-  if (!group) { res.status(404).json({ error: 'Group not found' }); return; }
+const taxQuerySchema = z.object({
+  fyStart: z.enum(['january', 'july']).default('july'),
+  year:    z.string().regex(/^\d{4}$/).default(String(new Date().getFullYear())),
+});
 
-  const schema = z.object({
-    fyStart: z.enum(['january', 'july']).default('july'),
-    year:    z.string().regex(/^\d{4}$/).default(String(new Date().getFullYear())),
-  });
-  const params = schema.safeParse(req.query);
+router.get('/:id/tax', async (req: AuthenticatedRequest, res: any) => {
+  const params = taxQuerySchema.safeParse(req.query);
   if (!params.success) { res.status(400).json({ error: params.error.flatten() }); return; }
 
-  const baseCurrency: string = group.base_currency ?? 'AUD';
+  try {
+    const data = await buildGroupTaxData(
+      req.params.id as string, req.userId!, params.data.fyStart, parseInt(params.data.year),
+    );
+    if (!data) { res.status(404).json({ error: 'Group not found' }); return; }
+
+    // Full ledger/CGT detail is only needed by the export endpoint below —
+    // keep this endpoint's payload small since it's fetched on every page load.
+    const { trades: _trades, cgt_lots: _cgtLots, fy_start_date: _fsd, fy_end_date: _fed, ...summary } = data;
+    res.json(summary);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/groups/:id/tax/export ────────────────────────────
+// Downloads the consolidated FY tax report (summary + full trade ledger +
+// CGT lot detail) as an .xlsx workbook or a printable .pdf report.
+router.get('/:id/tax/export', async (req: AuthenticatedRequest, res: any) => {
+  const params = taxQuerySchema.extend({
+    format: z.enum(['xlsx', 'pdf']).default('xlsx'),
+  }).safeParse(req.query);
+  if (!params.success) { res.status(400).json({ error: params.error.flatten() }); return; }
 
   try {
-    const portfolios = await getGroupPortfolios(req.params.id as string, req.userId!);
-    if (!portfolios.length) {
-      res.json({
-        financial_year: params.data.year,
-        base_currency: baseCurrency,
-        dividends_received: 0, interest_received: 0,
-        capital_gains_short_term: 0, capital_gains_long_term: 0,
-        cgt_discount_applied: 0, total_taxable_income: 0,
-        portfolios: [],
-      });
-      return;
-    }
-
-    const { fyStart, year } = params.data;
-    const yearNum = parseInt(year);
-    const fyStartDate = fyStart === 'july' ? `${yearNum - 1}-07-01` : `${yearNum}-01-01`;
-    const fyEndDate   = fyStart === 'july' ? `${yearNum}-06-30`     : `${yearNum}-12-31`;
-    const today = format(new Date(), 'yyyy-MM-dd');
-
-    // Step 1 — fetch trades and compute CGT lots per portfolio in parallel.
-    const portfolioData = await Promise.all(
-      portfolios.map(async (portfolio) => {
-        const trades = await getPortfolioTrades(portfolio.id);
-        const lots   = calculateCapitalGains(trades as any, fyStart, yearNum);
-        return { portfolio, trades, lots };
-      }),
+    const data = await buildGroupTaxData(
+      req.params.id as string, req.userId!, params.data.fyStart, parseInt(params.data.year),
     );
+    if (!data) { res.status(404).json({ error: 'Group not found' }); return; }
 
-    // Step 2 — collect unique (currency, date) pairs needed for FX conversion:
-    //   • Each CGT lot uses its sell_date (ATO-compliant disposal-date rate).
-    //   • Dividends/interest use today's rate (income, not a disposal — kept simple
-    //     for consistency with the per-portfolio tax report).
-    //   • Today's rate is also stored for the per-portfolio display field fx_rate.
-    const fxPairSet = new Set<string>();
-    for (const { portfolio, lots } of portfolioData) {
-      if (portfolio.currency === baseCurrency) continue;
-      fxPairSet.add(`${portfolio.currency}|${today}`);          // for income & display
-      for (const lot of lots) {
-        fxPairSet.add(`${portfolio.currency}|${lot.sell_date}`); // ATO disposal-date rate
-      }
+    const filename = `group-tax-report-${data.financial_year.replace(/[–—]/g, '-')}`;
+
+    if (params.data.format === 'xlsx') {
+      const buffer = buildGroupTaxWorkbook(data);
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}.xlsx"`);
+      res.send(buffer);
+    } else {
+      const buffer = await buildGroupTaxPdf(data);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}.pdf"`);
+      res.send(buffer);
     }
-
-    // Step 3 — fetch all required FX rates in parallel (deduplicated).
-    const fxCache = new Map<string, number>();
-    await Promise.all(
-      [...fxPairSet].map(async (key) => {
-        const [cur, date] = key.split('|');
-        fxCache.set(key, await getForexRate(cur, baseCurrency, date));
-      }),
-    );
-    const getFx = (currency: string, date: string): number => {
-      if (currency === baseCurrency) return 1;
-      return fxCache.get(`${currency}|${date}`) ?? 1;
-    };
-
-    // Step 4 — build per-portfolio tax rows using disposal-date rates for CGT.
-    const portfolioTaxData = portfolioData.map(({ portfolio, trades, lots }) => {
-      const fxToday = getFx(portfolio.currency, today);
-      const fyTrades = trades.filter(t => t.trade_date >= fyStartDate && t.trade_date <= fyEndDate);
-
-      // Income: use today's rate (not a CGT disposal; kept consistent with
-      // the individual-portfolio tax endpoint).
-      const dividends = fyTrades.filter(t => t.trade_type === 'dividend');
-      const interest  = fyTrades.filter(t => t.trade_type === 'interest');
-      const dividendIncome = dividends.reduce((s, t) => s + (t.price * t.quantity) * fxToday, 0);
-      const interestIncome = interest.reduce( (s, t) => s + (t.price * t.quantity) * fxToday, 0);
-
-      // CGT: convert each lot at its disposal date rate (ATO requirement).
-      const shortTerm = lots.filter(l => l.hold_days < 365)
-        .reduce((s, l) => s + l.net_gain * getFx(portfolio.currency, l.sell_date), 0);
-      const longTerm  = lots.filter(l => l.hold_days >= 365)
-        .reduce((s, l) => s + l.net_gain * getFx(portfolio.currency, l.sell_date), 0);
-      const discount  = lots.filter(l => l.cgt_discount_eligible)
-        .reduce((s, l) => s + l.cgt_discount_amount * getFx(portfolio.currency, l.sell_date), 0);
-
-      return {
-        portfolio_id:       portfolio.id,
-        portfolio_name:     portfolio.name,
-        portfolio_currency: portfolio.currency,
-        fx_rate:            fxToday, // today's rate shown for display only
-        dividends_received:       dividendIncome,
-        interest_received:        interestIncome,
-        capital_gains_short_term: shortTerm,
-        capital_gains_long_term:  longTerm,
-        cgt_discount_applied:     discount,
-        total_taxable_income:     dividendIncome + interestIncome + shortTerm + longTerm - discount,
-      };
-    });
-
-    const sum = (key: keyof typeof portfolioTaxData[0]) =>
-      portfolioTaxData.reduce((s, p) => s + (p[key] as number), 0);
-
-    res.json({
-      financial_year: fyStart === 'july' ? `${yearNum - 1}–${yearNum}` : String(yearNum),
-      base_currency: baseCurrency,
-      dividends_received:       sum('dividends_received'),
-      interest_received:        sum('interest_received'),
-      capital_gains_short_term: sum('capital_gains_short_term'),
-      capital_gains_long_term:  sum('capital_gains_long_term'),
-      cgt_discount_applied:     sum('cgt_discount_applied'),
-      total_taxable_income:     sum('total_taxable_income'),
-      portfolios: portfolioTaxData,
-    });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

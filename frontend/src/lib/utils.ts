@@ -143,6 +143,18 @@ export function dateRangeToParams(range: string, customStart?: string, customEnd
   };
 }
 
+// Trigger a browser download for an in-memory file (e.g. an export response's Blob).
+export function downloadBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 // Truncate string
 export function truncate(str: string, maxLength: number): string {
   if (str.length <= maxLength) return str;
