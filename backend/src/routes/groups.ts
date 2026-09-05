@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import multer from 'multer';
 import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth';
 import { requireApproved } from '../middleware/requireApproved';
@@ -13,9 +14,16 @@ import { format, subYears, startOfYear } from 'date-fns';
 import type { AuthenticatedRequest, Trade } from '../types';
 import { buildGroupTaxData } from '../services/reports/groupTax';
 import { buildGroupTaxWorkbook, buildGroupTaxPdf } from '../services/export/groupTaxExport';
+import { parseMoomooAnnualSummary } from '../services/pdf-parser/moomoo-xlsx';
+import { reconcilePortfolio } from '../services/reconcile/annualReconcile';
 
 const router = Router();
 const use = (fn: any) => (req: any, res: any, next: any) => fn(req, res, next);
+const uploadXlsx = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => cb(null, file.originalname.toLowerCase().endsWith('.xlsx')),
+});
 
 router.use(use(authMiddleware), use(requireApproved));
 
@@ -801,6 +809,48 @@ router.get('/:id/tax/export', async (req: AuthenticatedRequest, res: any) => {
     }
   } catch (err: any) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /api/groups/:id/reconcile ────────────────────────────
+// Upload a Moomoo annual "Financial Year Summary" .xlsx and compare it
+// against what's actually saved for each portfolio in the group — a
+// read-only check (nothing is imported or modified). The uploaded file
+// covers the whole account in one export (both AUD and USD legs); each
+// portfolio is matched against the slice of the file in its own currency,
+// the same way monthly PDF imports are currency-filtered per portfolio.
+router.post('/:id/reconcile', uploadXlsx.single('file'), async (req: AuthenticatedRequest, res: any) => {
+  const group = await getGroup(req.params.id as string, req.userId!);
+  if (!group) { res.status(404).json({ error: 'Group not found' }); return; }
+
+  if (!req.file) {
+    res.status(400).json({ error: 'No file uploaded. Please attach the Moomoo annual .xlsx summary.' });
+    return;
+  }
+
+  try {
+    const moomooTrades = parseMoomooAnnualSummary(req.file.buffer);
+    const portfolios = await getGroupPortfolios(req.params.id as string, req.userId!);
+
+    const results = await Promise.all(
+      portfolios.map(async (portfolio) => {
+        const trades = await getPortfolioTrades(portfolio.id);
+        return reconcilePortfolio(
+          { id: portfolio.id, name: portfolio.name, currency: portfolio.currency },
+          trades as any,
+          moomooTrades,
+        );
+      }),
+    );
+
+    res.json({
+      filename: req.file.originalname,
+      base_currency: group.base_currency ?? 'AUD',
+      portfolios: results,
+      is_clean: results.every((r) => r.is_clean),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message ?? 'Failed to parse or reconcile the uploaded file.' });
   }
 });
 

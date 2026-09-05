@@ -83,6 +83,42 @@ export interface GroupPortfolioTax {
   total_taxable_income: number;
 }
 
+export interface ReconcileEntry {
+  date: string;
+  type: string;
+  symbol: string;
+  qty: number;
+  amount: number;
+}
+
+export interface ReconcileDateShift extends ReconcileEntry {
+  database_date: string;
+  moomoo_date: string;
+  days_diff: number;
+}
+
+export interface PortfolioReconcileResult {
+  portfolio_id: string;
+  portfolio_name: string;
+  portfolio_currency: string;
+  window_start: string | null;
+  window_end: string | null;
+  moomoo_entry_count: number;
+  database_entry_count: number;
+  matched_count: number;
+  date_shifted: ReconcileDateShift[];
+  missing_from_database: ReconcileEntry[];
+  unexpected_in_database: ReconcileEntry[];
+  is_clean: boolean;
+}
+
+export interface GroupReconcileResult {
+  filename: string;
+  base_currency: string;
+  portfolios: PortfolioReconcileResult[];
+  is_clean: boolean;
+}
+
 export interface GroupTaxReport {
   financial_year: string;
   base_currency: string;

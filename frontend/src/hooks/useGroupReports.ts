@@ -3,6 +3,7 @@ import { api } from '../lib/api';
 import type {
   GroupSummary, GroupCapitalGain, GroupTaxReport, PerformancePoint,
   MonthlyProfit, DividendSummary, PortfolioDiversity, PortfolioStatistics, Holding,
+  GroupReconcileResult,
 } from '../types';
 import { dateRangeToParams } from '../lib/utils';
 import type { DateRange } from '../types';
@@ -167,6 +168,21 @@ export async function fetchGroupTaxExport(
   const filename = match?.[1] ?? `group-tax-report.${format}`;
 
   return { blob: response.data as Blob, filename };
+}
+
+// ── Group Reconcile (upload Moomoo annual summary, compare vs. database) ──────
+// Not a query — a one-off upload+compare action, so it's a plain async
+// function rather than a useQuery hook. Nothing is imported or modified;
+// this only reports whether the two sources agree.
+export async function reconcileGroup(groupId: string, file: File): Promise<GroupReconcileResult> {
+  const formData = new FormData();
+  formData.append('file', file);
+  const { data } = await api.post<GroupReconcileResult>(
+    `/api/groups/${groupId}/reconcile`,
+    formData,
+    { headers: { 'Content-Type': 'multipart/form-data' } },
+  );
+  return data;
 }
 
 // ── Group Dividends ──────────────────────────────────────────

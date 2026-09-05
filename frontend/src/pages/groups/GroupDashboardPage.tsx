@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowRight, Layers, FileText, Receipt, BarChart3, Wallet } from 'lucide-react';
+import { ArrowRight, Layers, FileText, Receipt, BarChart3, Wallet, ClipboardCheck } from 'lucide-react';
 import { useGroups } from '../../hooks/useGroups';
 import { useGroupSummary, useGroupPerformance } from '../../hooks/useGroupReports';
 import { StatCard } from '../../components/ui/StatCard';
@@ -123,6 +123,13 @@ export function GroupDashboardPage() {
             className="flex items-center gap-1.5 text-[14px] text-[var(--c-primary)] font-medium hover:underline"
           >
             <Receipt size={14} /> Tax Report
+          </Link>
+          <span className="text-[var(--c-border)]">·</span>
+          <Link
+            to={`/groups/${id}/reconcile`}
+            className="flex items-center gap-1.5 text-[14px] text-[var(--c-primary)] font-medium hover:underline"
+          >
+            <ClipboardCheck size={14} /> Reconcile
           </Link>
         </div>
       </div>
@@ -288,6 +295,12 @@ export function GroupDashboardPage() {
               className="flex items-center gap-1.5 text-[15px] text-[var(--c-primary)] font-medium hover:underline"
             >
               Tax Report <ArrowRight size={15} />
+            </Link>
+            <Link
+              to={`/groups/${id}/reconcile`}
+              className="flex items-center gap-1.5 text-[15px] text-[var(--c-primary)] font-medium hover:underline"
+            >
+              Reconcile <ArrowRight size={15} />
             </Link>
           </div>
         </Card>
