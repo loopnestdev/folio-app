@@ -14,6 +14,15 @@ export interface ReconcileDateShift extends ReconcileEntry {
   days_diff: number;
 }
 
+export interface ReconcileAggregatedMatch {
+  type: string;
+  symbol: string;
+  database_entries: ReconcileEntry[];
+  moomoo_entries: ReconcileEntry[];
+  total_qty: number;
+  total_amount: number;
+}
+
 export interface PortfolioReconcileResult {
   portfolio_id: string;
   portfolio_name: string;
@@ -24,6 +33,7 @@ export interface PortfolioReconcileResult {
   database_entry_count: number;
   matched_count: number;
   date_shifted: ReconcileDateShift[];
+  aggregated_matches: ReconcileAggregatedMatch[];
   missing_from_database: ReconcileEntry[];
   unexpected_in_database: ReconcileEntry[];
   is_clean: boolean;
@@ -141,9 +151,100 @@ export function reconcilePortfolio(
     }
   }
 
-  const missingFromDatabase: ReconcileEntry[] = mooPool
+  const missingFromDatabaseRaw: ReconcileEntry[] = mooPool
     .filter((m) => !m.used)
     .map((m) => ({ date: m.date, type: m.type, symbol: m.symbol, qty: m.qty, amount: m.amount }));
+
+  // ── Second pass: consolidated multi-fill matching ──────────────────────
+  // A single order that fills across multiple partial executions can end up
+  // recorded as one aggregated row on one side (e.g. a manually-entered trade
+  // merging several same-price fills into one line — confirmed in practice by
+  // notes like "Manual" or "Update from 100 to 200 manually" on such rows) and
+  // as separate line items on the other. The 1:1 pass above can never match
+  // these individually. If the FULL remaining set of leftover entries for a
+  // given (type, symbol) on each side — within the date tolerance window —
+  // sums to the same total quantity and dollar amount, treat the whole group
+  // as reconciled rather than flagging every line as a discrepancy. This only
+  // fires when the totals tie out exactly (within the same tolerance used
+  // elsewhere), so it can't paper over a genuine mismatch.
+  const groupKey = (e: ReconcileEntry) => `${e.type}|${e.symbol}`;
+  const dbLeftover = unexpectedInDatabase.map((e, i) => ({ ...e, i }));
+  const mooLeftover = missingFromDatabaseRaw.map((e, i) => ({ ...e, i }));
+
+  function groupBy<T extends { i: number } & ReconcileEntry>(entries: T[]): Map<string, T[]> {
+    const groups = new Map<string, T[]>();
+    for (const e of entries) {
+      const k = groupKey(e);
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k)!.push(e);
+    }
+    return groups;
+  }
+  const dbGroups = groupBy(dbLeftover);
+  const mooGroups = groupBy(mooLeftover);
+
+  const aggregatedMatches: ReconcileAggregatedMatch[] = [];
+  const resolvedDbIdx = new Set<number>();
+  const resolvedMooIdx = new Set<number>();
+
+  for (const [key, dbGroup] of dbGroups) {
+    const mooGroup = mooGroups.get(key);
+    if (!mooGroup || !mooGroup.length) continue;
+    const [type, symbol] = key.split('|');
+
+    // A (type, symbol) group can span the whole FY (e.g. ASTS traded in both
+    // April and June) — summing the entire group would wrongly try to net
+    // unrelated orders months apart against each other. Cluster by date
+    // first (chain-linking entries within DATE_TOLERANCE_DAYS of each other)
+    // so only entries plausibly from the same order get summed together.
+    type Tagged = (typeof dbGroup[number] | typeof mooGroup[number]) & { side: 'db' | 'moo' };
+    const tagged: Tagged[] = [
+      ...dbGroup.map((e) => ({ ...e, side: 'db' as const })),
+      ...mooGroup.map((e) => ({ ...e, side: 'moo' as const })),
+    ].sort((a, b) => a.date.localeCompare(b.date));
+
+    const clusters: Tagged[][] = [];
+    for (const entry of tagged) {
+      const current = clusters[clusters.length - 1];
+      if (current && dayDiff(current[current.length - 1].date, entry.date) <= DATE_TOLERANCE_DAYS) {
+        current.push(entry);
+      } else {
+        clusters.push([entry]);
+      }
+    }
+
+    for (const cluster of clusters) {
+      const dbEntries = cluster.filter((e) => e.side === 'db');
+      const mooEntries = cluster.filter((e) => e.side === 'moo');
+      if (!dbEntries.length || !mooEntries.length) continue; // needs both sides to be a "match"
+
+      const dbQty = dbEntries.reduce((s, e) => s + e.qty, 0);
+      const mooQty = mooEntries.reduce((s, e) => s + e.qty, 0);
+      if (QTY_COMPARABLE_TYPES.has(type) && Math.abs(dbQty - mooQty) > 0.001) continue;
+
+      const dbAmt = dbEntries.reduce((s, e) => s + Math.abs(e.amount), 0);
+      const mooAmt = mooEntries.reduce((s, e) => s + Math.abs(e.amount), 0);
+      if (!amountsMatch(dbAmt, mooAmt, dbAmt)) continue;
+
+      aggregatedMatches.push({
+        type,
+        symbol,
+        database_entries: dbEntries.map(({ i: _i, side: _s, ...e }) => e),
+        moomoo_entries: mooEntries.map(({ i: _i, side: _s, ...e }) => e),
+        total_qty: dbQty,
+        total_amount: dbAmt,
+      });
+      for (const e of dbEntries) resolvedDbIdx.add(e.i);
+      for (const e of mooEntries) resolvedMooIdx.add(e.i);
+    }
+  }
+
+  const missingFromDatabase = mooLeftover
+    .filter((e) => !resolvedMooIdx.has(e.i))
+    .map(({ i: _i, ...e }) => e);
+  const finalUnexpectedInDatabase = dbLeftover
+    .filter((e) => !resolvedDbIdx.has(e.i))
+    .map(({ i: _i, ...e }) => e);
 
   return {
     portfolio_id: portfolio.id,
@@ -155,8 +256,9 @@ export function reconcilePortfolio(
     database_entry_count: db.length,
     matched_count: matchedCount,
     date_shifted: dateShifted,
+    aggregated_matches: aggregatedMatches,
     missing_from_database: missingFromDatabase,
-    unexpected_in_database: unexpectedInDatabase,
-    is_clean: missingFromDatabase.length === 0 && unexpectedInDatabase.length === 0,
+    unexpected_in_database: finalUnexpectedInDatabase,
+    is_clean: missingFromDatabase.length === 0 && finalUnexpectedInDatabase.length === 0,
   };
 }

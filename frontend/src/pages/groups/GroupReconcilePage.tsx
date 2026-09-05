@@ -7,7 +7,7 @@ import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { useToast } from '../../components/ui/Toast';
 import { formatDate, cn } from '../../lib/utils';
-import type { GroupReconcileResult, PortfolioReconcileResult, ReconcileEntry, ReconcileDateShift } from '../../types';
+import type { GroupReconcileResult, PortfolioReconcileResult, ReconcileEntry, ReconcileDateShift, ReconcileAggregatedMatch } from '../../types';
 
 function EntryTable({ title, entries, tone }: { title: string; entries: ReconcileEntry[]; tone: 'warn' | 'bear' }) {
   if (!entries.length) return null;
@@ -76,7 +76,37 @@ function DateShiftTable({ shifts }: { shifts: ReconcileDateShift[] }) {
   );
 }
 
+function AggregatedMatchTable({ matches }: { matches: ReconcileAggregatedMatch[] }) {
+  if (!matches.length) return null;
+  return (
+    <details className="mt-3">
+      <summary className="text-[13px] font-medium text-[var(--c-ink-mute)] cursor-pointer select-none">
+        {matches.length} matched as a consolidated order (informational — not a discrepancy)
+      </summary>
+      <div className="mt-2 space-y-3">
+        {matches.map((m, i) => (
+          <div key={i} className="rounded-xl border border-[var(--c-border)] p-3 text-[13px]">
+            <p className="text-[var(--c-ink)]">
+              <span className="font-semibold text-[var(--c-primary)]">{m.symbol}</span>
+              {' '}{m.type.toUpperCase()} — {m.total_qty.toLocaleString()} shares, {m.total_amount.toFixed(2)} total
+            </p>
+            <p className="text-[var(--c-ink-mute)] mt-1">
+              Database: {m.database_entries.length} row{m.database_entries.length !== 1 ? 's' : ''}
+              {' '}({m.database_entries.map((e) => `${formatDate(e.date, 'short')}: ${e.qty}`).join(', ')})
+              {' · '}Moomoo file: {m.moomoo_entries.length} fill{m.moomoo_entries.length !== 1 ? 's' : ''}
+              {' '}({m.moomoo_entries.map((e) => `${formatDate(e.date, 'short')}: ${e.qty}`).join(', ')})
+            </p>
+          </div>
+        ))}
+      </div>
+    </details>
+  );
+}
+
 function PortfolioResultCard({ result }: { result: PortfolioReconcileResult }) {
+  const aggregatedMooCount = result.aggregated_matches.reduce((s, m) => s + m.moomoo_entries.length, 0);
+  const totalMatched = result.matched_count + aggregatedMooCount;
+
   return (
     <Card>
       <div className="flex items-center justify-between">
@@ -87,7 +117,8 @@ function PortfolioResultCard({ result }: { result: PortfolioReconcileResult }) {
             {result.window_start && result.window_end && (
               <> · {formatDate(result.window_start, 'medium')} – {formatDate(result.window_end, 'medium')}</>
             )}
-            {' · '}{result.matched_count} of {result.moomoo_entry_count} matched
+            {' · '}{totalMatched} of {result.moomoo_entry_count} matched
+            {aggregatedMooCount > 0 && ` (${aggregatedMooCount} as consolidated orders)`}
           </p>
         </div>
         {result.is_clean ? (
@@ -112,6 +143,7 @@ function PortfolioResultCard({ result }: { result: PortfolioReconcileResult }) {
         entries={result.unexpected_in_database}
         tone="warn"
       />
+      <AggregatedMatchTable matches={result.aggregated_matches} />
       <DateShiftTable shifts={result.date_shifted} />
     </Card>
   );

@@ -97,6 +97,15 @@ export interface ReconcileDateShift extends ReconcileEntry {
   days_diff: number;
 }
 
+export interface ReconcileAggregatedMatch {
+  type: string;
+  symbol: string;
+  database_entries: ReconcileEntry[];
+  moomoo_entries: ReconcileEntry[];
+  total_qty: number;
+  total_amount: number;
+}
+
 export interface PortfolioReconcileResult {
   portfolio_id: string;
   portfolio_name: string;
@@ -107,6 +116,7 @@ export interface PortfolioReconcileResult {
   database_entry_count: number;
   matched_count: number;
   date_shifted: ReconcileDateShift[];
+  aggregated_matches: ReconcileAggregatedMatch[];
   missing_from_database: ReconcileEntry[];
   unexpected_in_database: ReconcileEntry[];
   is_clean: boolean;
