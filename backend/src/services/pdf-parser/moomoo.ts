@@ -100,14 +100,33 @@ export function parseTradesSection(section: string): ParsedTrade[] {
 
     // Security name is the last non-empty tab token on the direction line
     // e.g. ["Buy to Open", "Buy to Open ", "Global X FANG+ ETF"]
-    // Sometimes the PDF wraps the security name onto its own line between the
-    // direction line and the symbol/exchange line (no tabs, no date). Detect and consume.
+    // Sometimes the PDF wraps the security name onto its own plain line(s)
+    // (no tabs, no date) between the direction line and the symbol/exchange
+    // line — long ETF names like "Global X Artificial Intllgnc Infras ETF"
+    // or "Global X Copper Miners ETF AUD Inc" can wrap across TWO such lines.
+    // The symbol always immediately precedes the first tab-separated line, so
+    // when 2+ plain lines are found, the last one is the symbol itself —
+    // rewind so the existing "symbol alone" branch below re-reads it.
     const dirParts = line.split('\t').map((s) => s.trim()).filter(Boolean);
     let securityName = dirParts.length >= 3 ? dirParts[dirParts.length - 1] : '';
     if (!securityName) {
-      const peek = (lines[i + 1] ?? '').trim();
-      const isNameLine = peek.length > 0 && !peek.includes('\t') && !/^\d{4}\/\d{2}\/\d{2}/.test(peek) && !peek.startsWith('Subtotal');
-      if (isNameLine) { securityName = peek; i++; }
+      const nameLines: string[] = [];
+      let j = i + 1;
+      while (j < lines.length && nameLines.length < 5) {
+        const peek = (lines[j] ?? '').trim();
+        const isPlainLine = peek.length > 0 && !peek.includes('\t') &&
+          !/^\d{4}\/\d{2}\/\d{2}/.test(peek) && !peek.startsWith('Subtotal') && !isTradeLine(peek);
+        if (!isPlainLine) break;
+        nameLines.push(peek);
+        j++;
+      }
+      if (nameLines.length === 1) {
+        securityName = nameLines[0];
+        i = j - 1;
+      } else if (nameLines.length >= 2) {
+        securityName = nameLines.slice(0, -1).join(' ');
+        i = j - 2;
+      }
     }
 
     // Line 2: SYMBOL \t EXCHANGE \t CURRENCY \t YYYY/MM/DD

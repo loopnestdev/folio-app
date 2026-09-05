@@ -7,6 +7,7 @@ All notable changes to Folio App are documented here.
 
 ### Fixed
 
+- **Moomoo PDF import — trades silently dropped when a security name wraps across 2+ lines** — `parseTradesSection` (`backend/src/services/pdf-parser/moomoo.ts`) only accounted for a security name wrapping onto a single extra line before the symbol. Long ETF names that wrap across two lines (e.g. "Global X Artificial Intllgnc Infras" / "ETF", or "Global X Copper Miners ETF" / "AUD Inc") caused the second name fragment to be misread as the symbol, and the trade was silently excluded from the import preview with no warning. Now consumes all consecutive wrapped name lines (up to 5, as a safety cap) and correctly treats the last one as the symbol. Verified against a real statement that was dropping 2 AUD sells worth $3,227.40 combined — both now parse correctly with no change to the 8 trades in an unaffected statement.
 - **Import Trade Preview — sell proceeds shown inflated by 2x the fee** — The "Total" column on the import preview table (`frontend/src/pages/ImportPage.tsx`) computed every row as `amount + brokerage`, which is correct for a buy (fees add to cost) but backwards for a sell (fees reduce proceeds). A $424.00 EQR sell with a $3.00 fee displayed as $427.00 instead of the broker-confirmed net $421.00. Now branches on `trade_type`: subtracts brokerage for sells, adds it for buys/other types. Display-only — the underlying parser output and all saved trade/cost-basis calculations were already correct, so no re-import is needed for previously-confirmed trades.
 
 ### Added
