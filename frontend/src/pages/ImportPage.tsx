@@ -133,7 +133,12 @@ export function ImportPage() {
       key: 'amount',
       label: 'Total',
       align: 'right' as const,
-      render: (_v: unknown, row: ParsedTrade) => formatCurrency(row.amount + row.brokerage, row.currency),
+      // Brokerage increases what a buy costs but reduces what a sell nets —
+      // adding it unconditionally overstated every sell's proceeds by 2x the fee.
+      render: (_v: unknown, row: ParsedTrade) => formatCurrency(
+        row.trade_type === 'sell' ? row.amount - row.brokerage : row.amount + row.brokerage,
+        row.currency,
+      ),
     },
     // FX column — shown when PDF contains trades in a different currency
     ...(hasFx ? [{

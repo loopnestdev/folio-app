@@ -5,6 +5,10 @@ All notable changes to Folio App are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Import Trade Preview — sell proceeds shown inflated by 2x the fee** — The "Total" column on the import preview table (`frontend/src/pages/ImportPage.tsx`) computed every row as `amount + brokerage`, which is correct for a buy (fees add to cost) but backwards for a sell (fees reduce proceeds). A $424.00 EQR sell with a $3.00 fee displayed as $427.00 instead of the broker-confirmed net $421.00. Now branches on `trade_type`: subtracts brokerage for sells, adds it for buys/other types. Display-only — the underlying parser output and all saved trade/cost-basis calculations were already correct, so no re-import is needed for previously-confirmed trades.
+
 ### Added
 
 - **Group Tax Report export (XLSX / PDF)** — The consolidated Group Tax Report (`/groups/:id/tax`) now has **XLSX** and **PDF** export buttons next to the FY filters. New endpoint `GET /api/groups/:id/tax/export?fyStart=&year=&format=xlsx|pdf` returns:
