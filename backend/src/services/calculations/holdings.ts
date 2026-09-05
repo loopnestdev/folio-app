@@ -54,6 +54,7 @@ export function calculateCashPosition(trades: TradeWithSecurity[]): {
         break;
       case 'dividend':
       case 'interest':
+      case 'other_income':
         cash += aud;
         break;
       default:

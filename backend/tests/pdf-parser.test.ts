@@ -105,9 +105,12 @@ describe('Moomoo PDF Parser', () => {
       expect(dividend?.trade_date).toBe('2025-07-17');
     });
 
-    it('extracts coupon/interest payment', () => {
+    it('extracts coupon payment as other_income (not interest)', () => {
+      // Moomoo "Stock Cash Coupon" is a referral/incentive reward, not interest
+      // paid on a cash balance — Moomoo's own annual tax summary never reports
+      // it under Interest, so it's modeled as its own income category.
       const items = parseCashSection(SAMPLE_CASH_SECTION);
-      const coupons = items.filter((t) => t.trade_type === 'interest');
+      const coupons = items.filter((t) => t.trade_type === 'other_income');
       expect(coupons.length).toBeGreaterThanOrEqual(1);
       expect(coupons[0]?.amount).toBe(10.0);
     });

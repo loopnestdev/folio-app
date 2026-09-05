@@ -144,13 +144,27 @@ export function parseMoomooAnnualSummary(buffer: Buffer): ParsedTrade[] {
       const symbol = str(row['Security Code']).toUpperCase();
       if (!symbol) continue;
 
-      const netAmount = num(row['Net Amount']);
-      if (netAmount <= 0) continue;
+      // Gross dividend = Unfranked + Franked amount — NOT "Net Amount". Two
+      // reasons:
+      //   1. CHESS-sponsored AU dividends (paid via share registry, not
+      //      through the Moomoo cash account) report Net Amount as "/",
+      //      which would otherwise drop the dividend entirely.
+      //   2. Foreign (US) dividends are grossed up for AU tax purposes —
+      //      withholding tax is a separate foreign-income-tax-offset claim,
+      //      not a reduction of assessable dividend income. Using Net
+      //      Amount understates taxable income by the withheld tax.
+      // A row with zero unfranked+franked is a withholding-tax reversal /
+      // adjustment line (e.g. Moomoo correcting an earlier WHT posting) —
+      // it carries no new dividend income, so skip it.
+      const unfranked = num(row['Unfranked Amount']);
+      const franked   = num(row['Franked Amount']);
+      const grossAmount = unfranked + franked;
+      if (grossAmount <= 0) continue;
 
-      const shares         = num(row['Participating Shares']);
+      const shares          = num(row['Participating Shares']);
       const dividendPerUnit = num(row['Cash Dividend/Unit']);
-      const currency       = str(row['Currency'], 'AUD').toUpperCase();
-      const market         = str(row['Market'], 'AU');
+      const currency        = str(row['Currency'], 'AUD').toUpperCase();
+      const market          = str(row['Market'], 'AU');
 
       trades.push({
         trade_date:    parseDate(payDate),
@@ -160,14 +174,14 @@ export function parseMoomooAnnualSummary(buffer: Buffer): ParsedTrade[] {
         exchange:      mapMarket(market),
         currency,
         quantity:      shares || 1,
-        price:         dividendPerUnit || netAmount,
-        amount:        netAmount,
+        price:         dividendPerUnit || grossAmount,
+        amount:        grossAmount,
         brokerage:     0,
         gst:           0,
         exchange_rate: 1,
         notes: [
-          `Unfranked: ${num(row['Unfranked Amount'])}`,
-          `Franked: ${num(row['Franked Amount'])}`,
+          `Unfranked: ${unfranked}`,
+          `Franked: ${franked}`,
           `Withholding Tax: ${num(row['Withholding Tax'])}`,
           `Franking Credit: ${num(row['Franking Credit'])}`,
         ].join(', '),
@@ -211,7 +225,10 @@ export function parseMoomooAnnualSummary(buffer: Buffer): ParsedTrade[] {
   // Moomoo cash vouchers.  "Stock Cash Coupon" entries are skipped here
   // because they are already captured as dividend/interest transactions via
   // monthly PDF imports (importing them again as deposits would double-count
-  // the cash balance).
+  // the cash balance). Dividend / withholding-tax lines (e.g. "FANG CASH
+  // DIVIDEND", "BITU ... SHARES WITHHOLDING TAX ...") are skipped for the
+  // same reason — they duplicate rows already produced from the Estimated
+  // Dividend Overview sheet above; importing both would double-count income.
   const cashSheet = wb.Sheets['Cash Overview'];
   if (cashSheet) {
     const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(cashSheet, { defval: null });
@@ -226,6 +243,8 @@ export function parseMoomooAnnualSummary(buffer: Buffer): ParsedTrade[] {
       // Skip Moomoo Stock Cash Coupons — they are captured as dividend/interest
       // trades via PDF imports; importing them here would double-count cash.
       if (comment.toLowerCase().includes('stock cash coupon')) continue;
+      // Skip dividend / withholding-tax cash lines — already captured above.
+      if (/dividend|withholding tax/i.test(comment)) continue;
 
       if (amount === 0) continue;
 

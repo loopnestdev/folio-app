@@ -414,8 +414,12 @@ export function parseCashSection(section: string): ParsedTrade[] {
       symbol = symMatch[1];
       notes = comment.trim();
     } else if (type === 'Coupon') {
+      // Moomoo "Stock Cash Coupon" — a referral/incentive reward, not
+      // interest paid on a cash balance. Moomoo's own annual tax summary
+      // never reports these under Interest (which shows $0.00), so they're
+      // modeled as their own taxable-income category rather than interest.
       if (amount <= 0) continue;
-      trade_type = 'interest';
+      trade_type = 'other_income';
       symbol = 'CASH';
       notes = comment.trim() || 'Moomoo Cash Coupon';
     } else if (type === 'Cash In Out' || type === 'Bank Transfer Deposits') {

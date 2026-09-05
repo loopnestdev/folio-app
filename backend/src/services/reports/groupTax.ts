@@ -11,6 +11,7 @@ export interface GroupPortfolioTax {
   fx_rate: number;
   dividends_received: number;
   interest_received: number;
+  other_income_received: number;
   capital_gains_short_term: number;
   capital_gains_long_term: number;
   cgt_discount_applied: number;
@@ -63,6 +64,7 @@ export interface GroupTaxData {
   fy_end_date: string;
   dividends_received: number;
   interest_received: number;
+  other_income_received: number;
   capital_gains_short_term: number;
   capital_gains_long_term: number;
   cgt_discount_applied: number;
@@ -104,7 +106,7 @@ async function getPortfolioTrades(portfolioId: string): Promise<Trade[]> {
 // Cash-flow sign convention — matches runningCash in reports.ts / groups.ts:
 // buy/drp reduce cash, sell/dividend/interest/deposit increase it, withdrawal reduces it.
 const CASH_FLOW_SIGN: Record<string, 1 | -1> = {
-  sell: 1, dividend: 1, interest: 1, deposit: 1,
+  sell: 1, dividend: 1, interest: 1, other_income: 1, deposit: 1,
   buy: -1, drp: -1, withdrawal: -1,
 };
 
@@ -133,7 +135,8 @@ export async function buildGroupTaxData(
   if (!portfolios.length) {
     return {
       financial_year: fyLabel, base_currency: baseCurrency, fy_start_date: fyStartDate, fy_end_date: fyEndDate,
-      dividends_received: 0, interest_received: 0, capital_gains_short_term: 0, capital_gains_long_term: 0,
+      dividends_received: 0, interest_received: 0, other_income_received: 0,
+      capital_gains_short_term: 0, capital_gains_long_term: 0,
       cgt_discount_applied: 0, total_taxable_income: 0, portfolios: [], trades: [], cgt_lots: [],
     };
   }
@@ -147,9 +150,13 @@ export async function buildGroupTaxData(
   );
 
   // Collect every (currency, date) pair that needs an FX lookup:
-  //   • today's rate — for the summary's income conversion (unchanged methodology)
+  //   • today's rate — shown as an informational fx_rate on the per-portfolio
+  //     breakdown only; income is NOT converted at this rate (see below)
   //   • each CGT lot's sell_date — ATO disposal-date rate
-  //   • each FY trade's own trade_date — for the per-transaction ledger export
+  //   • each FY trade's own trade_date — dividends/interest/other-income are
+  //     converted at their own payment-date rate (same treatment as CGT),
+  //     so the Tax Summary always agrees with the Trade Ledger export for
+  //     the same income instead of using one flat "today" rate for everything
   const today = format(new Date(), 'yyyy-MM-dd');
   const fxPairSet = new Set<string>();
   for (const { portfolio, trades, lots } of portfolioData) {
@@ -173,15 +180,19 @@ export async function buildGroupTaxData(
   const getFx = (currency: string, date: string): number =>
     currency === baseCurrency ? 1 : (fxCache.get(`${currency}|${date}`) ?? 1);
 
-  // Per-portfolio summary — identical formula to the existing /api/groups/:id/tax route.
+  // Per-portfolio summary.
   const portfolioTaxData: GroupPortfolioTax[] = portfolioData.map(({ portfolio, trades, lots }) => {
-    const fxToday = getFx(portfolio.currency, today);
+    const fxToday = getFx(portfolio.currency, today); // display-only, shown on the breakdown card
     const fyTrades = trades.filter(t => t.trade_date >= fyStartDate && t.trade_date <= fyEndDate);
 
-    const dividends = fyTrades.filter(t => t.trade_type === 'dividend');
-    const interest  = fyTrades.filter(t => t.trade_type === 'interest');
-    const dividendIncome = dividends.reduce((s, t) => s + (t.price * t.quantity) * fxToday, 0);
-    const interestIncome = interest.reduce( (s, t) => s + (t.price * t.quantity) * fxToday, 0);
+    const dividends   = fyTrades.filter(t => t.trade_type === 'dividend');
+    const interest    = fyTrades.filter(t => t.trade_type === 'interest');
+    const otherIncome = fyTrades.filter(t => t.trade_type === 'other_income');
+    // Each payment converted at ITS OWN date's rate — same treatment as CGT's
+    // disposal-date rate — so this total always matches the Trade Ledger export.
+    const dividendIncome   = dividends.reduce((s, t) => s + (t.price * t.quantity) * getFx(portfolio.currency, t.trade_date), 0);
+    const interestIncome   = interest.reduce( (s, t) => s + (t.price * t.quantity) * getFx(portfolio.currency, t.trade_date), 0);
+    const otherIncomeTotal = otherIncome.reduce((s, t) => s + (t.price * t.quantity) * getFx(portfolio.currency, t.trade_date), 0);
 
     const shortTerm = lots.filter(l => l.hold_days < 365)
       .reduce((s, l) => s + l.net_gain * getFx(portfolio.currency, l.sell_date), 0);
@@ -197,10 +208,11 @@ export async function buildGroupTaxData(
       fx_rate: fxToday,
       dividends_received: dividendIncome,
       interest_received: interestIncome,
+      other_income_received: otherIncomeTotal,
       capital_gains_short_term: shortTerm,
       capital_gains_long_term: longTerm,
       cgt_discount_applied: discount,
-      total_taxable_income: dividendIncome + interestIncome + shortTerm + longTerm - discount,
+      total_taxable_income: dividendIncome + interestIncome + otherIncomeTotal + shortTerm + longTerm - discount,
     };
   });
 
@@ -278,6 +290,7 @@ export async function buildGroupTaxData(
     fy_end_date: fyEndDate,
     dividends_received:       sum('dividends_received'),
     interest_received:        sum('interest_received'),
+    other_income_received:    sum('other_income_received'),
     capital_gains_short_term: sum('capital_gains_short_term'),
     capital_gains_long_term:  sum('capital_gains_long_term'),
     cgt_discount_applied:     sum('cgt_discount_applied'),

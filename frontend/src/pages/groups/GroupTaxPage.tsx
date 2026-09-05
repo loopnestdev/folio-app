@@ -53,9 +53,12 @@ export function GroupTaxPage() {
     }
   };
 
+  const fxNote = 'Converted to the group’s base currency at each payment’s own transaction-date exchange rate — the same method used for capital gains’ disposal-date rate — so this figure always agrees with the Trade Ledger export.';
+
   const taxRows = [
     { label: 'Dividend income',           value: taxData?.dividends_received ?? 0 },
     { label: 'Interest income',           value: taxData?.interest_received ?? 0 },
+    { label: 'Other income',              value: taxData?.other_income_received ?? 0 },
     { label: 'Short-term capital gains',  value: taxData?.capital_gains_short_term ?? 0 },
     { label: 'Long-term capital gains',   value: taxData?.capital_gains_long_term ?? 0 },
     { label: 'Less: CGT discount (50%)',  value: -(taxData?.cgt_discount_applied ?? 0) },
@@ -123,8 +126,9 @@ export function GroupTaxPage() {
         <>
           {/* Summary stats */}
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-            <StatCard label="Dividends" value={formatCurrency(taxData.dividends_received, baseCurrency)} />
-            <StatCard label="Interest"  value={formatCurrency(taxData.interest_received, baseCurrency)} />
+            <StatCard label="Dividends" value={formatCurrency(taxData.dividends_received, baseCurrency)} tooltip={fxNote} />
+            <StatCard label="Interest"  value={formatCurrency(taxData.interest_received, baseCurrency)} tooltip={fxNote} />
+            <StatCard label="Other Income" value={formatCurrency(taxData.other_income_received, baseCurrency)} tooltip={fxNote} />
             <StatCard label="Capital Gains (Short)"
               value={formatCurrency(taxData.capital_gains_short_term, baseCurrency)} />
             <StatCard label="Capital Gains (Long)"
@@ -160,7 +164,7 @@ export function GroupTaxPage() {
             <Card>
               <CardHeader
                 title="By Portfolio"
-                subtitle={`CGT converted to ${baseCurrency} at each disposal date · income at today's rate`}
+                subtitle={`CGT converted to ${baseCurrency} at each disposal date · income at each payment's own transaction date`}
               />
               <div className="space-y-4 mt-2">
                 {taxData.portfolios.map((p: GroupPortfolioTax) => (
@@ -170,7 +174,7 @@ export function GroupTaxPage() {
                         <p className="text-[15px] font-semibold text-[var(--c-ink)]">{p.portfolio_name}</p>
                         <p className="text-[12px] text-[var(--c-ink-mute)]">
                           {p.portfolio_currency}
-                          {p.portfolio_currency !== baseCurrency && ` · FX ${p.fx_rate.toFixed(4)} → ${baseCurrency}`}
+                          {p.portfolio_currency !== baseCurrency && ` · FX ${p.fx_rate.toFixed(4)} → ${baseCurrency} (today, for reference — income/CGT below use each transaction's own date)`}
                         </p>
                       </div>
                       <p className="text-[17px] font-semibold" style={{ color: getValueColor(p.total_taxable_income) }}>
@@ -181,6 +185,7 @@ export function GroupTaxPage() {
                       {[
                         { label: 'Dividends', value: p.dividends_received },
                         { label: 'Interest', value: p.interest_received },
+                        { label: 'Other Income', value: p.other_income_received },
                         { label: 'Short-term CGT', value: p.capital_gains_short_term },
                         { label: 'Long-term CGT', value: p.capital_gains_long_term },
                         { label: 'CGT Discount', value: -p.cgt_discount_applied },

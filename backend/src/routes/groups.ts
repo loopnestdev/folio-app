@@ -942,7 +942,7 @@ router.get('/:id/dividends', async (req: AuthenticatedRequest, res: any) => {
         .from('trades')
         .select('*, security:securities(*)')
         .eq('portfolio_id', portfolio.id)
-        .in('trade_type', ['dividend', 'interest'])
+        .in('trade_type', ['dividend', 'interest', 'other_income'])
         .order('trade_date', { ascending: false });
 
       if (fromDate) query = query.gte('trade_date', fromDate);

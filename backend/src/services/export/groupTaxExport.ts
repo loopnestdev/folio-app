@@ -13,16 +13,21 @@ export function buildGroupTaxWorkbook(data: GroupTaxData): Buffer {
     [],
     ['Dividends Received', data.dividends_received],
     ['Interest Received', data.interest_received],
+    ['Other Income Received', data.other_income_received],
     ['Capital Gains (Short Term)', data.capital_gains_short_term],
     ['Capital Gains (Long Term)', data.capital_gains_long_term],
     ['Less: CGT Discount Applied', -data.cgt_discount_applied],
     ['Total Taxable Income', data.total_taxable_income],
     [],
+    ['Note: foreign-currency dividends, interest, and other income are each converted to',
+     `${data.base_currency} at their own payment date's exchange rate (same method as capital gains'`],
+    ['disposal-date rate), so this summary always agrees with the Trade Ledger sheet below.'],
+    [],
     ['By Portfolio'],
-    ['Portfolio', 'Currency', 'FX Rate (today)', 'Dividends', 'Interest', 'CGT Short', 'CGT Long', 'CGT Discount', 'Taxable Income'],
+    ['Portfolio', 'Currency', 'FX Rate (today, for reference only)', 'Dividends', 'Interest', 'Other Income', 'CGT Short', 'CGT Long', 'CGT Discount', 'Taxable Income'],
     ...data.portfolios.map(p => [
       p.portfolio_name, p.portfolio_currency, p.fx_rate,
-      p.dividends_received, p.interest_received,
+      p.dividends_received, p.interest_received, p.other_income_received,
       p.capital_gains_short_term, p.capital_gains_long_term,
       -p.cgt_discount_applied, p.total_taxable_income,
     ]),
@@ -79,6 +84,7 @@ export function buildGroupTaxPdf(data: GroupTaxData): Promise<Buffer> {
     const summaryLines: [string, number][] = [
       ['Dividends Received', data.dividends_received],
       ['Interest Received', data.interest_received],
+      ['Other Income Received', data.other_income_received],
       ['Capital Gains (Short Term)', data.capital_gains_short_term],
       ['Capital Gains (Long Term)', data.capital_gains_long_term],
       ['Less: CGT Discount Applied', -data.cgt_discount_applied],
@@ -90,6 +96,14 @@ export function buildGroupTaxPdf(data: GroupTaxData): Promise<Buffer> {
     doc.fontSize(12).text(`Total Taxable Income:  ${fmtMoney(data.base_currency, data.total_taxable_income)}`, {
       underline: true,
     });
+    doc.moveDown(0.5);
+    doc.fontSize(8).fillColor('#777').text(
+      `Note: foreign-currency dividends, interest, and other income are each converted to ${data.base_currency} ` +
+      `at their own payment date's exchange rate — the same method used for capital gains' disposal-date rate — ` +
+      `so these totals always agree with the Trade Ledger page.`,
+      { width: 700 },
+    );
+    doc.fillColor('#000');
     doc.moveDown(1);
 
     if (data.portfolios.length > 1) {

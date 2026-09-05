@@ -123,6 +123,10 @@ export function TaxPage() {
               value={formatCurrency(taxData.interest_received, currency)}
             />
             <StatCard
+              label="Other Income Received"
+              value={formatCurrency(taxData.other_income_received, currency)}
+            />
+            <StatCard
               label="Capital Gains (Short Term)"
               value={formatCurrency(taxData.capital_gains_short_term, currency)}
             />
@@ -147,6 +151,7 @@ export function TaxPage() {
               {[
                 { label: 'Dividend income', value: taxData.dividends_received },
                 { label: 'Interest income', value: taxData.interest_received },
+                { label: 'Other income', value: taxData.other_income_received },
                 { label: 'Short-term capital gains', value: taxData.capital_gains_short_term },
                 { label: 'Long-term capital gains', value: taxData.capital_gains_long_term },
                 { label: 'Less: CGT discount (50%)', value: -taxData.cgt_discount_applied },

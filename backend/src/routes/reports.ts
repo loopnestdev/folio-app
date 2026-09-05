@@ -685,19 +685,22 @@ router.get('/:id/tax', async (req: AuthenticatedRequest, res: any) => {
 
     const dividends = fyTrades.filter(t => t.trade_type === 'dividend');
     const interest = fyTrades.filter(t => t.trade_type === 'interest');
+    const otherIncome = fyTrades.filter(t => t.trade_type === 'other_income');
 
     const totalDividends = dividends.reduce((s, t) => s + t.price * t.quantity, 0);
     const totalInterest = interest.reduce((s, t) => s + t.price * t.quantity, 0);
+    const totalOtherIncome = otherIncome.reduce((s, t) => s + t.price * t.quantity, 0);
 
     const cgtLots = calculateCapitalGains(trades as any, fyStart, yearNum);
     const totalNetCapitalGain = cgtLots.reduce((s, l) => s + l.net_gain, 0);
-    const totalTaxableIncome = totalDividends + totalInterest + Math.max(0, totalNetCapitalGain);
+    const totalTaxableIncome = totalDividends + totalInterest + totalOtherIncome + Math.max(0, totalNetCapitalGain);
 
     res.json({
       fy_start: fyStartDate,
       fy_end: fyEndDate,
       dividends: { items: dividends, total: totalDividends },
       interest: { items: interest, total: totalInterest },
+      other_income: { items: otherIncome, total: totalOtherIncome },
       capital_gains: { lots: cgtLots, net_total: totalNetCapitalGain },
       total_taxable_income: totalTaxableIncome,
     });
@@ -717,7 +720,7 @@ router.get('/:id/dividends', async (req: AuthenticatedRequest, res: any) => {
     .from('trades')
     .select('*, security:securities(*)')
     .eq('portfolio_id', id)
-    .in('trade_type', ['dividend', 'interest'])
+    .in('trade_type', ['dividend', 'interest', 'other_income'])
     .order('trade_date', { ascending: false });
 
   if (from) query = query.gte('trade_date', from);
@@ -1095,6 +1098,8 @@ router.get('/:id/reports/tax', async (req: AuthenticatedRequest, res: any) => {
       .reduce((s, t) => s + Number(t.price) * Number(t.quantity), 0);
     const totalInterest = fyTrades.filter(t => t.trade_type === 'interest')
       .reduce((s, t) => s + Number(t.price) * Number(t.quantity), 0);
+    const totalOtherIncome = fyTrades.filter(t => t.trade_type === 'other_income')
+      .reduce((s, t) => s + Number(t.price) * Number(t.quantity), 0);
 
     // Use the unified fyStart/year params for calculateCapitalGains
     const fyStartParam: 'january' | 'july' = isJulJun ? 'july' : 'january';
@@ -1114,10 +1119,11 @@ router.get('/:id/reports/tax', async (req: AuthenticatedRequest, res: any) => {
       financial_year: fyLabel,
       dividends_received: totalDividends,
       interest_received: totalInterest,
+      other_income_received: totalOtherIncome,
       capital_gains_short_term: shortTermGains,
       capital_gains_long_term: longTermGrossGains,
       cgt_discount_applied: cgtDiscount,
-      total_taxable_income: totalDividends + totalInterest + Math.max(0, netCapGain),
+      total_taxable_income: totalDividends + totalInterest + totalOtherIncome + Math.max(0, netCapGain),
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -1138,7 +1144,7 @@ router.get('/:id/reports/dividends', async (req: AuthenticatedRequest, res: any)
       .from('trades')
       .select('*, security:securities(*)')
       .eq('portfolio_id', id)
-      .in('trade_type', ['dividend', 'interest'])
+      .in('trade_type', ['dividend', 'interest', 'other_income'])
       .order('trade_date', { ascending: false });
 
     if (start_date) query = query.gte('trade_date', start_date);

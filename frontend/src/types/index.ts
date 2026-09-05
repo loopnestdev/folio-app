@@ -76,6 +76,7 @@ export interface GroupPortfolioTax {
   fx_rate: number;
   dividends_received: number;
   interest_received: number;
+  other_income_received: number;
   capital_gains_short_term: number;
   capital_gains_long_term: number;
   cgt_discount_applied: number;
@@ -87,6 +88,7 @@ export interface GroupTaxReport {
   base_currency: string;
   dividends_received: number;
   interest_received: number;
+  other_income_received: number;
   capital_gains_short_term: number;
   capital_gains_long_term: number;
   cgt_discount_applied: number;
@@ -127,7 +129,7 @@ export interface PortfolioSummary {
 }
 
 // Trade Types — match backend schema exactly
-export type BackendTradeType = 'buy' | 'sell' | 'dividend' | 'interest' | 'drp' | 'split' | 'deposit' | 'withdrawal' | 'transfer_in';
+export type BackendTradeType = 'buy' | 'sell' | 'dividend' | 'interest' | 'other_income' | 'drp' | 'split' | 'deposit' | 'withdrawal' | 'transfer_in';
 
 // Legacy aliases kept so existing UI code that renders direction labels compiles
 export type TradeDirection = 'BUY' | 'SELL';
@@ -285,6 +287,7 @@ export interface TaxReport {
   financial_year: string;
   dividends_received: number;
   interest_received: number;
+  other_income_received: number;
   capital_gains_short_term: number;
   capital_gains_long_term: number;
   cgt_discount_applied: number;
@@ -295,7 +298,7 @@ export interface TaxReport {
 export interface ParsedTrade {
   symbol: string;
   security_name: string | null;
-  trade_type: 'buy' | 'sell' | 'dividend' | 'interest' | 'drp' | 'split';
+  trade_type: 'buy' | 'sell' | 'dividend' | 'interest' | 'other_income' | 'drp' | 'split';
   quantity: number;
   price: number;
   amount: number;
