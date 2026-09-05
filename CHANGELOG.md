@@ -3,6 +3,12 @@
 All notable changes to Folio App are documented here.
 
 
+## [Unreleased]
+
+### Fixed
+
+- **Moomoo PDF import — Corporate Action dividends silently dropped when the comment wraps onto separate lines** — `parseCashSection` (`backend/src/services/pdf-parser/moomoo.ts`) only collected a cash-line's wrapped comment text (across the following 1-5 physical lines) for `Currency Exchange` entries. A `Corporate Action` dividend line can appear as just `"date time Corporate Action +6.75"` with nothing after the amount, with the actual description ("MU 45.00000000 SHARES\nDIVIDENDS 0.14999990 USD PER\nSHARE") wrapping onto the next lines — with no inline comment to extract a symbol from, the whole dividend was silently skipped. Generalized the wrapped-comment collection to apply to every cash-line type, not just Currency Exchange. Verified against a real statement that was dropping a $6.75 MU dividend, with byte-identical output on two previously-working statements (no regression).
+
 ## [v0.7.0] — 2026-09-06
 
 ### Fixed

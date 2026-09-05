@@ -380,11 +380,17 @@ export function parseCashSection(section: string): ParsedTrade[] {
     const [, dateStr, timeStr, type, amountStr, inlineComment] = match;
     const amount = parseNumber(amountStr);
 
-    // For Currency Exchange the FX detail often wraps across the next 1-3 lines.
-    // Always collect continuation lines (no tab = not a structured row; stop at
-    // dated lines, currency headers, or tab-separated table rows).
+    // The comment (FX detail, dividend/withholding-tax description, etc.) often
+    // wraps across the next 1-5 lines rather than staying inline — e.g. a
+    // Corporate Action dividend line can be just "date time Corporate Action
+    // +6.75" with "MU 45.00000000 SHARES\nDIVIDENDS ... USD PER\nSHARE" as
+    // separate following lines. Previously only Currency Exchange collected
+    // these continuation lines, so Corporate Action dividends with a wrapped
+    // comment had no way to extract their symbol and were silently dropped.
+    // Always collect continuation lines (no tab = not a structured row; stop
+    // at dated lines, currency headers, or tab-separated table rows).
     let comment = inlineComment.trim();
-    if (type === 'Currency Exchange') {
+    {
       const extra: string[] = comment ? [comment] : [];
       for (let j = i + 1; j < Math.min(i + 6, lines.length); j++) {
         const next = lines[j];
