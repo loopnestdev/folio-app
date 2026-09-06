@@ -51,7 +51,7 @@ interface DbTradeInput {
 // other type (other_income, drp, split, transfer_in) are excluded from
 // comparison — the file has no section that could ever report them, so
 // flagging them would just be permanent, unfixable noise.
-const COMPARABLE_TYPES = new Set(['buy', 'sell', 'dividend', 'interest', 'deposit', 'withdrawal']);
+const COMPARABLE_TYPES = new Set(['buy', 'sell', 'dividend', 'interest', 'deposit', 'withdrawal', 'fx_transfer_in', 'fx_transfer_out']);
 
 // Only buy/sell quantities are directly comparable between the two sources.
 // Dividends/interest/deposits/withdrawals use inconsistent quantity

@@ -47,6 +47,7 @@ const SAMPLE_CASH_SECTION = `Changes in Cash
 AUD Date/Time Type Amount Comment
 2025/07/17 18:43:59 Asset Adjustment +8.98 FANG CASH DIVIDEND
 2025/07/25 18:30:14 Coupon +10.00 Stock Cash Coupon
+2025/08/14 12:05:52 Bank Transfer Withdrawals -5,727.00
 USD Date/Time Type Amount Comment
 2025/07/13 10:30:17 Coupon +7.31 Stock Cash Coupon
 2025/07/23 18:30:06 Coupon +7.31 Stock Cash Coupon`;
@@ -132,6 +133,30 @@ describe('Moomoo PDF Parser', () => {
       expect(dividend?.symbol).toBe('FANG');
       expect(dividend?.amount).toBe(8.98);
       expect(dividend?.trade_date).toBe('2025-07-17');
+    });
+
+    it('classifies a Currency Exchange line as fx_transfer, not deposit/withdrawal', () => {
+      // An internal AUD<->USD conversion is not new external capital — it must
+      // stay out of deposit/withdrawal so it doesn't distort return calculations
+      // or the "money I've put in" cash-flow report.
+      const section = `Changes in Cash
+AUD Date/Time Type Amount Comment
+2025/04/07 22:37:15 Currency Exchange +5,009.13 (USD -> AUD 0.7105020574521226)`;
+      const items = parseCashSection(section);
+      const fx = items.find((t) => t.symbol === 'CASH');
+      expect(fx?.trade_type).toBe('fx_transfer_in');
+      expect(fx?.trade_type).not.toBe('deposit');
+    });
+
+    it('extracts a Bank Transfer Withdrawals line, not just Deposits', () => {
+      // Moomoo labels the type "Bank Transfer Withdrawals" for outbound transfers,
+      // distinct from "Bank Transfer Deposits" — the line-matching regex previously
+      // only recognized the Deposits variant, silently dropping withdrawals.
+      const items = parseCashSection(SAMPLE_CASH_SECTION);
+      const withdrawal = items.find((t) => t.trade_type === 'withdrawal');
+      expect(withdrawal).toBeDefined();
+      expect(withdrawal?.amount).toBe(5727.0);
+      expect(withdrawal?.trade_date).toBe('2025-08-14');
     });
 
     it('resolves a dividend to the exchange its symbol actually trades on, not the currency code', () => {

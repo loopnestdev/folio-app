@@ -46,7 +46,7 @@ async function upsertSecurity(symbol: string, name: string, exchange: string, cu
 
 const tradeSchema = z.object({
   trade_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  trade_type: z.enum(['buy', 'sell', 'dividend', 'interest', 'other_income', 'drp', 'split', 'deposit', 'withdrawal', 'transfer_in']),
+  trade_type: z.enum(['buy', 'sell', 'dividend', 'interest', 'other_income', 'drp', 'split', 'deposit', 'withdrawal', 'transfer_in', 'fx_transfer_in', 'fx_transfer_out']),
   symbol: z.string().min(1).max(20),
   security_name: z.string().optional(),
   exchange: z.string().optional().default('ASX'),
@@ -255,7 +255,7 @@ async function handleImportParse(req: AuthenticatedRequest, res: any) {
     // (e.g. ZEPTO_PR.xxx) are treated as distinct.
     const makeKey = (sym: string, type: string, date: string, qty: number, price: number, notes?: string | null) => {
       const base = `${date}|${sym.toUpperCase()}|${type}|${qty}|${price}`;
-      if ((type === 'deposit' || type === 'withdrawal') && notes) return `${base}|${notes}`;
+      if ((type === 'deposit' || type === 'withdrawal' || type === 'fx_transfer_in' || type === 'fx_transfer_out') && notes) return `${base}|${notes}`;
       return base;
     };
 
@@ -320,7 +320,7 @@ router.post('/:portfolioId/import/confirm', async (req: AuthenticatedRequest, re
   const schema = z.object({
     trades: z.array(z.object({
       trade_date: z.string(),
-      trade_type: z.enum(['buy', 'sell', 'dividend', 'interest', 'other_income', 'drp', 'split', 'deposit', 'withdrawal', 'transfer_in']),
+      trade_type: z.enum(['buy', 'sell', 'dividend', 'interest', 'other_income', 'drp', 'split', 'deposit', 'withdrawal', 'transfer_in', 'fx_transfer_in', 'fx_transfer_out']),
       symbol: z.string(),
       security_name: z.string(),
       exchange: z.string(),
@@ -360,7 +360,7 @@ router.post('/:portfolioId/import/confirm', async (req: AuthenticatedRequest, re
       .eq('quantity',     t.quantity)
       .eq('price',        t.price)
       .eq('security_id',  securityId ?? '');
-    if ((t.trade_type === 'deposit' || t.trade_type === 'withdrawal') && t.notes) {
+    if ((t.trade_type === 'deposit' || t.trade_type === 'withdrawal' || t.trade_type === 'fx_transfer_in' || t.trade_type === 'fx_transfer_out') && t.notes) {
       dupQuery = dupQuery.eq('notes', t.notes);
     }
     const { data: existing } = await dupQuery.maybeSingle();

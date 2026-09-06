@@ -27,6 +27,8 @@ const TRADE_TYPE_BADGE: Record<BackendTradeType, 'success' | 'info' | 'warning' 
   deposit:     'success',
   withdrawal:  'warning',
   transfer_in: 'info',
+  fx_transfer_in:  'neutral',
+  fx_transfer_out: 'neutral',
 };
 
 export function TradesPage() {
@@ -236,6 +238,8 @@ export function TradesPage() {
             { label: 'Split',        value: 'split' },
             { label: 'Deposit',      value: 'deposit' },
             { label: 'Withdrawal',   value: 'withdrawal' },
+            { label: 'FX Transfer In',  value: 'fx_transfer_in' },
+            { label: 'FX Transfer Out', value: 'fx_transfer_out' },
           ]}
           value={filterType}
           onChange={(v) => setFilterType(v as BackendTradeType | '')}

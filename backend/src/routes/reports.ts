@@ -243,7 +243,7 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
     // chartStartIdx (first date with netDep > 0 AND totalValue > 0) is always
     // found even when the display range starts after that date.
     // The returned data is then filtered+re-normalised to the display window.
-    const investmentTrades = trades.filter(t => t.trade_type !== 'deposit' && t.trade_type !== 'withdrawal');
+    const investmentTrades = trades.filter(t => t.trade_type !== 'deposit' && t.trade_type !== 'withdrawal' && t.trade_type !== 'fx_transfer_in' && t.trade_type !== 'fx_transfer_out');
     const earliestTradeDate = investmentTrades.length
       ? investmentTrades.reduce((min, t) => t.trade_date < min ? t.trade_date : min, investmentTrades[0].trade_date)
       : trades[0].trade_date;
@@ -309,6 +309,8 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
         const brok  = Number(t.brokerage)  || 0;
         if      (t.trade_type === 'deposit')                        cash += price * qty;
         else if (t.trade_type === 'withdrawal')                     cash -= price * qty;
+        else if (t.trade_type === 'fx_transfer_in')                 cash += price * qty;
+        else if (t.trade_type === 'fx_transfer_out')                cash -= price * qty;
         else if (t.trade_type === 'buy' || t.trade_type === 'drp') cash -= price * qty + brok;
         else if (t.trade_type === 'sell')                           cash += price * qty - brok;
         else if (t.trade_type === 'dividend')                       cash += price * qty;
@@ -549,7 +551,7 @@ router.get('/:id/statistics', async (req: AuthenticatedRequest, res: any) => {
   try {
     const trades = await getPortfolioTrades(id);
     // Exclude deposit/withdrawal trades — their CASH security has no price history
-    const investmentTrades = trades.filter(t => t.trade_type !== 'deposit' && t.trade_type !== 'withdrawal');
+    const investmentTrades = trades.filter(t => t.trade_type !== 'deposit' && t.trade_type !== 'withdrawal' && t.trade_type !== 'fx_transfer_in' && t.trade_type !== 'fx_transfer_out');
     const symbols = [...new Set(investmentTrades.filter(t => t.security).map(t => t.security!.symbol))];
 
     // Only fetch prices from the earliest actual trade date (or fromDate, whichever is later)
@@ -793,7 +795,8 @@ router.get('/:id/reports/monthly-profit', async (req: AuthenticatedRequest, res:
     if (!trades.length) { res.json([]); return; }
 
     const investmentTrades = trades.filter(
-      (t) => t.trade_type !== 'deposit' && t.trade_type !== 'withdrawal',
+      (t) => t.trade_type !== 'deposit' && t.trade_type !== 'withdrawal'
+        && t.trade_type !== 'fx_transfer_in' && t.trade_type !== 'fx_transfer_out',
     );
     const symbols = [...new Set(investmentTrades.filter((t) => t.security).map((t) => t.security!.symbol))];
 
@@ -825,6 +828,8 @@ router.get('/:id/reports/monthly-profit', async (req: AuthenticatedRequest, res:
       const brok  = Number(t.brokerage) || 0;
       if      (t.trade_type === 'deposit')                          cash += price * qty;
       else if (t.trade_type === 'withdrawal')                       cash -= price * qty;
+      else if (t.trade_type === 'fx_transfer_in')                   cash += price * qty;
+      else if (t.trade_type === 'fx_transfer_out')                  cash -= price * qty;
       else if (t.trade_type === 'buy' || t.trade_type === 'drp')  cash -= price * qty + brok;
       else if (t.trade_type === 'sell')                             cash += price * qty - brok;
       else if (t.trade_type === 'dividend')                         cash += price * qty;
@@ -916,7 +921,8 @@ router.get('/:id/reports/drawdown', async (req: AuthenticatedRequest, res: any) 
     if (!trades.length) { res.json([]); return; }
 
     const investmentTrades = trades.filter(
-      (t) => t.trade_type !== 'deposit' && t.trade_type !== 'withdrawal',
+      (t) => t.trade_type !== 'deposit' && t.trade_type !== 'withdrawal'
+        && t.trade_type !== 'fx_transfer_in' && t.trade_type !== 'fx_transfer_out',
     );
     const symbols = [...new Set(investmentTrades.filter((t) => t.security).map((t) => t.security!.symbol))];
 
@@ -951,6 +957,8 @@ router.get('/:id/reports/drawdown', async (req: AuthenticatedRequest, res: any) 
       const brok  = Number(t.brokerage) || 0;
       if      (t.trade_type === 'deposit')                         cash2 += price * qty;
       else if (t.trade_type === 'withdrawal')                      cash2 -= price * qty;
+      else if (t.trade_type === 'fx_transfer_in')                  cash2 += price * qty;
+      else if (t.trade_type === 'fx_transfer_out')                 cash2 -= price * qty;
       else if (t.trade_type === 'buy' || t.trade_type === 'drp') cash2 -= price * qty + brok;
       else if (t.trade_type === 'sell')                            cash2 += price * qty - brok;
       else if (t.trade_type === 'dividend')                        cash2 += price * qty;
@@ -1040,7 +1048,7 @@ router.get('/:id/reports/cash-flows', async (req: AuthenticatedRequest, res: any
     .from('trades')
     .select('*, security:securities(*)')
     .eq('portfolio_id', id)
-    .in('trade_type', ['deposit', 'withdrawal'])
+    .in('trade_type', ['deposit', 'withdrawal', 'fx_transfer_in', 'fx_transfer_out'])
     .gte('trade_date', fromDate)
     .lte('trade_date', toDate)
     .order('trade_date', { ascending: false });

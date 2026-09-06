@@ -86,6 +86,17 @@ export function CashFlowPage() {
   // Combined: "Bank Transfer" + "Other" deposits are both cash inflows from your bank
   const bankDeposits = bankDepositsOnly + otherDeposits;
 
+  const bankWithdrawalsOnly = classified
+    .filter((t: any) => t.trade_type === 'withdrawal' && t._category === 'bank_transfer')
+    .reduce((s: number, t: any) => s + t._amount, 0);
+
+  const otherWithdrawals = classified
+    .filter((t: any) => t.trade_type === 'withdrawal' && t._category === 'other')
+    .reduce((s: number, t: any) => s + t._amount, 0);
+
+  // Combined: "Bank Transfer" + "Other" withdrawals are both cash outflows to your bank
+  const bankWithdrawals = bankWithdrawalsOnly + otherWithdrawals;
+
   // FX: unique directions found in the data, sorted for stable card order
   const fxDirections = [...new Set(
     classified
@@ -93,12 +104,14 @@ export function CashFlowPage() {
       .map((t: any) => t._fxDirection as string),
   )].sort();
 
-  // For each direction sum the DEPOSIT side — that's what arrived in the destination currency
+  // For each direction sum the arrival side — that's what arrived in the destination currency.
+  // Newly-imported FX transfers use trade_type 'fx_transfer_in'; older rows recorded before
+  // that type existed still use 'deposit' (with "FX Transfer" in the notes) — match both.
   const fxDepositsByDirection: Record<string, number> = Object.fromEntries(
     fxDirections.map((dir) => [
       dir,
       classified
-        .filter((t: any) => t._category === 'fx_transfer' && t.trade_type === 'deposit' && t._fxDirection === dir)
+        .filter((t: any) => t._category === 'fx_transfer' && (t.trade_type === 'deposit' || t.trade_type === 'fx_transfer_in') && t._fxDirection === dir)
         .reduce((s: number, t: any) => s + t._amount, 0),
     ]),
   );
@@ -121,7 +134,7 @@ export function CashFlowPage() {
       key: 'trade_type',
       label: 'Type',
       render: (v: unknown) => (
-        <Badge variant={v === 'deposit' ? 'success' : 'warning'}>
+        <Badge variant={v === 'deposit' || v === 'fx_transfer_in' ? 'success' : 'warning'}>
           {String(v).toUpperCase()}
         </Badge>
       ),
@@ -159,7 +172,7 @@ export function CashFlowPage() {
       sortable: true,
       render: (v: unknown, row: any) => {
         const amt    = v as number;
-        const signed = row.trade_type === 'withdrawal' ? -amt : amt;
+        const signed = (row.trade_type === 'withdrawal' || row.trade_type === 'fx_transfer_out') ? -amt : amt;
         return (
           <span style={{ color: getValueColor(signed) }} className="font-medium">
             {formatCurrency(amt, currency)}
@@ -197,6 +210,12 @@ export function CashFlowPage() {
           value={formatCurrency(bankDeposits, currency)}
           trend={bankDeposits}
           tooltip="Total cash deposited from your bank — includes labelled bank transfers and other direct deposits (e.g. Zepto payments)"
+        />
+        <StatCard
+          label="Bank Transfer Withdrawals"
+          value={formatCurrency(bankWithdrawals, currency)}
+          trend={-bankWithdrawals}
+          tooltip="Total cash withdrawn to your bank — includes labelled bank transfers and other direct withdrawals"
         />
         {fxDirections.map((dir) => {
           const [from, to] = dir.split(' → ');

@@ -390,7 +390,7 @@ export function parseCashSection(section: string): ParsedTrade[] {
   //   "2024/09/30 13:41:14  Cash In Out       +515.30  ZEPTO_PR.2m3pdi"
   //   "2025/04/07 22:37:15  Currency Exchange -1,354.00"  (comment on next lines)
   const pattern =
-    /^(\d{4}\/\d{2}\/\d{2})\s+(\d{2}:\d{2}:\d{2})\s+(Asset Adjustment|Coupon|Cash In Out|Currency Exchange|Corporate Action|Bank Transfer Deposits)\s+([+-][\d,\.]+)\s*(.*)$/;
+    /^(\d{4}\/\d{2}\/\d{2})\s+(\d{2}:\d{2}:\d{2})\s+(Asset Adjustment|Coupon|Cash In Out|Currency Exchange|Corporate Action|Bank Transfer Deposits|Bank Transfer Withdrawals)\s+([+-][\d,\.]+)\s*(.*)$/;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -455,27 +455,29 @@ export function parseCashSection(section: string): ParsedTrade[] {
       trade_type = 'other_income';
       symbol = 'CASH';
       notes = comment.trim() || 'Moomoo Cash Coupon';
-    } else if (type === 'Cash In Out' || type === 'Bank Transfer Deposits') {
+    } else if (type === 'Cash In Out' || type === 'Bank Transfer Deposits' || type === 'Bank Transfer Withdrawals') {
       if (amount === 0) continue;
       trade_type = amount > 0 ? 'deposit' : 'withdrawal';
       symbol = 'CASH';
-      // For Bank Transfer Deposits the comment is usually empty — use the timestamp
-      // as a unique identifier so that multiple same-day same-amount deposits
-      // (e.g. 7× $1,000 on 30 Dec) each get a distinct dedup key on import.
+      // For Bank Transfer Deposits/Withdrawals the comment is usually empty — use
+      // the timestamp as a unique identifier so that multiple same-day same-amount
+      // transfers (e.g. 7× $1,000 on 30 Dec) each get a distinct dedup key on import.
       // Cash In Out entries already carry a unique Zepto reference in the comment.
-      if (type === 'Bank Transfer Deposits') {
-        notes = comment ? `${comment} ${timeStr}` : `Bank Transfer Deposits ${timeStr}`;
+      if (type === 'Bank Transfer Deposits' || type === 'Bank Transfer Withdrawals') {
+        notes = comment ? `${comment} ${timeStr}` : `${type} ${timeStr}`;
       } else {
         notes = comment || type;
       }
     } else if (type === 'Currency Exchange') {
-      // FX transfer between currency accounts (e.g. AUD → USD or USD → AUD).
-      // Positive = funds arriving in this currency (deposit).
-      // Negative = funds leaving this currency (withdrawal).
+      // Internal conversion between this account's own currency sleeves (e.g.
+      // AUD → USD or USD → AUD) — NOT new external capital, so it must not be
+      // recorded as a deposit/withdrawal (those drive return/performance
+      // calculations and a "money I've contributed" cash-flow report).
+      // Positive = funds arriving in this currency, negative = funds leaving.
       // Both sides live in the same PDF; the currency filter routes each side
       // to the correct portfolio on import (AUD side → AUD portfolio, USD side → USD portfolio).
       if (amount === 0) continue;
-      trade_type = amount > 0 ? 'deposit' : 'withdrawal';
+      trade_type = amount > 0 ? 'fx_transfer_in' : 'fx_transfer_out';
       symbol = 'CASH';
       // Extract direction from comment: "(AUD -> USD 0.629)" or similar
       const dirMatch = comment.match(/\(([A-Z]+)\s*->\s*([A-Z]+)\s+([\d.]+)\)/);

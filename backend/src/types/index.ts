@@ -4,7 +4,7 @@ export type UserRole = 'admin' | 'standard';
 export type UserStatus = 'pending' | 'approved' | 'rejected';
 export type ChartLibrary = 'recharts' | 'echarts';
 export type FinancialYearStart = 'january' | 'july';
-export type TradeType = 'buy' | 'sell' | 'dividend' | 'interest' | 'other_income' | 'drp' | 'split' | 'deposit' | 'withdrawal' | 'transfer_in';
+export type TradeType = 'buy' | 'sell' | 'dividend' | 'interest' | 'other_income' | 'drp' | 'split' | 'deposit' | 'withdrawal' | 'transfer_in' | 'fx_transfer_in' | 'fx_transfer_out';
 export type TradeSource = 'manual' | 'pdf_import';
 
 export interface Profile {

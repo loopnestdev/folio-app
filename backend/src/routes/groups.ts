@@ -393,8 +393,10 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
         // Running cash balance at each trade event
         let cash = 0;
         const cashEvents: [string, number][] = sortedTrades.map((t) => {
-          if      (t.trade_type === 'deposit')    cash += t.price * t.quantity;
-          else if (t.trade_type === 'withdrawal') cash -= t.price * t.quantity;
+          if      (t.trade_type === 'deposit')       cash += t.price * t.quantity;
+          else if (t.trade_type === 'withdrawal')    cash -= t.price * t.quantity;
+          else if (t.trade_type === 'fx_transfer_in')  cash += t.price * t.quantity;
+          else if (t.trade_type === 'fx_transfer_out') cash -= t.price * t.quantity;
           else if (t.trade_type === 'buy')        cash -= t.price * t.quantity + t.brokerage;
           else if (t.trade_type === 'sell')       cash += t.price * t.quantity - t.brokerage;
           else if (t.trade_type === 'dividend')   cash += t.price * t.quantity;
@@ -719,7 +721,7 @@ router.get('/:id/cash-flows', async (req: AuthenticatedRequest, res: any) => {
         .from('trades')
         .select('*, security:securities(*)')
         .eq('portfolio_id', portfolio.id)
-        .in('trade_type', ['deposit', 'withdrawal'])
+        .in('trade_type', ['deposit', 'withdrawal', 'fx_transfer_in', 'fx_transfer_out'])
         .gte('trade_date', fromDate)
         .lte('trade_date', toDate)
         .order('trade_date', { ascending: false });
@@ -921,8 +923,10 @@ async function buildGroupDailyValues(
       const sortedTrades = [...trades].sort((a, b) => a.trade_date.localeCompare(b.trade_date));
       let cashAmt = 0;
       const cashEvents: [string, number][] = sortedTrades.map((t) => {
-        if      (t.trade_type === 'deposit')    cashAmt += t.price * t.quantity;
-        else if (t.trade_type === 'withdrawal') cashAmt -= t.price * t.quantity;
+        if      (t.trade_type === 'deposit')       cashAmt += t.price * t.quantity;
+        else if (t.trade_type === 'withdrawal')    cashAmt -= t.price * t.quantity;
+        else if (t.trade_type === 'fx_transfer_in')  cashAmt += t.price * t.quantity;
+        else if (t.trade_type === 'fx_transfer_out') cashAmt -= t.price * t.quantity;
         else if (t.trade_type === 'buy')        cashAmt -= t.price * t.quantity + t.brokerage;
         else if (t.trade_type === 'sell')       cashAmt += t.price * t.quantity - t.brokerage;
         else if (t.trade_type === 'dividend')   cashAmt += t.price * t.quantity;
@@ -1381,7 +1385,8 @@ router.get('/:id/monthly-profit', async (req: AuthenticatedRequest, res: any) =>
         const fx = fxRates[portfolio.currency] ?? 1;
 
         const investmentTrades = trades.filter(
-          (t) => t.trade_type !== 'deposit' && t.trade_type !== 'withdrawal',
+          (t) => t.trade_type !== 'deposit' && t.trade_type !== 'withdrawal'
+            && t.trade_type !== 'fx_transfer_in' && t.trade_type !== 'fx_transfer_out',
         );
         const symbols = [...new Set(investmentTrades.filter((t) => t.security).map((t) => t.security!.symbol))];
         const earliestDate = trades[0].trade_date;
@@ -1407,6 +1412,8 @@ router.get('/:id/monthly-profit', async (req: AuthenticatedRequest, res: any) =>
         const cashEvents: [string, number][] = sortedTrades.map((t) => {
           if      (t.trade_type === 'deposit')                         cashAmt += t.price * t.quantity;
           else if (t.trade_type === 'withdrawal')                      cashAmt -= t.price * t.quantity;
+          else if (t.trade_type === 'fx_transfer_in')                  cashAmt += t.price * t.quantity;
+          else if (t.trade_type === 'fx_transfer_out')                 cashAmt -= t.price * t.quantity;
           else if (t.trade_type === 'buy' || t.trade_type === 'drp') cashAmt -= t.price * t.quantity + t.brokerage;
           else if (t.trade_type === 'sell')                            cashAmt += t.price * t.quantity - t.brokerage;
           else if (t.trade_type === 'dividend')                        cashAmt += t.price * t.quantity;

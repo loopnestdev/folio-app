@@ -43,6 +43,15 @@ export function calculateCashPosition(trades: TradeWithSecurity[]): {
         cash      -= aud;
         withdrawn += aud;
         break;
+      case 'fx_transfer_in':
+        // Internal conversion between this account's own currency sleeves —
+        // moves cash but is not new external capital, so it must not touch
+        // deposited/withdrawn (those drive return/performance calculations).
+        cash += aud;
+        break;
+      case 'fx_transfer_out':
+        cash -= aud;
+        break;
       case 'buy':
       case 'drp':
         // Cost out: share cost + brokerage

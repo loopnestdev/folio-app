@@ -248,14 +248,21 @@ export function parseMoomooAnnualSummary(buffer: Buffer): ParsedTrade[] {
 
       if (amount === 0) continue;
 
-      const tradeType: TradeType = amount > 0 ? 'deposit' : 'withdrawal';
+      // "TRANSFER TO/FROM UNIVERSAL SECURITIES ACCOUNT (USD -> AUD 0.71...)" is an
+      // internal conversion between this account's own currency sleeves, not new
+      // external capital — must not be a deposit/withdrawal (see moomoo.ts's
+      // Currency Exchange handling for the monthly-PDF equivalent of this same line).
+      const isFxTransfer = /UNIVERSAL SECURITIES ACCOUNT|\([A-Z]+\s*->\s*[A-Z]+\s+[\d.]+\)/i.test(comment);
+      const tradeType: TradeType = isFxTransfer
+        ? (amount > 0 ? 'fx_transfer_in' : 'fx_transfer_out')
+        : (amount > 0 ? 'deposit' : 'withdrawal');
       const absAmount = Math.abs(amount);
 
       trades.push({
         trade_date:    parseDate(payDate),
         trade_type:    tradeType,
         symbol:        'CASH',
-        security_name: comment || (tradeType === 'deposit' ? 'Cash Deposit' : 'Cash Withdrawal'),
+        security_name: comment || (amount > 0 ? 'Cash Deposit' : 'Cash Withdrawal'),
         exchange:      currency === 'AUD' ? 'ASX' : 'US',
         currency,
         quantity:      1,
