@@ -360,6 +360,20 @@ export function parseMovementSection(section: string): ParsedTrade[] {
   }));
 }
 
+// Securities are keyed by (symbol, exchange) — a dividend/interest row must resolve
+// to the SAME exchange as that symbol's buy/sell trades, or it silently creates a
+// duplicate security (e.g. "MU" on exchange "US" from a buy vs. a phantom "MU" on
+// exchange "USD" from a dividend). The cash section only carries a currency, so map
+// it to the exchange that currency trades on in this account.
+function exchangeForCurrency(currency: string): string {
+  switch (currency) {
+    case 'AUD': return 'ASX';
+    case 'USD': return 'US';
+    case 'HKD': return 'HK';
+    default:    return currency;
+  }
+}
+
 export function parseCashSection(section: string): ParsedTrade[] {
   const trades: ParsedTrade[] = [];
   const lines = section
@@ -477,7 +491,7 @@ export function parseCashSection(section: string): ParsedTrade[] {
       trade_type,
       symbol,
       security_name: trade_type === 'deposit' ? 'Cash Deposit' : trade_type === 'withdrawal' ? 'Cash Withdrawal' : notes,
-      exchange:      currentCurrency,   // re-used to carry currency context
+      exchange:      symbol === 'CASH' ? currentCurrency : exchangeForCurrency(currentCurrency),
       currency:      currentCurrency,
       quantity:      1,
       price:         Math.abs(amount),

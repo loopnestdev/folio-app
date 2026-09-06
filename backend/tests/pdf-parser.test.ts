@@ -134,6 +134,15 @@ describe('Moomoo PDF Parser', () => {
       expect(dividend?.trade_date).toBe('2025-07-17');
     });
 
+    it('resolves a dividend to the exchange its symbol actually trades on, not the currency code', () => {
+      // Securities upsert on (symbol, exchange) — an AUD dividend must resolve to
+      // 'ASX', not 'AUD', or it silently creates a duplicate security disconnected
+      // from the symbol's real buy/sell trades.
+      const items = parseCashSection(SAMPLE_CASH_SECTION);
+      const dividend = items.find((t) => t.trade_type === 'dividend');
+      expect(dividend?.exchange).toBe('ASX');
+    });
+
     it('extracts coupon payment as other_income (not interest)', () => {
       // Moomoo "Stock Cash Coupon" is a referral/incentive reward, not interest
       // paid on a cash balance — Moomoo's own annual tax summary never reports
