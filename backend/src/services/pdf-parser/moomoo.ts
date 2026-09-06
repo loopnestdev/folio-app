@@ -240,8 +240,15 @@ export function parseTradesSection(section: string): ParsedTrade[] {
  * correct position. Multiple +1 entries for the same symbol on the same date
  * are aggregated into a single trade row.
  *
+ * A comment containing "DRIP" is a Dividend Reinvestment Plan reinvestment,
+ * not a free gift — it's recorded as trade_type='drp' instead of 'buy' so
+ * reports can distinguish it. The statement's "Movement - Securities" section
+ * carries no dollar figure though, so price/amount stay $0 here — the real
+ * dividend amount and cost base must be entered manually (check the fund's
+ * own distribution history for the per-unit rate around the movement date).
+ *
  * Other "Other" types (stock splits via movement, etc.) are ignored here —
- * only "Gift Share" in the comment is captured for now.
+ * only "Gift Share" and "DRIP" in the comment are captured for now.
  */
 export function parseMovementSection(section: string): ParsedTrade[] {
   // Normalize: tabs → spaces, collapse runs, split by line
@@ -255,7 +262,7 @@ export function parseMovementSection(section: string): ParsedTrade[] {
   // incoming security movement with a positive quantity).
   const giftMap = new Map<string, {
     date: string; symbol: string; name: string;
-    currency: string; exchange: string; qty: number; notes: string;
+    currency: string; exchange: string; qty: number; notes: string; tradeType: TradeType;
   }>();
 
   let currentDate = '';
@@ -271,8 +278,10 @@ export function parseMovementSection(section: string): ParsedTrade[] {
     // Skip section / header lines
     if (/^(Movement|Date\/Time|Changes in)/.test(line)) continue;
 
-    // Time + context line: HH:MM:SS ... Other ... exchange ... security_name
-    if (/^\d{2}:\d{2}:\d{2}/.test(line) && line.includes('Other')) {
+    // Time + context line: HH:MM:SS ... <Type> ... exchange ... security_name
+    // <Type> varies ("Other" for Gift Share, "Asset Adjustment" for DRIP, etc.) —
+    // detect the line by the exchange code it carries, not by a specific Type text.
+    if (/^\d{2}:\d{2}:\d{2}/.test(line) && /\b(US|ASX|HK)\b/.test(line)) {
       prevTimeLine = line;
       continue;
     }
@@ -302,11 +311,15 @@ export function parseMovementSection(section: string): ParsedTrade[] {
       // Comment: everything after the "+QTY " token
       const commentMatch = line.match(/\+\d+\s+(.*)/);
       const comment = commentMatch ? commentMatch[1].trim() : '';
-      const notes = comment === 'Gift Share'
-        ? 'Gift Share from Moomoo'
-        : comment
-          ? `Transfer In (${comment}) — update cost base`
-          : 'Transfer In — update cost base';
+      const isDrip = /\bDRIP\b/i.test(comment);
+      const tradeType: TradeType = isDrip ? 'drp' : 'buy';
+      const notes = isDrip
+        ? 'DRIP reinvestment — dividend amount not shown on statement; verify per-unit rate and enter manually'
+        : comment === 'Gift Share'
+          ? 'Gift Share from Moomoo'
+          : comment
+            ? `Transfer In (${comment}) — update cost base`
+            : 'Transfer In — update cost base';
 
       // Extract exchange + security name from the preceding time line
       let securityName = symbol;
@@ -325,14 +338,14 @@ export function parseMovementSection(section: string): ParsedTrade[] {
       if (existing) {
         existing.qty += qty;
       } else {
-        giftMap.set(key, { date: currentDate, symbol, name: securityName, currency, exchange, qty, notes });
+        giftMap.set(key, { date: currentDate, symbol, name: securityName, currency, exchange, qty, notes, tradeType });
       }
     }
   }
 
   return Array.from(giftMap.values()).map((g) => ({
     trade_date:    parseDate(g.date),
-    trade_type:    'buy' as TradeType,
+    trade_type:    g.tradeType,
     symbol:        g.symbol,
     security_name: g.name,
     exchange:      g.exchange,

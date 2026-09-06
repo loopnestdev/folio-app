@@ -1,4 +1,4 @@
-import { extractTrades, parseTradesSection, parseCashSection } from '../src/services/pdf-parser/moomoo';
+import { extractTrades, parseTradesSection, parseCashSection, parseMovementSection } from '../src/services/pdf-parser/moomoo';
 
 const SAMPLE_TRADES_SECTION = `Trades - Securities
 Direction Symbol Exchange Currency Date/Time Price Quantity Amount
@@ -33,6 +33,15 @@ ASX AUD
 11:29:18
 32.5800 133 4,333.14
 Subtotal: 3.00 Number of Transactions: 1 Transaction Amount: 4,333.14 Net Transaction Amount: 4,330.14 Commission: 0.91 Platform Fee: 1.82 GST: 0.27`;
+
+const SAMPLE_MOVEMENT_SECTION = `Movement - Securities
+Date/Time Type Exchange Symbol Currency Direction Quantity Comment
+2025/07/27
+14:41:32 Other ASX GDX
+GDX AUD In +3 GDX DRIP
+2025/08/01
+09:15:00 Other US NVDA
+NVDA USD In +1 Gift Share`;
 
 const SAMPLE_CASH_SECTION = `Changes in Cash
 AUD Date/Time Type Amount Comment
@@ -92,6 +101,26 @@ describe('Moomoo PDF Parser', () => {
 
     it('returns empty array for empty section', () => {
       expect(parseTradesSection('')).toEqual([]);
+    });
+  });
+
+  describe('parseMovementSection', () => {
+    it('classifies a DRIP comment as drp, not buy', () => {
+      const items = parseMovementSection(SAMPLE_MOVEMENT_SECTION);
+      const gdx = items.find((t) => t.symbol === 'GDX');
+      expect(gdx).toBeDefined();
+      expect(gdx?.trade_type).toBe('drp');
+      expect(gdx?.quantity).toBe(3);
+      expect(gdx?.price).toBe(0);
+      expect(gdx?.notes).toMatch(/DRIP reinvestment/);
+    });
+
+    it('still classifies a Gift Share as buy', () => {
+      const items = parseMovementSection(SAMPLE_MOVEMENT_SECTION);
+      const nvda = items.find((t) => t.symbol === 'NVDA');
+      expect(nvda).toBeDefined();
+      expect(nvda?.trade_type).toBe('buy');
+      expect(nvda?.notes).toBe('Gift Share from Moomoo');
     });
   });
 
