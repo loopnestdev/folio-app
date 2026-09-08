@@ -1,8 +1,8 @@
-# Folio App — Product Specification
+# Folio App - Product Specification
 
 ## Overview
 
-A portfolio tracking web application for self-directed investors using the Moomoo broker in Australia. The app provides trade tracking, tax reporting, benchmarking, and investment analytics — similar in scope to Sharesight.
+A portfolio tracking web application for self-directed investors using the Moomoo broker in Australia. The app provides trade tracking, tax reporting, benchmarking, and investment analytics - similar in scope to Sharesight.
 
 ## Core Requirements
 
@@ -32,7 +32,7 @@ A portfolio tracking web application for self-directed investors using the Moomo
 ### Charts
 
 - Two chart libraries: Recharts (default) and Apache ECharts
-- Users can switch between them in Settings — all charts update immediately
+- Users can switch between them in Settings - all charts update immediately
 - No known security vulnerabilities in either library
 
 ## Reports
@@ -70,7 +70,7 @@ A portfolio tracking web application for self-directed investors using the Moomo
 - Australian CGT rules: FIFO matching
 - 50% discount applied to assets held > 12 months with positive gain
 - Short-term vs. long-term breakdown
-- Configurable financial year: 1 Jul – 30 Jun (default) or 1 Jan – 31 Dec
+- Configurable financial year: 1 Jul - 30 Jun (default) or 1 Jan - 31 Dec
 
 ### Tax Report
 
@@ -98,15 +98,15 @@ A portfolio tracking web application for self-directed investors using the Moomo
 
 ```text
 Browser
-  └── Cloudflare Pages (React SPA — Vite 8, React 18, TypeScript)
-        └── Railway (Express 4 API — Node.js 20, TypeScript)
-              └── Supabase (PostgreSQL + Auth + RLS)
-                    └── yahoo-finance2 (market data: prices, benchmarks)
+  +-- Cloudflare Pages (React SPA - Vite 8, React 18, TypeScript)
+        +-- Railway (Express 4 API - Node.js 20, TypeScript)
+              +-- Supabase (PostgreSQL + Auth + RLS)
+                    +-- yahoo-finance2 (market data: prices, benchmarks)
 ```
 
 ### Security
 
-- Row Level Security (RLS) at database level — users cannot access others' data
+- Row Level Security (RLS) at database level - users cannot access others' data
 - Backend verifies Supabase JWT on every request
 - Service-role key used only in backend (never exposed to browser)
 - CORS restricted to frontend origin

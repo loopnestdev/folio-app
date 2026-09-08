@@ -14,29 +14,29 @@ Supabase charges per **project** (compute add-on per instance). By consolidating
 
 ```
 Supabase Project: loopnest-central
-│
-├── auth schema (Supabase-managed)
-│   └── auth.users  ← one identity per Google account, shared
-│
-├── folio schema    ← folio-app (portfolio tracker)
-│   ├── profiles
-│   ├── portfolios
-│   ├── securities
-│   ├── trades
-│   ├── price_history
-│   └── benchmark_data
-│
-├── moat schema     ← moat-finder (equity research)
-│   ├── users
-│   ├── tickers
-│   ├── research_reports
-│   ├── research_versions
-│   ├── audit_log
-│   └── research_checkpoints
-│
-└── signal schema   ← signal-dashboard (stock watchlists)
-    ├── user_profiles
-    └── watchlists
+|
++-- auth schema (Supabase-managed)
+|   +-- auth.users  <-- one identity per Google account, shared
+|
++-- folio schema    <-- folio-app (portfolio tracker)
+|   +-- profiles
+|   +-- portfolios
+|   +-- securities
+|   +-- trades
+|   +-- price_history
+|   +-- benchmark_data
+|
++-- moat schema     <-- moat-finder (equity research)
+|   +-- users
+|   +-- tickers
+|   +-- research_reports
+|   +-- research_versions
+|   +-- audit_log
+|   +-- research_checkpoints
+|
++-- signal schema   <-- signal-dashboard (stock watchlists)
+    +-- user_profiles
+    +-- watchlists
 ```
 
 ### Key Properties
@@ -44,8 +44,8 @@ Supabase Project: loopnest-central
 | Property | Detail |
 |---|---|
 | Google OAuth | One configuration, works for all apps |
-| User identity | Same Google account → same `auth.users.id` across all apps |
-| App roles | Independent per app — admin in moat ≠ admin in folio |
+| User identity | Same Google account --> same `auth.users.id` across all apps |
+| App roles | Independent per app - admin in moat != admin in folio |
 | First-user admin | Each app counts its own schema's user table independently |
 | Data isolation | RLS enforced per schema; service role key used only in backends |
 | Schema isolation | `folio.*` tables invisible to moat queries and vice versa |
@@ -56,28 +56,28 @@ Supabase Project: loopnest-central
 
 ### 1. Create Project
 
-Go to [supabase.com](https://supabase.com) → New Project → name it `loopnest-central`.
+Go to [supabase.com](https://supabase.com) --> New Project --> name it `loopnest-central`.
 
 ### 2. Enable Google OAuth
 
-Dashboard → **Authentication** → **Providers** → Google → enable and paste your Google OAuth client credentials. This single configuration covers all three apps.
+Dashboard --> **Authentication** --> **Providers** --> Google --> enable and paste your Google OAuth client credentials. This single configuration covers all three apps.
 
 ### 3. Run Migrations (in order)
 
 Open **SQL Editor** in the Supabase dashboard and run each file in sequence:
 
 ```
-migrations/001_schemas.sql        ← creates folio + moat + signal schemas
-migrations/002_folio.sql          ← folio-app tables + RLS
-migrations/003_moat.sql           ← moat-finder tables + RLS
-migrations/004_signal.sql         ← signal-dashboard tables + RLS
+migrations/001_schemas.sql        <-- creates folio + moat + signal schemas
+migrations/002_folio.sql          <-- folio-app tables + RLS
+migrations/003_moat.sql           <-- moat-finder tables + RLS
+migrations/004_signal.sql         <-- signal-dashboard tables + RLS
 ```
 
 Run `005_data_migration.sql` only if migrating existing data (see below).
 
 ### 4. Expose Schemas in PostgREST
 
-Dashboard → **Project Settings** → **Data API** → **Exposed schemas**
+Dashboard --> **Project Settings** --> **Data API** --> **Exposed schemas**
 
 Add `folio`, `moat`, and `signal` to the list (alongside `public`). Save.
 
@@ -85,10 +85,10 @@ This allows the Supabase JS client's `db: { schema: '...' }` option to route que
 
 ### 5. Collect Credentials
 
-From Dashboard → **Project Settings** → **API**:
-- `SUPABASE_URL` — same for all apps
-- `SUPABASE_ANON_KEY` — same for all apps (frontends)
-- `SUPABASE_SERVICE_ROLE_KEY` — same for all apps (backends, keep secret)
+From Dashboard --> **Project Settings** --> **API**:
+- `SUPABASE_URL` - same for all apps
+- `SUPABASE_ANON_KEY` - same for all apps (frontends)
+- `SUPABASE_SERVICE_ROLE_KEY` - same for all apps (backends, keep secret)
 
 ---
 
@@ -115,7 +115,7 @@ Update `.env` / Railway env vars to point to the new Supabase project.
 
 Two files to update:
 
-**`backend/src/services/supabase.ts`** — add `db: { schema: 'moat' }` to both `adminClient` and `userClient`:
+**`backend/src/services/supabase.ts`** - add `db: { schema: 'moat' }` to both `adminClient` and `userClient`:
 ```typescript
 export const adminClient = createClient(url, serviceKey, {
   auth: { autoRefreshToken: false, persistSession: false },
@@ -123,7 +123,7 @@ export const adminClient = createClient(url, serviceKey, {
 });
 ```
 
-**`frontend/src/lib/supabase.ts`** (or equivalent) — add `db: { schema: 'moat' }`:
+**`frontend/src/lib/supabase.ts`** (or equivalent) - add `db: { schema: 'moat' }`:
 ```typescript
 export const supabase = createClient(url, anonKey, {
   db: { schema: 'moat' },
@@ -136,7 +136,7 @@ Update `.env` / Railway / Cloudflare env vars to point to the new Supabase proje
 
 signal-dashboard is frontend-only (no Express backend). Two code changes are required.
 
-**`frontend/src/lib/supabase.ts`** — add `db: { schema: 'signal' }`:
+**`frontend/src/lib/supabase.ts`** - add `db: { schema: 'signal' }`:
 
 ```typescript
 // Before:
@@ -148,7 +148,7 @@ export const supabase: SupabaseClient<Database> | null =
   url && key ? createClient<Database>(url, key, { db: { schema: 'signal' } }) : null;
 ```
 
-**`frontend/src/hooks/useAuth.ts`** — INSERT profile on first sign-in (no backend or DB trigger handles this). In your `fetchProfile` function, after the SELECT returns no row, add an INSERT:
+**`frontend/src/hooks/useAuth.ts`** - INSERT profile on first sign-in (no backend or DB trigger handles this). In your `fetchProfile` function, after the SELECT returns no row, add an INSERT:
 
 ```typescript
 // After SELECT returns null / no row:
@@ -173,16 +173,16 @@ Update Cloudflare Pages env vars (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`)
 
 ## Data Migration (if you have existing data to preserve)
 
-### Option A — Fresh Start (recommended if data is sparse)
+### Option A - Fresh Start (recommended if data is sparse)
 
 Users just sign in with Google again. Their Google account creates a new `auth.users` row automatically. They re-enter any portfolio/research data.
 
-### Option B — Preserve Existing Data
+### Option B - Preserve Existing Data
 
 #### Step 1: Export data from old projects
 
 Get your old Supabase project's direct DB connection string from:
-Dashboard → **Project Settings** → **Database** → **Connection string** (use the direct, not pooler, connection).
+Dashboard --> **Project Settings** --> **Database** --> **Connection string** (use the direct, not pooler, connection).
 
 ```bash
 # folio-app old project
@@ -292,14 +292,14 @@ ORDER BY table_schema, grantee, table_name;
 
 ## How Google OAuth Works Across Apps
 
-One Google OAuth app → one Supabase Auth configuration → one `auth.users` table.
+One Google OAuth app --> one Supabase Auth configuration --> one `auth.users` table.
 
 When the same person signs into any of the three apps with the same Google account:
 
 - They get **one** `auth.users.id` (UUID)
 - They have **independent** profile rows: `folio.profiles`, `moat.users`, `signal.user_profiles`
 - Being admin in one app does NOT grant admin in any other
-- Their JWT (from Google → Supabase) is valid for all three apps
+- Their JWT (from Google --> Supabase) is valid for all three apps
 - Each app reads only its own schema to check role/approval status
 
 This is full **single sign-on** with **per-app authorisation**.

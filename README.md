@@ -1,22 +1,22 @@
 # Folio App
 
-A portfolio tracking web application for self-directed investors. Track trades, dividends, capital gains, and benchmarks — with full Australian CGT support and Moomoo PDF import.
+A portfolio tracking web application for self-directed investors. Track trades, dividends, capital gains, and benchmarks - with full Australian CGT support and Moomoo PDF import.
 
 **Production URL:** https://folio.ailab.build
 
 ## Features
 
-- **Multi-portfolio** — create separate portfolios (e.g. personal, retirement)
-- **Trade management** — manual entry or Moomoo PDF statement import
-- **Holdings** — FIFO cost basis, unrealised gain/loss per position
-- **Performance charts** — portfolio value vs. ASX 200, S&P 500, NASDAQ over any date range
-- **Statistics** — Sharpe, Sortino, Beta, Max Drawdown, Correlation, Winning Months %
-- **CGT report** — Australian rules (50% discount for assets held > 12 months), FIFO matching
-- **Tax report** — dividends, interest, and brokerage fees by financial year (Jul–Jun or Jan–Dec)
-- **Diversity report** — sector, asset type, country, and market breakdown
-- **Chart library toggle** — switch between Recharts and Apache ECharts live from settings
-- **Role-based access** — admin approves new users; first registered user is automatically admin
-- **Google OAuth** — via Supabase Auth (shared coredb project with other loopnestdev apps)
+- **Multi-portfolio** - create separate portfolios (e.g. personal, retirement)
+- **Trade management** - manual entry or Moomoo PDF statement import
+- **Holdings** - FIFO cost basis, unrealised gain/loss per position
+- **Performance charts** - portfolio value vs. ASX 200, S&P 500, NASDAQ over any date range
+- **Statistics** - Sharpe, Sortino, Beta, Max Drawdown, Correlation, Winning Months %
+- **CGT report** - Australian rules (50% discount for assets held > 12 months), FIFO matching
+- **Tax report** - dividends, interest, and brokerage fees by financial year (Jul-Jun or Jan-Dec)
+- **Diversity report** - sector, asset type, country, and market breakdown
+- **Chart library toggle** - switch between Recharts and Apache ECharts live from settings
+- **Role-based access** - admin approves new users; first registered user is automatically admin
+- **Google OAuth** - via Supabase Auth (shared coredb project with other loopnestdev apps)
 
 ## Tech Stack
 
@@ -27,7 +27,7 @@ A portfolio tracking web application for self-directed investors. Track trades, 
 | Forms | React Hook Form + Zod |
 | Charts | Recharts v2 + Apache ECharts v5 |
 | Backend | Node.js 22 LTS, Express 5, TypeScript |
-| Database | Supabase coredb — `folio` schema (PostgreSQL + RLS) |
+| Database | Supabase coredb - `folio` schema (PostgreSQL + RLS) |
 | Auth | Supabase Auth + Google OAuth |
 | PDF Parsing | pdf-parse |
 | Market Data | yahoo-finance2 |
@@ -67,17 +67,17 @@ VITE_API_URL=http://localhost:3001
 
 folio-app uses the shared **coredb** Supabase project with all tables in the `folio` schema (isolated from other apps that share the same Supabase instance).
 
-**Step 1 — Expose `folio` schema in PostgREST:**
-Supabase Dashboard → Project Settings → API → Exposed schemas → add `folio` → Save.
+**Step 1 - Expose `folio` schema in PostgREST:**
+Supabase Dashboard --> Project Settings --> API --> Exposed schemas --> add `folio` --> Save.
 
-**Step 2 — Run schema bootstrap** (Supabase SQL Editor):
+**Step 2 - Run schema bootstrap** (Supabase SQL Editor):
 
 ```sql
 -- supabase-central/migrations/001_schemas.sql
 -- Creates folio, signal, moat schemas with grants (safe to re-run)
 ```
 
-**Step 3 — Run folio tables and RLS** (Supabase SQL Editor):
+**Step 3 - Run folio tables and RLS** (Supabase SQL Editor):
 
 ```sql
 -- supabase-central/migrations/002_folio.sql
@@ -85,14 +85,14 @@ Supabase Dashboard → Project Settings → API → Exposed schemas → add `fol
 -- Safe to re-run (all triggers and policies use DROP IF EXISTS first)
 ```
 
-**Step 4 — Add OAuth redirect URL:**
-Supabase Dashboard → Authentication → URL Configuration → Redirect URLs → add:
+**Step 4 - Add OAuth redirect URL:**
+Supabase Dashboard --> Authentication --> URL Configuration --> Redirect URLs --> add:
 
 ```text
 https://folio.ailab.build/auth/callback
 ```
 
-**Step 5 — Admin bootstrap** (after first sign-in):
+**Step 5 - Admin bootstrap** (after first sign-in):
 The backend automatically grants `role=admin, status=approved` to the first user and sets `app_metadata.role=admin` in their JWT. Sign out and sign back in so the updated JWT is issued.
 
 Verify via SQL:
@@ -138,7 +138,7 @@ The parser extracts:
 - Dividends from "Asset Adjustment" entries in "Changes in Cash"
 - Interest from "Coupon" entries in "Changes in Cash"
 
-Upload via **Portfolio → Import** in the app. Review the parsed trades before confirming.
+Upload via **Portfolio --> Import** in the app. Review the parsed trades before confirming.
 
 ## Deployment
 
@@ -149,7 +149,7 @@ Upload via **Portfolio → Import** in the app. Review the parsed trades before 
    - Build: `npm install --include=dev && npm run build` (ensures `tsc` is available)
    - Start: `npm start` (`node dist/index.js`)
    - Healthcheck: `GET /health`
-3. Set environment variables in Railway (Settings → Variables):
+3. Set environment variables in Railway (Settings --> Variables):
    - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`
    - `FRONTEND_URL=https://folio.ailab.build`
    - `NODE_ENV=production`
@@ -166,7 +166,7 @@ compatibility_date = "2024-01-01"
 directory = "./dist"
 ```
 
-SPA routing (React Router deep-links) is handled by `not_found_handling = "single-page-application"`. Do **not** add a `public/_redirects` file — the `/* /index.html 200` rule is Cloudflare Pages syntax and causes error 100324 (infinite redirect loop) in Workers Assets.
+SPA routing (React Router deep-links) is handled by `not_found_handling = "single-page-application"`. Do **not** add a `public/_redirects` file - the `/* /index.html 200` rule is Cloudflare Pages syntax and causes error 100324 (infinite redirect loop) in Workers Assets.
 
 Deploy:
 ```bash
@@ -177,25 +177,25 @@ npx wrangler deploy
 
 > **Note:** `VITE_*` env vars are baked into the JS bundle at build time. They are set in `frontend/.env` (not Cloudflare Dashboard variables). Keep `frontend/.env` up to date with the correct Railway backend URL before every deploy.
 
-Add custom domain `folio.ailab.build` via Cloudflare Dashboard → Workers → folio-app → Triggers → Custom Domains.
+Add custom domain `folio.ailab.build` via Cloudflare Dashboard --> Workers --> folio-app --> Triggers --> Custom Domains.
 
 ## Architecture
 
 ```text
-Browser → Cloudflare Workers + Assets (React SPA — folio.ailab.build)
-                ↓ API calls (Bearer JWT)
-         Railway (Express API — backend)
-                ↓ service-role key
-         Supabase coredb (folio schema — PostgreSQL + Auth)
-                ↓
+Browser --> Cloudflare Workers + Assets (React SPA - folio.ailab.build)
+                v API calls (Bearer JWT)
+         Railway (Express API - backend)
+                v service-role key
+         Supabase coredb (folio schema - PostgreSQL + Auth)
+                v
          yahoo-finance2 (benchmark market data)
 ```
 
 **Auth flow:**
-1. Browser signs in via Google OAuth → Supabase issues JWT
+1. Browser signs in via Google OAuth --> Supabase issues JWT
 2. Frontend attaches JWT as `Authorization: Bearer <token>` to all API calls
 3. Backend `authMiddleware` verifies token via `supabase.auth.getUser()`, loads profile from `folio.profiles`
 4. `requireApproved` middleware blocks `pending`/`rejected` users with HTTP 403
 5. `requireAdmin` middleware gates admin-only endpoints
 
-**RLS:** All tables have Row Level Security enabled. The backend uses the service-role key (bypasses RLS) for report calculations and profile writes. The `folio.is_admin()` function reads `app_metadata.role` from the JWT — it must NOT query `folio.profiles` directly (would cause PostgreSQL error 42P17 infinite recursion).
+**RLS:** All tables have Row Level Security enabled. The backend uses the service-role key (bypasses RLS) for report calculations and profile writes. The `folio.is_admin()` function reads `app_metadata.role` from the JWT - it must NOT query `folio.profiles` directly (would cause PostgreSQL error 42P17 infinite recursion).
