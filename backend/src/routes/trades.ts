@@ -8,6 +8,7 @@ import { parseMoomooStatement } from '../services/pdf-parser/moomoo';
 import { parseMoomooAnnualSummary } from '../services/pdf-parser/moomoo-xlsx';
 import { getForexRate } from '../services/market-data/yahoo';
 import type { AuthenticatedRequest, ParsedTrade } from '../types';
+import { filterNewByOccurrence, isAlreadyImported } from '../services/import/dedupe';
 
 const router = Router();
 const upload = multer({
@@ -270,12 +271,14 @@ async function handleImportParse(req: AuthenticatedRequest, res: any) {
       return base;
     };
 
-    const existingKeys = new Set(
-      (existingTrades ?? []).map((t: any) => {
-        const sym = (t.security as any)?.symbol ?? '';
-        return makeKey(sym, t.trade_type, t.trade_date, Number(t.quantity), Number(t.price), t.notes);
-      }),
-    );
+    // Counted, not just a Set: identical fills (e.g. three "sell 100 @ 4.71" lines) are
+    // separate trades, so a key is "already imported" only up to how many copies exist.
+    const existingKeyCounts = new Map<string, number>();
+    for (const t of existingTrades ?? []) {
+      const sym = (t.security as any)?.symbol ?? '';
+      const k = makeKey(sym, t.trade_type, t.trade_date, Number(t.quantity), Number(t.price), t.notes);
+      existingKeyCounts.set(k, (existingKeyCounts.get(k) ?? 0) + 1);
+    }
     // Loose key: date|symbol|type|qty — for zero-price parsed trades (e.g. SI IN
     // transfers) where the user may have corrected the price after first import.
     const existingLooseKeys = new Set(
@@ -285,9 +288,12 @@ async function handleImportParse(req: AuthenticatedRequest, res: any) {
       }),
     );
 
-    const newTrades = enriched.filter((t) => {
-      const strict = makeKey(t.symbol, t.trade_type, t.trade_date, t.quantity, t.price, t.notes);
-      if (existingKeys.has(strict)) return false;
+    const notYetStrict = filterNewByOccurrence(
+      enriched,
+      (t) => makeKey(t.symbol, t.trade_type, t.trade_date, t.quantity, t.price, t.notes),
+      existingKeyCounts,
+    );
+    const newTrades = notYetStrict.filter((t) => {
       // Zero-price trades: fall back to loose match so edited prices don't re-surface them
       if (t.price === 0) {
         const loose = `${t.trade_date}|${t.symbol.toUpperCase()}|${t.trade_type}|${t.quantity}`;
@@ -351,6 +357,10 @@ router.post('/:portfolioId/import/confirm', async (req: AuthenticatedRequest, re
 
   const inserted = [];
   const skipped  = [];
+  // How many times each identical trade has been seen so far in this file, so that
+  // identical fills (e.g. three "sell 100 @ 4.71") are each inserted once rather than
+  // collapsed into one: the Nth copy is only a duplicate if the DB already holds N.
+  const occurrences = new Map<string, number>();
 
   for (const t of body.data.trades as ParsedTrade[]) {
     // Only trade rows carry a real security name; cash-line rows carry a statement comment.
@@ -365,10 +375,12 @@ router.post('/:portfolioId/import/confirm', async (req: AuthenticatedRequest, re
     // reference), also match on notes so that multiple same-day same-amount
     // deposits with different references are not incorrectly collapsed.
     // This prevents double-importing trades from both a monthly PDF and an
-    // overlapping annual XLSX summary.
+    // overlapping annual XLSX summary. Identical fills are counted, not just
+    // detected (see `occurrences`): "a matching row exists" must not mean "all
+    // copies exist".
     let dupQuery = supabase
       .from('trades')
-      .select('id')
+      .select('id', { count: 'exact', head: true })
       .eq('portfolio_id', portfolioId)
       .eq('trade_date',   t.trade_date)
       .eq('trade_type',   t.trade_type)
@@ -378,9 +390,13 @@ router.post('/:portfolioId/import/confirm', async (req: AuthenticatedRequest, re
     if ((t.trade_type === 'deposit' || t.trade_type === 'withdrawal' || t.trade_type === 'fx_transfer_in' || t.trade_type === 'fx_transfer_out') && t.notes) {
       dupQuery = dupQuery.eq('notes', t.notes);
     }
-    const { data: existing } = await dupQuery.maybeSingle();
+    const occurrenceKey = [t.trade_date, securityId, t.trade_type, t.quantity, t.price,
+      (t.trade_type === 'deposit' || t.trade_type === 'withdrawal' || t.trade_type === 'fx_transfer_in' || t.trade_type === 'fx_transfer_out') ? (t.notes ?? '') : ''].join('|');
+    const occurrence = (occurrences.get(occurrenceKey) ?? 0) + 1;
+    occurrences.set(occurrenceKey, occurrence);
+    const { count: existingCount } = await dupQuery;
 
-    if (existing) {
+    if (isAlreadyImported(existingCount ?? 0, occurrence)) {
       skipped.push({ trade_date: t.trade_date, symbol: t.symbol });
       continue;
     }
