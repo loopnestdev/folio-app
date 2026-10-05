@@ -100,6 +100,31 @@ describe('Moomoo PDF Parser', () => {
       expect(vbtc?.gst).toBe(0.27);
     });
 
+    it('attaches the subtotal fee when a page break sits between the trade and its subtotal', () => {
+      // Real layout from the Apr 2026 statement: the carried-over "Buy"/"Sell"
+      // labels plus the 5-line page footer land between the trade and its
+      // Subtotal, pushing it 8 lines away — it used to fall outside the scan window.
+      const section = [
+        'Trades - Securities',
+        'Buy to Open \tElectro Optic Systems Hldgs Ltd',
+        'EOS \tASX \tAUD \t2026/04/30',
+        '15:51:32 \t9.0900 \t200 \t1,818.00',
+        'Buy',
+        'Sell',
+        'Monthly Statement of Universal Account (7291) - Securities',
+        'Apr 2026',
+        'Page 5 of 8\tPreparation Date: 2026/05/04',
+        'Client Name: REYMOND YULIAN KEILUHU \tAccount Number: 1009270687127291',
+        '',
+        '-- 5 of 8 --',
+        '',
+        'Subtotal: 3.00 \tNumber of Transactions: 1 \tTransaction Amount: 1,818.00 \tNet Transaction Amount: -1,821.00 Commission: 0.91 \tPlatform Fee: 1.82 \tGST: 0.27',
+      ].join('\n');
+      const eos = parseTradesSection(section).find((t) => t.symbol === 'EOS');
+      expect(eos).toBeDefined();
+      expect(eos?.brokerage).toBe(3.0);
+    });
+
     it('returns empty array for empty section', () => {
       expect(parseTradesSection('')).toEqual([]);
     });

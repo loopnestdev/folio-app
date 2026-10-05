@@ -189,13 +189,15 @@ export function parseTradesSection(section: string): ParsedTrade[] {
     // Subtotal lookup:
     //  - When two fills share a subtotal (grouped), the next line is another
     //    trade header — don't scan ahead, use brokerage=0.
-    //  - Otherwise scan up to 8 lines ahead (covers page-break content that
-    //    pdf-parse inserts between the trade and its subtotal).
+    //  - Otherwise scan up to 14 lines ahead (covers page-break content that
+    //    pdf-parse inserts between the trade and its subtotal: the carried-over
+    //    "Buy"/"Sell" labels plus the page footer is ~7 lines, and the scan
+    //    stops at the next trade header so it can't reach another order's fee).
     let brokerage = 0;
     let gst = 0;
 
     if (!isTradeLine(lines[i + 1] ?? '')) {
-      for (let j = i + 1; j < Math.min(i + 8, lines.length); j++) {
+      for (let j = i + 1; j < Math.min(i + 14, lines.length); j++) {
         const l = lines[j];
         if (l.startsWith('Subtotal:')) {
           const fees = parseFees(l);
