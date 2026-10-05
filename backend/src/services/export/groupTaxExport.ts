@@ -18,18 +18,19 @@ export function buildGroupTaxWorkbook(data: GroupTaxData): Buffer {
     ['Capital Gains (Long Term)', data.capital_gains_long_term],
     ['Less: CGT Discount Applied', -data.cgt_discount_applied],
     ['Total Taxable Income', data.total_taxable_income],
+    ['Foreign Tax Withheld (not deducted above; basis for a foreign income tax offset)', data.foreign_tax_withheld],
     [],
     ['Note: foreign-currency dividends, interest, and other income are each converted to',
      `${data.base_currency} at their own payment date's exchange rate (same method as capital gains'`],
     ['disposal-date rate), so this summary always agrees with the Trade Ledger sheet below.'],
     [],
     ['By Portfolio'],
-    ['Portfolio', 'Currency', 'FX Rate (today, for reference only)', 'Dividends', 'Interest', 'Other Income', 'CGT Short', 'CGT Long', 'CGT Discount', 'Taxable Income'],
+    ['Portfolio', 'Currency', 'FX Rate (today, for reference only)', 'Dividends', 'Interest', 'Other Income', 'CGT Short', 'CGT Long', 'CGT Discount', 'Taxable Income', 'Foreign Tax Withheld'],
     ...data.portfolios.map(p => [
       p.portfolio_name, p.portfolio_currency, p.fx_rate,
       p.dividends_received, p.interest_received, p.other_income_received,
       p.capital_gains_short_term, p.capital_gains_long_term,
-      -p.cgt_discount_applied, p.total_taxable_income,
+      -p.cgt_discount_applied, p.total_taxable_income, p.foreign_tax_withheld,
     ]),
   ];
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summaryRows), 'Tax Summary');
@@ -96,6 +97,9 @@ export function buildGroupTaxPdf(data: GroupTaxData): Promise<Buffer> {
     doc.fontSize(12).text(`Total Taxable Income:  ${fmtMoney(data.base_currency, data.total_taxable_income)}`, {
       underline: true,
     });
+    doc.fontSize(10).text(
+      `Foreign Tax Withheld (not deducted above; basis for a foreign income tax offset):  ${fmtMoney(data.base_currency, data.foreign_tax_withheld)}`,
+    );
     doc.moveDown(0.5);
     doc.fontSize(8).fillColor('#777').text(
       `Note: foreign-currency dividends, interest, and other income are each converted to ${data.base_currency} ` +

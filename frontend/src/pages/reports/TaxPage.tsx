@@ -142,6 +142,11 @@ export function TaxPage() {
               label="Total Taxable Income"
               value={formatCurrency(taxData.total_taxable_income, currency)}
             />
+            <StatCard
+              label="Foreign Tax Withheld"
+              value={formatCurrency(taxData.foreign_tax_withheld ?? 0, currency)}
+              tooltip="Tax withheld at source on foreign dividends, net of any refunds. Not deducted from taxable income — dividends are reported gross. This is the amount a foreign income tax offset is claimed on."
+            />
           </div>
 
           {/* Details */}

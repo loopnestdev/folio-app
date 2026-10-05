@@ -1,4 +1,4 @@
-import { calculateHoldings, calculateCapitalGains } from '../src/services/calculations/holdings';
+import { calculateHoldings, calculateCapitalGains, calculateCashPosition } from '../src/services/calculations/holdings';
 import { computeStatistics, computeMonthlyReturns } from '../src/services/calculations/statistics';
 import type { Trade } from '../src/types';
 
@@ -68,6 +68,35 @@ describe('Holdings Calculation (FIFO)', () => {
     const holdings = calculateHoldings(trades as any, { WBC: 22 });
     expect(holdings[0]!.quantity).toBe(10);
     expect(holdings[0]!.cost_base).toBeCloseTo(225); // 5*20 + 5*25
+  });
+});
+
+describe('Cash position — withholding tax and FX transfers', () => {
+  const cash = (type: Trade['trade_type'], price: number) =>
+    makeTrade({ symbol: 'CASH', trade_type: type, quantity: 1, price });
+
+  it('withholding tax reduces cash and a refund adds it back, without touching deposited/withdrawn', () => {
+    const r = calculateCashPosition([
+      cash('deposit', 1000),
+      cash('dividend', 34.78),
+      cash('withholding_tax', 5.22),
+      cash('withholding_tax_refund', 5.22),
+      cash('withholding_tax', 5.21),
+    ] as any);
+    expect(r.cash_balance).toBeCloseTo(1000 + 34.78 - 5.22 + 5.22 - 5.21, 2);
+    expect(r.total_deposited).toBe(1000);
+    expect(r.total_withdrawn).toBe(0);
+  });
+
+  it('FX transfers move cash but are not deposited or withdrawn capital', () => {
+    const r = calculateCashPosition([
+      cash('deposit', 500),
+      cash('fx_transfer_in', 200),
+      cash('fx_transfer_out', 50),
+    ] as any);
+    expect(r.cash_balance).toBe(650);
+    expect(r.total_deposited).toBe(500);
+    expect(r.total_withdrawn).toBe(0);
   });
 });
 

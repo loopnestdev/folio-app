@@ -442,16 +442,26 @@ export function parseCashSection(section: string): ParsedTrade[] {
       // Positive = cash dividend paid by a fund/ETF (e.g. BITU per-share distribution)
       // Negative = withholding tax deducted on that dividend — skip it; the gross dividend
       //            is the authoritative income figure for tax reporting.
+      // Withholding tax is recorded as its own entry rather than skipped: the cash
+      // really left the account (so the cash balance matches the broker), and the
+      // tax report can show total foreign tax withheld for a foreign income tax offset.
+      // It never reduces the dividend, which stays reported gross.
       // A positive "WITHHOLDING TAX ... REVERSAL/ADJUSTMENT" line is Moomoo refunding
-      // tax it withheld earlier (then re-applying a corrected amount) — not income,
-      // so skip any withholding-tax line regardless of sign.
-      if (/withholding tax/i.test(comment)) continue;
-      if (amount <= 0) continue;
+      // tax it withheld earlier (then re-applying a corrected amount) — not income —
+      // so it is a refund of the withholding, not a dividend.
       const symMatch = comment.match(/^([A-Z]{1,10})\b/);
       if (!symMatch) continue;
-      trade_type = 'dividend';
-      symbol = symMatch[1];
-      notes = comment.trim();
+      if (/withholding tax/i.test(comment)) {
+        if (amount === 0) continue;
+        trade_type = amount < 0 ? 'withholding_tax' : 'withholding_tax_refund';
+        symbol = symMatch[1];
+        notes = comment.trim();
+      } else {
+        if (amount <= 0) continue;
+        trade_type = 'dividend';
+        symbol = symMatch[1];
+        notes = comment.trim();
+      }
     } else if (type === 'Coupon') {
       // Moomoo "Stock Cash Coupon" — a referral/incentive reward, not
       // interest paid on a cash balance. Moomoo's own annual tax summary

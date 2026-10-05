@@ -52,6 +52,14 @@ export function calculateCashPosition(trades: TradeWithSecurity[]): {
       case 'fx_transfer_out':
         cash -= aud;
         break;
+      case 'withholding_tax':
+        // Tax withheld at source on a dividend: cash really leaves the account, but
+        // it is not an investment cost and the dividend itself stays reported gross.
+        cash -= aud;
+        break;
+      case 'withholding_tax_refund':
+        cash += aud;
+        break;
       case 'buy':
       case 'drp':
         // Cost out: share cost + brokerage

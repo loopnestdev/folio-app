@@ -77,6 +77,7 @@ export interface GroupPortfolioTax {
   dividends_received: number;
   interest_received: number;
   other_income_received: number;
+  foreign_tax_withheld: number;
   capital_gains_short_term: number;
   capital_gains_long_term: number;
   cgt_discount_applied: number;
@@ -135,6 +136,7 @@ export interface GroupTaxReport {
   dividends_received: number;
   interest_received: number;
   other_income_received: number;
+  foreign_tax_withheld: number;
   capital_gains_short_term: number;
   capital_gains_long_term: number;
   cgt_discount_applied: number;
@@ -175,7 +177,7 @@ export interface PortfolioSummary {
 }
 
 // Trade Types — match backend schema exactly
-export type BackendTradeType = 'buy' | 'sell' | 'dividend' | 'interest' | 'other_income' | 'drp' | 'split' | 'deposit' | 'withdrawal' | 'transfer_in' | 'fx_transfer_in' | 'fx_transfer_out';
+export type BackendTradeType = 'buy' | 'sell' | 'dividend' | 'interest' | 'other_income' | 'drp' | 'split' | 'deposit' | 'withdrawal' | 'transfer_in' | 'fx_transfer_in' | 'fx_transfer_out' | 'withholding_tax' | 'withholding_tax_refund';
 
 // Legacy aliases kept so existing UI code that renders direction labels compiles
 export type TradeDirection = 'BUY' | 'SELL';
@@ -334,6 +336,7 @@ export interface TaxReport {
   dividends_received: number;
   interest_received: number;
   other_income_received: number;
+  foreign_tax_withheld: number;
   capital_gains_short_term: number;
   capital_gains_long_term: number;
   cgt_discount_applied: number;

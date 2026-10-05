@@ -13,7 +13,7 @@ const tradeSchema = z.object({
   symbol:        z.string().min(1, 'Symbol is required').max(20).transform((v) => v.toUpperCase()),
   security_name: z.string().max(200).optional(),
   exchange:      z.string().max(20).optional(),
-  trade_type:    z.enum(['buy', 'sell', 'dividend', 'interest', 'other_income', 'drp', 'split', 'deposit', 'withdrawal', 'transfer_in', 'fx_transfer_in', 'fx_transfer_out']),
+  trade_type:    z.enum(['buy', 'sell', 'dividend', 'interest', 'other_income', 'drp', 'split', 'deposit', 'withdrawal', 'transfer_in', 'fx_transfer_in', 'fx_transfer_out', 'withholding_tax', 'withholding_tax_refund']),
   quantity:      z.coerce.number().positive('Quantity must be positive'),
   price:         z.coerce.number().min(0, 'Price must be non-negative'),
   brokerage:     z.coerce.number().min(0).default(0),
@@ -50,6 +50,8 @@ const TRADE_TYPE_OPTIONS = [
   { label: 'Withdrawal',  value: 'withdrawal' },
   { label: 'FX Transfer In',  value: 'fx_transfer_in' },
   { label: 'FX Transfer Out', value: 'fx_transfer_out' },
+  { label: 'Withholding Tax', value: 'withholding_tax' },
+  { label: 'Withholding Tax Refund', value: 'withholding_tax_refund' },
 ];
 
 const CURRENCY_OPTIONS = [

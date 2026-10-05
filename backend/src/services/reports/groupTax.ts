@@ -12,6 +12,8 @@ export interface GroupPortfolioTax {
   dividends_received: number;
   interest_received: number;
   other_income_received: number;
+  /** Foreign tax withheld at source (net of refunds) — an offset claim, NOT part of taxable income. */
+  foreign_tax_withheld: number;
   capital_gains_short_term: number;
   capital_gains_long_term: number;
   cgt_discount_applied: number;
@@ -65,6 +67,7 @@ export interface GroupTaxData {
   dividends_received: number;
   interest_received: number;
   other_income_received: number;
+  foreign_tax_withheld: number;
   capital_gains_short_term: number;
   capital_gains_long_term: number;
   cgt_discount_applied: number;
@@ -105,9 +108,13 @@ async function getPortfolioTrades(portfolioId: string): Promise<Trade[]> {
 
 // Cash-flow sign convention — matches runningCash in reports.ts / groups.ts:
 // buy/drp reduce cash, sell/dividend/interest/deposit increase it, withdrawal reduces it.
+// FX transfers move cash between currency sleeves (in = arrives, out = leaves);
+// withholding tax leaves the account, and a refund of it comes back.
 const CASH_FLOW_SIGN: Record<string, 1 | -1> = {
   sell: 1, dividend: 1, interest: 1, other_income: 1, deposit: 1,
+  fx_transfer_in: 1, withholding_tax_refund: 1,
   buy: -1, drp: -1, withdrawal: -1,
+  fx_transfer_out: -1, withholding_tax: -1,
 };
 
 /**
@@ -135,7 +142,7 @@ export async function buildGroupTaxData(
   if (!portfolios.length) {
     return {
       financial_year: fyLabel, base_currency: baseCurrency, fy_start_date: fyStartDate, fy_end_date: fyEndDate,
-      dividends_received: 0, interest_received: 0, other_income_received: 0,
+      dividends_received: 0, interest_received: 0, other_income_received: 0, foreign_tax_withheld: 0,
       capital_gains_short_term: 0, capital_gains_long_term: 0,
       cgt_discount_applied: 0, total_taxable_income: 0, portfolios: [], trades: [], cgt_lots: [],
     };
@@ -193,6 +200,13 @@ export async function buildGroupTaxData(
     const dividendIncome   = dividends.reduce((s, t) => s + (t.price * t.quantity) * getFx(portfolio.currency, t.trade_date), 0);
     const interestIncome   = interest.reduce( (s, t) => s + (t.price * t.quantity) * getFx(portfolio.currency, t.trade_date), 0);
     const otherIncomeTotal = otherIncome.reduce((s, t) => s + (t.price * t.quantity) * getFx(portfolio.currency, t.trade_date), 0);
+    // Foreign tax withheld on dividends, net of any refund Moomoo later reversed.
+    // Same payment-date FX treatment. Kept out of taxable income: dividends are
+    // already reported gross, and this is what a foreign income tax offset is claimed on.
+    const foreignTaxWithheld = fyTrades.reduce((s, t) => {
+      const amt = (t.price * t.quantity) * getFx(portfolio.currency, t.trade_date);
+      return t.trade_type === 'withholding_tax' ? s + amt : t.trade_type === 'withholding_tax_refund' ? s - amt : s;
+    }, 0);
 
     const shortTerm = lots.filter(l => l.hold_days < 365)
       .reduce((s, l) => s + l.net_gain * getFx(portfolio.currency, l.sell_date), 0);
@@ -209,6 +223,7 @@ export async function buildGroupTaxData(
       dividends_received: dividendIncome,
       interest_received: interestIncome,
       other_income_received: otherIncomeTotal,
+      foreign_tax_withheld: foreignTaxWithheld,
       capital_gains_short_term: shortTerm,
       capital_gains_long_term: longTerm,
       cgt_discount_applied: discount,
@@ -291,6 +306,7 @@ export async function buildGroupTaxData(
     dividends_received:       sum('dividends_received'),
     interest_received:        sum('interest_received'),
     other_income_received:    sum('other_income_received'),
+    foreign_tax_withheld:     sum('foreign_tax_withheld'),
     capital_gains_short_term: sum('capital_gains_short_term'),
     capital_gains_long_term:  sum('capital_gains_long_term'),
     cgt_discount_applied:     sum('cgt_discount_applied'),

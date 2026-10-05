@@ -29,6 +29,8 @@ const TRADE_TYPE_BADGE: Record<BackendTradeType, 'success' | 'info' | 'warning' 
   transfer_in: 'info',
   fx_transfer_in:  'neutral',
   fx_transfer_out: 'neutral',
+  withholding_tax:        'neutral',
+  withholding_tax_refund: 'neutral',
 };
 
 export function TradesPage() {
@@ -240,6 +242,8 @@ export function TradesPage() {
             { label: 'Withdrawal',   value: 'withdrawal' },
             { label: 'FX Transfer In',  value: 'fx_transfer_in' },
             { label: 'FX Transfer Out', value: 'fx_transfer_out' },
+            { label: 'Withholding Tax', value: 'withholding_tax' },
+            { label: 'Withholding Tax Refund', value: 'withholding_tax_refund' },
           ]}
           value={filterType}
           onChange={(v) => setFilterType(v as BackendTradeType | '')}

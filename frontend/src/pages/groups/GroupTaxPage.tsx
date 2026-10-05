@@ -136,6 +136,9 @@ export function GroupTaxPage() {
             <StatCard label="CGT Discount" value={formatCurrency(taxData.cgt_discount_applied, baseCurrency)} />
             <StatCard label="Total Taxable Income"
               value={formatCurrency(taxData.total_taxable_income, baseCurrency)} />
+            <StatCard label="Foreign Tax Withheld"
+              value={formatCurrency(taxData.foreign_tax_withheld ?? 0, baseCurrency)}
+              tooltip="Tax withheld at source on foreign dividends, net of any refunds. Not deducted from taxable income — dividends are reported gross. This is the amount a foreign income tax offset is claimed on. Converted at each payment’s own date, like the income above." />
           </div>
 
           {/* Consolidated waterfall */}
@@ -189,6 +192,7 @@ export function GroupTaxPage() {
                         { label: 'Short-term CGT', value: p.capital_gains_short_term },
                         { label: 'Long-term CGT', value: p.capital_gains_long_term },
                         { label: 'CGT Discount', value: -p.cgt_discount_applied },
+                        { label: 'Foreign Tax Withheld', value: p.foreign_tax_withheld ?? 0 },
                       ].map(({ label, value }) => (
                         <div key={label}>
                           <p className="text-[var(--c-ink-mute)]">{label}</p>

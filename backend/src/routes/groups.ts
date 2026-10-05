@@ -397,6 +397,8 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
           else if (t.trade_type === 'withdrawal')    cash -= t.price * t.quantity;
           else if (t.trade_type === 'fx_transfer_in')  cash += t.price * t.quantity;
           else if (t.trade_type === 'fx_transfer_out') cash -= t.price * t.quantity;
+          else if (t.trade_type === 'withholding_tax')        cash -= t.price * t.quantity;
+          else if (t.trade_type === 'withholding_tax_refund') cash += t.price * t.quantity;
           else if (t.trade_type === 'buy')        cash -= t.price * t.quantity + t.brokerage;
           else if (t.trade_type === 'sell')       cash += t.price * t.quantity - t.brokerage;
           else if (t.trade_type === 'dividend')   cash += t.price * t.quantity;
@@ -927,6 +929,8 @@ async function buildGroupDailyValues(
         else if (t.trade_type === 'withdrawal')    cashAmt -= t.price * t.quantity;
         else if (t.trade_type === 'fx_transfer_in')  cashAmt += t.price * t.quantity;
         else if (t.trade_type === 'fx_transfer_out') cashAmt -= t.price * t.quantity;
+        else if (t.trade_type === 'withholding_tax')        cashAmt -= t.price * t.quantity;
+        else if (t.trade_type === 'withholding_tax_refund') cashAmt += t.price * t.quantity;
         else if (t.trade_type === 'buy')        cashAmt -= t.price * t.quantity + t.brokerage;
         else if (t.trade_type === 'sell')       cashAmt += t.price * t.quantity - t.brokerage;
         else if (t.trade_type === 'dividend')   cashAmt += t.price * t.quantity;
@@ -1414,6 +1418,8 @@ router.get('/:id/monthly-profit', async (req: AuthenticatedRequest, res: any) =>
           else if (t.trade_type === 'withdrawal')                      cashAmt -= t.price * t.quantity;
           else if (t.trade_type === 'fx_transfer_in')                  cashAmt += t.price * t.quantity;
           else if (t.trade_type === 'fx_transfer_out')                 cashAmt -= t.price * t.quantity;
+          else if (t.trade_type === 'withholding_tax')                 cashAmt -= t.price * t.quantity;
+          else if (t.trade_type === 'withholding_tax_refund')          cashAmt += t.price * t.quantity;
           else if (t.trade_type === 'buy' || t.trade_type === 'drp') cashAmt -= t.price * t.quantity + t.brokerage;
           else if (t.trade_type === 'sell')                            cashAmt += t.price * t.quantity - t.brokerage;
           else if (t.trade_type === 'dividend')                        cashAmt += t.price * t.quantity;

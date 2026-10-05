@@ -311,6 +311,8 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
         else if (t.trade_type === 'withdrawal')                     cash -= price * qty;
         else if (t.trade_type === 'fx_transfer_in')                 cash += price * qty;
         else if (t.trade_type === 'fx_transfer_out')                cash -= price * qty;
+        else if (t.trade_type === 'withholding_tax')                cash -= price * qty;
+        else if (t.trade_type === 'withholding_tax_refund')         cash += price * qty;
         else if (t.trade_type === 'buy' || t.trade_type === 'drp') cash -= price * qty + brok;
         else if (t.trade_type === 'sell')                           cash += price * qty - brok;
         else if (t.trade_type === 'dividend')                       cash += price * qty;
@@ -692,6 +694,10 @@ router.get('/:id/tax', async (req: AuthenticatedRequest, res: any) => {
     const totalDividends = dividends.reduce((s, t) => s + t.price * t.quantity, 0);
     const totalInterest = interest.reduce((s, t) => s + t.price * t.quantity, 0);
     const totalOtherIncome = otherIncome.reduce((s, t) => s + t.price * t.quantity, 0);
+    // Foreign tax withheld (net of refunds) — not income; basis for a foreign income tax offset.
+    const foreignTaxWithheld = fyTrades.reduce((s, t) =>
+      t.trade_type === 'withholding_tax' ? s + t.price * t.quantity
+      : t.trade_type === 'withholding_tax_refund' ? s - t.price * t.quantity : s, 0);
 
     const cgtLots = calculateCapitalGains(trades as any, fyStart, yearNum);
     const totalNetCapitalGain = cgtLots.reduce((s, l) => s + l.net_gain, 0);
@@ -703,6 +709,7 @@ router.get('/:id/tax', async (req: AuthenticatedRequest, res: any) => {
       dividends: { items: dividends, total: totalDividends },
       interest: { items: interest, total: totalInterest },
       other_income: { items: otherIncome, total: totalOtherIncome },
+      foreign_tax_withheld: foreignTaxWithheld,
       capital_gains: { lots: cgtLots, net_total: totalNetCapitalGain },
       total_taxable_income: totalTaxableIncome,
     });
@@ -830,6 +837,8 @@ router.get('/:id/reports/monthly-profit', async (req: AuthenticatedRequest, res:
       else if (t.trade_type === 'withdrawal')                       cash -= price * qty;
       else if (t.trade_type === 'fx_transfer_in')                   cash += price * qty;
       else if (t.trade_type === 'fx_transfer_out')                  cash -= price * qty;
+      else if (t.trade_type === 'withholding_tax')                  cash -= price * qty;
+      else if (t.trade_type === 'withholding_tax_refund')           cash += price * qty;
       else if (t.trade_type === 'buy' || t.trade_type === 'drp')  cash -= price * qty + brok;
       else if (t.trade_type === 'sell')                             cash += price * qty - brok;
       else if (t.trade_type === 'dividend')                         cash += price * qty;
@@ -959,6 +968,8 @@ router.get('/:id/reports/drawdown', async (req: AuthenticatedRequest, res: any) 
       else if (t.trade_type === 'withdrawal')                      cash2 -= price * qty;
       else if (t.trade_type === 'fx_transfer_in')                  cash2 += price * qty;
       else if (t.trade_type === 'fx_transfer_out')                 cash2 -= price * qty;
+      else if (t.trade_type === 'withholding_tax')                 cash2 -= price * qty;
+      else if (t.trade_type === 'withholding_tax_refund')          cash2 += price * qty;
       else if (t.trade_type === 'buy' || t.trade_type === 'drp') cash2 -= price * qty + brok;
       else if (t.trade_type === 'sell')                            cash2 += price * qty - brok;
       else if (t.trade_type === 'dividend')                        cash2 += price * qty;
@@ -1108,6 +1119,11 @@ router.get('/:id/reports/tax', async (req: AuthenticatedRequest, res: any) => {
       .reduce((s, t) => s + Number(t.price) * Number(t.quantity), 0);
     const totalOtherIncome = fyTrades.filter(t => t.trade_type === 'other_income')
       .reduce((s, t) => s + Number(t.price) * Number(t.quantity), 0);
+    // Foreign tax withheld (net of refunds) — not income; basis for a foreign income tax offset.
+    const foreignTaxWithheld = fyTrades.reduce((s, t) => {
+      const amt = Number(t.price) * Number(t.quantity);
+      return t.trade_type === 'withholding_tax' ? s + amt : t.trade_type === 'withholding_tax_refund' ? s - amt : s;
+    }, 0);
 
     // Use the unified fyStart/year params for calculateCapitalGains
     const fyStartParam: 'january' | 'july' = isJulJun ? 'july' : 'january';
@@ -1128,6 +1144,7 @@ router.get('/:id/reports/tax', async (req: AuthenticatedRequest, res: any) => {
       dividends_received: totalDividends,
       interest_received: totalInterest,
       other_income_received: totalOtherIncome,
+      foreign_tax_withheld: foreignTaxWithheld,
       capital_gains_short_term: shortTermGains,
       capital_gains_long_term: longTermGrossGains,
       cgt_discount_applied: cgtDiscount,

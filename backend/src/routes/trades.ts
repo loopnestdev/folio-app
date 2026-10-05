@@ -32,7 +32,18 @@ async function verifyPortfolioOwnership(portfolioId: string, userId: string): Pr
   return !!data;
 }
 
-async function upsertSecurity(symbol: string, name: string, exchange: string, currency: string) {
+async function upsertSecurity(symbol: string, name: string, exchange: string, currency: string, canRename = true) {
+  // Cash-line rows (dividend, withholding tax, ...) carry the statement comment as their
+  // "name" (e.g. "FANG CASH DIVIDEND") — that must never overwrite a security's real name.
+  // For those, reuse the existing row untouched; only create one (named by symbol) if absent.
+  if (!canRename) {
+    const { data: existing } = await supabase
+      .from('securities').select('id')
+      .eq('symbol', symbol.toUpperCase()).eq('exchange', exchange)
+      .maybeSingle();
+    if (existing) return existing.id as string;
+    name = symbol.toUpperCase();
+  }
   const { data } = await supabase
     .from('securities')
     .upsert(
@@ -46,7 +57,7 @@ async function upsertSecurity(symbol: string, name: string, exchange: string, cu
 
 const tradeSchema = z.object({
   trade_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  trade_type: z.enum(['buy', 'sell', 'dividend', 'interest', 'other_income', 'drp', 'split', 'deposit', 'withdrawal', 'transfer_in', 'fx_transfer_in', 'fx_transfer_out']),
+  trade_type: z.enum(['buy', 'sell', 'dividend', 'interest', 'other_income', 'drp', 'split', 'deposit', 'withdrawal', 'transfer_in', 'fx_transfer_in', 'fx_transfer_out', 'withholding_tax', 'withholding_tax_refund']),
   symbol: z.string().min(1).max(20),
   security_name: z.string().optional(),
   exchange: z.string().optional().default('ASX'),
@@ -320,7 +331,7 @@ router.post('/:portfolioId/import/confirm', async (req: AuthenticatedRequest, re
   const schema = z.object({
     trades: z.array(z.object({
       trade_date: z.string(),
-      trade_type: z.enum(['buy', 'sell', 'dividend', 'interest', 'other_income', 'drp', 'split', 'deposit', 'withdrawal', 'transfer_in', 'fx_transfer_in', 'fx_transfer_out']),
+      trade_type: z.enum(['buy', 'sell', 'dividend', 'interest', 'other_income', 'drp', 'split', 'deposit', 'withdrawal', 'transfer_in', 'fx_transfer_in', 'fx_transfer_out', 'withholding_tax', 'withholding_tax_refund']),
       symbol: z.string(),
       security_name: z.string(),
       exchange: z.string(),
@@ -342,7 +353,11 @@ router.post('/:portfolioId/import/confirm', async (req: AuthenticatedRequest, re
   const skipped  = [];
 
   for (const t of body.data.trades as ParsedTrade[]) {
-    const securityId = await upsertSecurity(t.symbol, t.security_name, t.exchange, t.currency);
+    // Only trade rows carry a real security name; cash-line rows carry a statement comment.
+    const securityId = await upsertSecurity(
+      t.symbol, t.security_name, t.exchange, t.currency,
+      t.trade_type === 'buy' || t.trade_type === 'sell' || t.trade_type === 'drp',
+    );
 
     // Deduplicate: skip if an identical trade already exists for this portfolio.
     // Key: trade_date + security_id + trade_type + quantity + price.

@@ -48,7 +48,7 @@ interface DbTradeInput {
 }
 
 // Trade types the annual summary file can represent at all. DB trades of any
-// other type (other_income, drp, split, transfer_in) are excluded from
+// other type (other_income, drp, split, transfer_in, withholding_tax[_refund]) are excluded from
 // comparison — the file has no section that could ever report them, so
 // flagging them would just be permanent, unfixable noise.
 const COMPARABLE_TYPES = new Set(['buy', 'sell', 'dividend', 'interest', 'deposit', 'withdrawal', 'fx_transfer_in', 'fx_transfer_out']);

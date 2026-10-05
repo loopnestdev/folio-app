@@ -160,12 +160,14 @@ describe('Moomoo PDF Parser', () => {
       expect(dividend?.trade_date).toBe('2025-07-17');
     });
 
-    it('does not treat a positive withholding-tax reversal as dividend income', () => {
-      // Moomoo refunds tax it withheld earlier (+5.22) then re-applies a corrected
-      // amount (-5.21). The refund is a Corporate Action with a BITU comment, so it
-      // used to be parsed as a $5.22 dividend. Only the real dividend should remain.
+    it('records withholding tax as its own entry and never as dividend income', () => {
+      // Dividend stays gross. Withholding is a separate cash-out (-5.22); a later
+      // positive REVERSAL line (+5.22) is Moomoo refunding it, then re-applying a
+      // corrected amount (-5.21). The refund carries the stock symbol and a positive
+      // amount, so it used to be parsed as a $5.22 dividend.
       const section = `Changes in Cash
-USD Date/Time Type Amount Comment
+USD
+Date/Time Type Amount Comment
 2025/08/08 21:00:00 Corporate Action +34.78
 BITU 36.00000000 SHARES
 DIVIDENDS 0.96611111 USD PER SHARE
@@ -175,9 +177,14 @@ BITU 36.00000000 SHARES WITHHOLDING TAX -0.14492807 USD PER SHARE - TAX
 BITU 36.00000000 SHARES WITHHOLDING TAX 0.14492807 USD PER SHARE - REVERSAL/ ADJUSTMENT (7 Aug 2025) - TAX
 2026/04/01 21:08:25 Corporate Action -5.21
 BITU 36.00000000 SHARES WITHHOLDING TAX -0.14467883 USD PER SHARE - REVERSAL/ ADJUSTMENT (7 Aug 2025) - TAX`;
-      const divs = parseCashSection(section).filter((t) => t.trade_type === 'dividend');
+      const items = parseCashSection(section);
+      const divs = items.filter((t) => t.trade_type === 'dividend');
       expect(divs).toHaveLength(1);
       expect(divs[0]?.amount).toBe(34.78);
+      expect(items.filter((t) => t.trade_type === 'withholding_tax').map((t) => t.amount)).toEqual([5.22, 5.21]);
+      expect(items.filter((t) => t.trade_type === 'withholding_tax_refund').map((t) => t.amount)).toEqual([5.22]);
+      expect(items.find((t) => t.trade_type === 'withholding_tax')?.symbol).toBe('BITU');
+      expect(items.find((t) => t.trade_type === 'withholding_tax')?.exchange).toBe('US');
     });
 
     it('classifies a Currency Exchange line as fx_transfer, not deposit/withdrawal', () => {
