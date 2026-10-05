@@ -35,6 +35,17 @@ export function GroupDashboardPage() {
 
   const baseCurrency = summary?.base_currency ?? group?.base_currency ?? 'AUD';
 
+  // Cash split by the currency it is actually held in (a USD portfolio's cash is
+  // USD, not just an AUD-converted number), summed across portfolios sharing a currency.
+  const cashByCurrency = Object.values(
+    (summary?.portfolios ?? []).reduce<Record<string, { currency: string; native: number; base: number }>>((acc, p) => {
+      const row = (acc[p.currency] ??= { currency: p.currency, native: 0, base: 0 });
+      row.native += p.cash_balance;
+      row.base   += p.cash_balance_base;
+      return acc;
+    }, {}),
+  ).sort((a, b) => (a.currency === baseCurrency ? -1 : b.currency === baseCurrency ? 1 : a.currency.localeCompare(b.currency)));
+
   const portfolioColumns = [
     {
       key: 'name',
@@ -42,6 +53,13 @@ export function GroupDashboardPage() {
       render: (v: unknown) => <span className="font-medium text-[var(--c-ink)]">{String(v)}</span>,
     },
     { key: 'currency', label: 'Currency', render: (v: unknown) => String(v) },
+    {
+      key: 'cash_balance',
+      label: 'Cash',
+      align: 'right' as const,
+      sortable: true,
+      render: (_v: unknown, row: GroupPortfolioBreakdown) => formatCurrency(row.cash_balance, row.currency),
+    },
     {
       key: 'fx_rate',
       label: `FX Rate → ${baseCurrency}`,
@@ -206,6 +224,21 @@ export function GroupDashboardPage() {
               ? `${((summary.cash_balance ?? 0) / summary.total_value * 100).toFixed(1)}% of portfolio`
               : undefined
           }
+          footer={cashByCurrency.length > 0 ? (
+            <div className="space-y-1">
+              {cashByCurrency.map((c) => (
+                <div key={c.currency} className="flex items-center justify-between text-[13px]">
+                  <span className="text-[var(--c-ink-mute)]">{c.currency}</span>
+                  <span className="tnum text-[var(--c-ink)]">
+                    {formatCurrency(c.native, c.currency)}
+                    {c.currency !== baseCurrency && (
+                      <span className="text-[var(--c-ink-mute)]"> · {formatCurrency(c.base, baseCurrency)}</span>
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : undefined}
           loading={summaryLoading}
         />
       </div>
