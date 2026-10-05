@@ -1,4 +1,4 @@
-import { filterNewByOccurrence, isAlreadyImported } from '../src/services/import/dedupe';
+import { filterNewByOccurrence, isAlreadyImported, createSubmitGuard } from '../src/services/import/dedupe';
 
 const key = (s: string) => s;
 
@@ -32,16 +32,33 @@ describe('import duplicate detection respects identical fills', () => {
     expect(isAlreadyImported(2, 2)).toBe(true);
   });
 
-  it('the confirm-time sequence inserts each copy once and then skips on re-run', () => {
-    // Mirrors the route: the DB count grows as copies are inserted within the batch.
-    const run = (dbCount: number, copies: number) => {
-      let count = dbCount; let inserted = 0;
-      for (let occ = 1; occ <= copies; occ++) { if (!isAlreadyImported(count, occ)) { count++; inserted++; } }
-      return { inserted, count };
-    };
-    expect(run(0, 3)).toEqual({ inserted: 3, count: 3 });
-    expect(run(3, 3)).toEqual({ inserted: 0, count: 3 });
-    expect(run(1, 2)).toEqual({ inserted: 1, count: 2 });
-    expect(run(2, 3)).toEqual({ inserted: 1, count: 3 });
+  it('a partial re-import surfaces only the missing copy, and confirm must insert it', () => {
+    // Regression: the preview sends just the one missing copy. A per-trade existence
+    // check at confirm saw 1 matching row and skipped it, so it could never be added.
+    // The preview is the only place that decides what is new; what it returns is inserted as sent.
+    const file = ['DRAM|buy|27|69.65', 'DRAM|buy|27|69.65'];
+    const sentToConfirm = filterNewByOccurrence(file, key, new Map([['DRAM|buy|27|69.65', 1]]));
+    expect(sentToConfirm).toEqual(['DRAM|buy|27|69.65']);
+  });
+});
+
+describe('createSubmitGuard', () => {
+  it('refuses an identical batch submitted again within the window, but not a different one', () => {
+    let t = 0;
+    const g = createSubmitGuard(60_000, () => t);
+    expect(g.isDuplicate('batch-A')).toBe(false);
+    t = 5_000;
+    expect(g.isDuplicate('batch-A')).toBe(true);
+    expect(g.isDuplicate('batch-B')).toBe(false);
+  });
+
+  it('allows the same batch again after the window, or after forget (failed insert retry)', () => {
+    let t = 0;
+    const g = createSubmitGuard(60_000, () => t);
+    g.isDuplicate('A');
+    t = 61_000;
+    expect(g.isDuplicate('A')).toBe(false);
+    g.forget('A');
+    expect(g.isDuplicate('A')).toBe(false);
   });
 });

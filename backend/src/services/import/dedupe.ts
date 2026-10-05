@@ -32,3 +32,29 @@ export function filterNewByOccurrence<T>(
     return !isAlreadyImported(existingCounts.get(key) ?? 0, occurrence);
   });
 }
+
+/**
+ * Double-submit guard for the confirm step.
+ *
+ * Confirm receives exactly the trades the preview decided were new, so it must insert
+ * them as sent: a per-trade "does a matching row exist?" check there cannot tell a
+ * genuinely missing copy of an identical fill from one that is already saved. What it
+ * was really protecting against is the same batch being submitted twice (double
+ * click, retry), so guard that explicitly: an identical batch for the same portfolio
+ * within `windowMs` is refused.
+ */
+export function createSubmitGuard(windowMs = 60_000, now: () => number = Date.now) {
+  const recent = new Map<string, number>();
+  return {
+    /** Returns true if this exact batch was already submitted within the window; otherwise records it. */
+    isDuplicate(batchKey: string): boolean {
+      const t = now();
+      for (const [k, at] of recent) if (t - at > windowMs) recent.delete(k);
+      if (recent.has(batchKey)) return true;
+      recent.set(batchKey, t);
+      return false;
+    },
+    /** Forget a batch (used when the insert failed so a retry is allowed). */
+    forget(batchKey: string) { recent.delete(batchKey); },
+  };
+}

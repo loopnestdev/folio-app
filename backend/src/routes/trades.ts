@@ -8,7 +8,9 @@ import { parseMoomooStatement } from '../services/pdf-parser/moomoo';
 import { parseMoomooAnnualSummary } from '../services/pdf-parser/moomoo-xlsx';
 import { getForexRate } from '../services/market-data/yahoo';
 import type { AuthenticatedRequest, ParsedTrade } from '../types';
-import { filterNewByOccurrence, isAlreadyImported } from '../services/import/dedupe';
+import { filterNewByOccurrence, createSubmitGuard } from '../services/import/dedupe';
+
+const confirmGuard = createSubmitGuard();
 
 const router = Router();
 const upload = multer({
@@ -357,10 +359,15 @@ router.post('/:portfolioId/import/confirm', async (req: AuthenticatedRequest, re
 
   const inserted = [];
   const skipped  = [];
-  // How many times each identical trade has been seen so far in this file, so that
-  // identical fills (e.g. three "sell 100 @ 4.71") are each inserted once rather than
-  // collapsed into one: the Nth copy is only a duplicate if the DB already holds N.
-  const occurrences = new Map<string, number>();
+  // The preview already filtered out everything that is in the database (counting identical
+  // fills correctly), so insert exactly what was sent. A per-trade "does a matching row
+  // exist?" check here would wrongly skip a genuinely missing copy of an identical fill;
+  // what it really guarded against is the same batch being submitted twice.
+  const batchKey = `${portfolioId}|${JSON.stringify(body.data.trades)}`;
+  if (confirmGuard.isDuplicate(batchKey)) {
+    res.status(200).json({ inserted: 0, skipped: body.data.trades.length, trades: [], duplicate_submit: true });
+    return;
+  }
 
   for (const t of body.data.trades as ParsedTrade[]) {
     // Only trade rows carry a real security name; cash-line rows carry a statement comment.
@@ -368,38 +375,6 @@ router.post('/:portfolioId/import/confirm', async (req: AuthenticatedRequest, re
       t.symbol, t.security_name, t.exchange, t.currency,
       t.trade_type === 'buy' || t.trade_type === 'sell' || t.trade_type === 'drp',
     );
-
-    // Deduplicate: skip if an identical trade already exists for this portfolio.
-    // Key: trade_date + security_id + trade_type + quantity + price.
-    // For deposit/withdrawal with a non-null notes value (e.g. a Zepto payment
-    // reference), also match on notes so that multiple same-day same-amount
-    // deposits with different references are not incorrectly collapsed.
-    // This prevents double-importing trades from both a monthly PDF and an
-    // overlapping annual XLSX summary. Identical fills are counted, not just
-    // detected (see `occurrences`): "a matching row exists" must not mean "all
-    // copies exist".
-    let dupQuery = supabase
-      .from('trades')
-      .select('id', { count: 'exact', head: true })
-      .eq('portfolio_id', portfolioId)
-      .eq('trade_date',   t.trade_date)
-      .eq('trade_type',   t.trade_type)
-      .eq('quantity',     t.quantity)
-      .eq('price',        t.price)
-      .eq('security_id',  securityId ?? '');
-    if ((t.trade_type === 'deposit' || t.trade_type === 'withdrawal' || t.trade_type === 'fx_transfer_in' || t.trade_type === 'fx_transfer_out') && t.notes) {
-      dupQuery = dupQuery.eq('notes', t.notes);
-    }
-    const occurrenceKey = [t.trade_date, securityId, t.trade_type, t.quantity, t.price,
-      (t.trade_type === 'deposit' || t.trade_type === 'withdrawal' || t.trade_type === 'fx_transfer_in' || t.trade_type === 'fx_transfer_out') ? (t.notes ?? '') : ''].join('|');
-    const occurrence = (occurrences.get(occurrenceKey) ?? 0) + 1;
-    occurrences.set(occurrenceKey, occurrence);
-    const { count: existingCount } = await dupQuery;
-
-    if (isAlreadyImported(existingCount ?? 0, occurrence)) {
-      skipped.push({ trade_date: t.trade_date, symbol: t.symbol });
-      continue;
-    }
 
     const { data } = await supabase
       .from('trades')
@@ -422,6 +397,9 @@ router.post('/:portfolioId/import/confirm', async (req: AuthenticatedRequest, re
 
     if (data) inserted.push(data);
   }
+
+  // If any row failed to save, allow the same batch to be retried.
+  if (inserted.length < body.data.trades.length) confirmGuard.forget(batchKey);
 
   res.status(201).json({ inserted: inserted.length, skipped: skipped.length, trades: inserted });
 });
