@@ -160,6 +160,26 @@ describe('Moomoo PDF Parser', () => {
       expect(dividend?.trade_date).toBe('2025-07-17');
     });
 
+    it('does not treat a positive withholding-tax reversal as dividend income', () => {
+      // Moomoo refunds tax it withheld earlier (+5.22) then re-applies a corrected
+      // amount (-5.21). The refund is a Corporate Action with a BITU comment, so it
+      // used to be parsed as a $5.22 dividend. Only the real dividend should remain.
+      const section = `Changes in Cash
+USD Date/Time Type Amount Comment
+2025/08/08 21:00:00 Corporate Action +34.78
+BITU 36.00000000 SHARES
+DIVIDENDS 0.96611111 USD PER SHARE
+2025/08/08 21:00:05 Corporate Action -5.22
+BITU 36.00000000 SHARES WITHHOLDING TAX -0.14492807 USD PER SHARE - TAX
+2026/04/01 21:08:22 Corporate Action +5.22
+BITU 36.00000000 SHARES WITHHOLDING TAX 0.14492807 USD PER SHARE - REVERSAL/ ADJUSTMENT (7 Aug 2025) - TAX
+2026/04/01 21:08:25 Corporate Action -5.21
+BITU 36.00000000 SHARES WITHHOLDING TAX -0.14467883 USD PER SHARE - REVERSAL/ ADJUSTMENT (7 Aug 2025) - TAX`;
+      const divs = parseCashSection(section).filter((t) => t.trade_type === 'dividend');
+      expect(divs).toHaveLength(1);
+      expect(divs[0]?.amount).toBe(34.78);
+    });
+
     it('classifies a Currency Exchange line as fx_transfer, not deposit/withdrawal', () => {
       // An internal AUD<->USD conversion is not new external capital — it must
       // stay out of deposit/withdrawal so it doesn't distort return calculations

@@ -442,6 +442,10 @@ export function parseCashSection(section: string): ParsedTrade[] {
       // Positive = cash dividend paid by a fund/ETF (e.g. BITU per-share distribution)
       // Negative = withholding tax deducted on that dividend — skip it; the gross dividend
       //            is the authoritative income figure for tax reporting.
+      // A positive "WITHHOLDING TAX ... REVERSAL/ADJUSTMENT" line is Moomoo refunding
+      // tax it withheld earlier (then re-applying a corrected amount) — not income,
+      // so skip any withholding-tax line regardless of sign.
+      if (/withholding tax/i.test(comment)) continue;
       if (amount <= 0) continue;
       const symMatch = comment.match(/^([A-Z]{1,10})\b/);
       if (!symMatch) continue;
