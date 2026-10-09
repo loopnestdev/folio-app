@@ -5,7 +5,7 @@ let firstCachedDate: string | null = null;
 
 const query = (result: () => any) => {
   const q: any = {
-    select: () => q, eq: () => q, gte: () => q, lte: () => q, limit: () => q,
+    select: () => q, eq: () => q, gte: () => q, lte: () => q, limit: () => q, range: () => q,
     order: () => q,
     then: (resolve: any) => resolve(result()),
   };
@@ -74,6 +74,33 @@ describe('getHistoricalPrices', () => {
     expect(prices).toHaveLength(6);
     expect(prices[0]).toEqual({ date: '2026-01-12', close: 2.9 });
     expect(upserts).toHaveLength(0);
+  });
+
+  it('keeps cached history when Yahoo returns only a live quote (Cboe .XA listing with no daily history)', async () => {
+    cachedWindow = ['2024-10-01', '2024-10-02', '2024-10-03', '2024-10-04', '2024-10-07', '2025-07-29']
+      .map((date) => ({ date, close_price: 8 }));
+    chart
+      .mockRejectedValueOnce(new Error('No data found, symbol may be delisted')) // IBTC.AX
+      .mockResolvedValueOnce({ meta: { exchangeTimezoneName: 'Australia/Sydney' }, quotes: [{ date: new Date('2026-10-09T04:52:19Z'), close: 11.7 }] }); // IBTC.XA
+
+    const prices = await getHistoricalPrices('IBTC', '2024-06-09', '2026-10-09', 'sec-1', 'ASX');
+
+    expect(chart.mock.calls.map((c) => c[0])).toEqual(['IBTC.AX', 'IBTC.XA']);
+    expect(prices).toHaveLength(7);
+    expect(prices[0]).toEqual({ date: '2024-10-01', close: 8 });
+    expect(prices[6]).toEqual({ date: '2026-10-09', close: 11.7 });
+  });
+
+  it('prefers fresh closes over cached ones on the same date', async () => {
+    cachedWindow = ['2026-03-02', '2026-03-03', '2026-03-04', '2026-03-05', '2026-03-06', '2026-03-09']
+      .map((date) => ({ date, close_price: 100 }));
+    chart.mockResolvedValueOnce({ meta: { exchangeTimezoneName: 'America/New_York' }, quotes: [bar('2026-03-09', 101), bar('2026-03-20', 105)] });
+
+    const prices = await getHistoricalPrices('XYZ', '2026-03-01', '2026-03-31', 'sec-1', 'US');
+
+    expect(prices.map((p) => `${p.date}=${p.close}`)).toEqual([
+      '2026-03-02=100', '2026-03-03=100', '2026-03-04=100', '2026-03-05=100', '2026-03-06=100', '2026-03-09=101', '2026-03-20=105',
+    ]);
   });
 
   it('serves cached prices when the Yahoo request throws', async () => {

@@ -140,15 +140,23 @@ export async function getHistoricalPrices(
 ): Promise<{ date: string; close: number }[]> {
   let cachedRows: DailyClose[] = [];
   if (securityId) {
-    const { data: cached } = await supabase
-      .from('price_history')
-      .select('date, close_price')
-      .eq('security_id', securityId)
-      .gte('date', fromDate)
-      .lte('date', toDate)
-      .order('date', { ascending: true });
+    // Paged: PostgREST caps a response at 1000 rows, which cut long histories (FANG has 1,600+) short,
+    // so the end-of-range check always saw a stale cache and the Yahoo-failure fallback lost recent closes.
+    const cached: { date: string; close_price: number }[] = [];
+    for (let from = 0; ; from += 1000) {
+      const { data: page } = await supabase
+        .from('price_history')
+        .select('date, close_price')
+        .eq('security_id', securityId)
+        .gte('date', fromDate)
+        .lte('date', toDate)
+        .order('date', { ascending: true })
+        .range(from, from + 999);
+      cached.push(...(page ?? []));
+      if (!page || page.length < 1000) break;
+    }
 
-    if (cached && cached.length > 5) {
+    if (cached.length > 5) {
       // Use cache only if it covers both ends of the requested range well.
       //
       // Start check: a previous query for a shorter range (e.g. 1Y) may have
@@ -209,10 +217,11 @@ export async function getHistoricalPrices(
       await savePriceHistory(securityId, prices);
     }
 
-    // Yahoo had nothing (delisted, renamed, outage): serve what is cached rather than [] — an empty result values the holding at $0
-    if (!prices.length && cachedRows.length) return cachedRows;
-
-    return prices;
+    // Merge rather than replace:
+    //   - Yahoo can return far less than is cached (delisted, renamed, outage, or a Cboe .XA listing with no daily history that returns only today's live quote, as with IBTC)
+    //   - Returning only that would drop every cached close and value the holding at $0 on those days
+    //   - Fresh closes win on shared dates
+    return dedupeByDate([...cachedRows, ...prices]).sort((a, b) => a.date.localeCompare(b.date));
   } catch (err) {
     console.error(`Failed to fetch prices for ${symbol}:`, err);
     return cachedRows;
