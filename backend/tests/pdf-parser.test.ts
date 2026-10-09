@@ -1,37 +1,26 @@
 import { extractTrades, parseTradesSection, parseCashSection, parseMovementSection } from '../src/services/pdf-parser/moomoo';
 
+// pdf-parse v2 tab layout: direction line (security name inline, or wrapped onto
+// its own line), then SYMBOL \t EXCHANGE \t CURRENCY \t DATE, then TIME \t PRICE \t QTY \t AMOUNT.
 const SAMPLE_TRADES_SECTION = `Trades - Securities
-Direction Symbol Exchange Currency Date/Time Price Quantity Amount
-Buy to Open
-NEBIUS
-NBIS
-US USD
-2025/07/12
-05:52:12
-43.9700 21 923.37
+Direction\tSymbol\tExchange\tCurrency\tDate/Time\tPrice\tQuantity\tAmount
+Buy to Open\tBuy to Open \tNEBIUS
+NBIS\tUS\tUSD\t2025/07/12
+05:52:12\t43.9700\t21\t923.37
 Subtotal: 1.05 Number of Transactions: 1 Transaction Amount: 923.37 Net Transaction Amount: -924.42 Platform Fee: 0.99 Settlement Fee: 0.06 Consolidated Audit Trail Fees: 0.00
-Sell to Close
+Sell to Close\tSell to Close
 Tesla
-TSLA
-US USD
-2025/07/17
-00:31:04
-319.1500 15 4,787.25
+TSLA\tUS\tUSD\t2025/07/17
+00:31:04\t319.1500\t15\t4,787.25
 Subtotal: 1.05 Number of Transactions: 1 Transaction Amount: 4,787.25 Net Transaction Amount: 4,786.20 Platform Fee: 0.99 Settlement Fee: 0.05 Trading Activity Fee: 0.01 Consolidated Audit Trail Fees: 0.00
-Buy to Open Monochrome Bitcoin ETF
-IBTC
-ASX AUD
-2025/07/24
-15:07:57
-17.7100 125 2,213.75
+Buy to Open\tBuy to Open \tMonochrome Bitcoin ETF
+IBTC\tASX\tAUD\t2025/07/24
+15:07:57\t17.7100\t125\t2,213.75
 Subtotal: 3.00 Number of Transactions: 1 Transaction Amount: 2,213.75 Net Transaction Amount: -2,216.75 Commission: 0.91 Platform Fee: 1.82 GST: 0.27
-Sell to Close
+Sell to Close\tSell to Close
 VanEck Bitcoin ETF
-VBTC
-ASX AUD
-2025/07/02
-11:29:18
-32.5800 133 4,333.14
+VBTC\tASX\tAUD\t2025/07/02
+11:29:18\t32.5800\t133\t4,333.14
 Subtotal: 3.00 Number of Transactions: 1 Transaction Amount: 4,333.14 Net Transaction Amount: 4,330.14 Commission: 0.91 Platform Fee: 1.82 GST: 0.27`;
 
 const SAMPLE_MOVEMENT_SECTION = `Movement - Securities
@@ -88,6 +77,7 @@ describe('Moomoo PDF Parser', () => {
       expect(ibtc?.quantity).toBe(125);
       expect(ibtc?.price).toBe(17.71);
       expect(ibtc?.gst).toBe(0.27);
+      expect(ibtc?.security_name).toBe('Monochrome Bitcoin ETF');
     });
 
     it('parses AUD sell trade with GST', () => {
@@ -98,6 +88,7 @@ describe('Moomoo PDF Parser', () => {
       expect(vbtc?.currency).toBe('AUD');
       expect(vbtc?.brokerage).toBe(3.0);
       expect(vbtc?.gst).toBe(0.27);
+      expect(vbtc?.security_name).toBe('VanEck Bitcoin ETF');
     });
 
     it('attaches the subtotal fee when a page break sits between the trade and its subtotal', () => {
