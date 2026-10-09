@@ -29,7 +29,7 @@
     "multer": "^2.4.0",
     "pdf-parse": "^2.4.5",
     "pdfkit": "^0.20.2",
-    "xlsx": "^0.18.5",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "yahoo-finance2": "^3.14.1",
     "zod": "^4.4.3"
   },
@@ -46,5 +46,10 @@
     "ts-jest": "^29.4.11",
     "tsx": "^4.22.3",
     "typescript": "^6.0.3"
+  },
+  "overrides": {
+    "js-yaml@3": {
+      "argparse": "^2.0.1"
+    }
   }
 }
