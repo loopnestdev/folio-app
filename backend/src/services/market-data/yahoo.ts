@@ -75,12 +75,25 @@ export function dedupeByDate<T extends { date: string }>(rows: T[]): T[] {
 }
 
 /**
+ * TICKER_RENAMES:
+ *   - Securities whose ticker changed after they were traded, keyed EXCHANGE:OLD -> new bare ticker
+ *   - Yahoo moves the whole price history to the new ticker and returns nothing for the old one, so the old security could not be priced or refreshed
+ *   - The security, its trades and CGT records keep the ticker shown on the broker statements; only price lookups use the new one
+ *   - To add one: confirm on Yahoo that the new ticker's history covers the old ticker's cached prices, then add an entry here
+ */
+export const TICKER_RENAMES: Record<string, string> = {
+  'US:BITF': 'KEEL', // Bitfarms -> Keel Infrastructure Corp. (NASDAQ), history matches cached BITF closes exactly
+};
+
+/**
  * Convert a bare ticker + exchange to the Yahoo Finance symbol format.
  *   ASX   → TICKER.AX   (e.g. FANG.AX, VAS.AX)
  *   HK    → TICKER.HK   (e.g. 0700.HK)
  *   US/NYSE/NASDAQ → TICKER  (no suffix needed)
+ * Renamed tickers (TICKER_RENAMES) resolve to their new symbol first.
  */
 export function toYahooTicker(symbol: string, exchange?: string | null): string {
+  symbol = TICKER_RENAMES[`${(exchange ?? '').toUpperCase()}:${symbol.toUpperCase()}`] ?? symbol;
   switch ((exchange ?? '').toUpperCase()) {
     case 'ASX':  return `${symbol}.AX`;
     case 'HK':   return `${symbol}.HK`;
@@ -196,10 +209,13 @@ export async function getHistoricalPrices(
       await savePriceHistory(securityId, prices);
     }
 
+    // Yahoo had nothing (delisted, renamed, outage): serve what is cached rather than [] — an empty result values the holding at $0
+    if (!prices.length && cachedRows.length) return cachedRows;
+
     return prices;
   } catch (err) {
     console.error(`Failed to fetch prices for ${symbol}:`, err);
-    return [];
+    return cachedRows;
   }
 }
 

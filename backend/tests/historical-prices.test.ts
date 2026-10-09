@@ -25,7 +25,7 @@ jest.mock('../src/lib/supabase', () => ({
 const chart = jest.fn();
 jest.mock('yahoo-finance2', () => ({ __esModule: true, default: class { chart = chart; } }));
 
-import { getHistoricalPrices } from '../src/services/market-data/yahoo';
+import { getHistoricalPrices, toYahooTicker } from '../src/services/market-data/yahoo';
 
 // A US bar stamped at the 9:30 New York open, i.e. 13:30/14:30 UTC on the same day.
 const bar = (date: string, close: number) => ({ date: new Date(`${date}T14:30:00Z`), close });
@@ -61,6 +61,37 @@ describe('getHistoricalPrices', () => {
 
     expect(chart).toHaveBeenCalledTimes(1);
     expect(upserts.flat().map((r) => r.date)).toEqual(['2026-03-09', '2026-03-20']);
+  });
+
+  it('serves cached prices when Yahoo returns nothing for the ticker (delisted / renamed)', async () => {
+    // Cache ends long before toDate, so a refresh is attempted and comes back empty.
+    cachedWindow = ['2026-01-12', '2026-01-13', '2026-01-14', '2026-01-15', '2026-01-16', '2026-01-20']
+      .map((date, i) => ({ date, close_price: 2.9 + i / 100 }));
+    chart.mockResolvedValueOnce({ meta: { exchangeTimezoneName: 'America/New_York' }, quotes: [] });
+
+    const prices = await getHistoricalPrices('GONE', '2026-01-12', '2026-10-09', 'sec-1', 'US');
+
+    expect(prices).toHaveLength(6);
+    expect(prices[0]).toEqual({ date: '2026-01-12', close: 2.9 });
+    expect(upserts).toHaveLength(0);
+  });
+
+  it('serves cached prices when the Yahoo request throws', async () => {
+    cachedWindow = ['2026-01-12', '2026-01-13', '2026-01-14', '2026-01-15', '2026-01-16', '2026-01-20']
+      .map((date) => ({ date, close_price: 3 }));
+    chart.mockRejectedValueOnce(new Error('No data found, symbol may be delisted'));
+
+    expect(await getHistoricalPrices('GONE', '2026-01-12', '2026-10-09', 'sec-1', 'US')).toHaveLength(6);
+  });
+
+  it('looks up a renamed ticker under its new symbol', async () => {
+    expect(toYahooTicker('BITF', 'US')).toBe('KEEL');
+    expect(toYahooTicker('BITF', 'ASX')).toBe('BITF.AX'); // rename is exchange-specific
+    chart.mockResolvedValueOnce({ meta: { exchangeTimezoneName: 'America/New_York' }, quotes: [bar('2026-01-16', 2.95)] });
+
+    await getHistoricalPrices('BITF', '2026-01-16', '2026-01-17', undefined, 'US');
+
+    expect(chart.mock.calls[0][0]).toBe('KEEL');
   });
 
   it('dates ASX bars in Sydney time when Yahoo omits the timezone', async () => {

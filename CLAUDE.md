@@ -266,7 +266,7 @@ Note: `backend/package.json` has a `typecheck` script (`tsc --noEmit`). Run `npm
 Run after every change:
 
 ```bash
-cd backend  && npm test   # 64 tests - Jest + ts-jest
+cd backend  && npm test   # 67 tests - Jest + ts-jest
 cd frontend && npm test   # 74 tests - Vitest
 ```
 
