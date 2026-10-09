@@ -138,6 +138,14 @@ npm run repair:asx-dates             # dry run: prints what would change
 npm run repair:asx-dates -- --apply  # writes the changes
 ```
 
+**Repair split-adjusted prices** (`backend/scripts/repair-split-history.ts`) - one-off repair for closes cached on Yahoo's split-adjusted basis before prices were stored as traded. For every security except the `CASH` placeholder, it refetches the cached span and upserts any close that differs by more than 1%. It never deletes rows, and it skips securities where Yahoo returns less than half the cached history (e.g. delisted `IBTC`). Writes to the live database; run the dry run first.
+
+```bash
+cd backend
+npm run repair:splits             # dry run: prints what would change
+npm run repair:splits -- --apply  # writes the changes
+```
+
 ## PDF Import
 
 Supported format: **Moomoo Securities Australia** monthly account statements.

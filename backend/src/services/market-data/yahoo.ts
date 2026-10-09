@@ -49,6 +49,7 @@ export function benchmarkTimeZone(indexSymbol: string): string {
  *   - True when any date present in both sets differs by more than `tolerance` (default 15%)
  *   - Yahoo closes are split-adjusted as of when they are fetched, so after a split or consolidation every older close is re-based (e.g. /4 for a 4-for-1) while cached rows keep the old basis
  *   - Ordinary corrections are well under 15%; a mismatch above it means the cached history is on a different basis and must be refetched as a whole
+ *   - Fresh closes are now split-unadjusted (unadjustForSplits), so this mainly catches rows cached on the adjusted basis before that change
  */
 export function hasAdjustmentMismatch(
   cached: { date: string; close: number }[],
@@ -102,23 +103,53 @@ export function toYahooTicker(symbol: string, exchange?: string | null): string 
 }
 
 type DailyClose = { date: string; close: number };
+export type SplitEvent = { date: string; numerator: number; denominator: number };
 
-/** Daily closes for a Yahoo ticker over [fromDate, toDate], dated in the exchange's timezone, one row per date. */
-async function fetchDailyCloses(ticker: string, fromDate: string, toDate: string, fallbackTimeZone: string): Promise<DailyClose[]> {
+/**
+ * unadjustForSplits:
+ *   - Converts Yahoo's split-adjusted closes back to the prices actually traded on each date
+ *   - Yahoo rescales every close before a split to the post-split share count (CEL's 1:20 consolidation on 2026-07-29 turned a $0.155 close into $3.10), but trades are stored in the shares held at the time, so adjusted closes valued CEL and LCID positions 20x and 10x too high while held
+ *   - raw = adjusted x numerator / denominator for each split dated after the close; a close on the split date is already post-split
+ */
+export function unadjustForSplits(closes: DailyClose[], splits: SplitEvent[]): DailyClose[] {
+  if (!splits.length) return closes;
+  return closes.map((c) => {
+    const factor = splits
+      .filter((s) => s.date > c.date && s.numerator > 0 && s.denominator > 0)
+      .reduce((f, s) => f * (s.numerator / s.denominator), 1);
+    return factor === 1 ? c : { date: c.date, close: c.close * factor };
+  });
+}
+
+/**
+ * fetchDailyCloses:
+ *   - Daily closes for a Yahoo ticker over [fromDate, toDate], dated in the exchange's timezone, one row per date, as traded (split-unadjusted)
+ *   - Always requests through today: Yahoo only returns split events inside the requested range, yet adjusts earlier closes for later splits too
+ */
+export async function fetchDailyCloses(ticker: string, fromDate: string, toDate: string, fallbackTimeZone: string): Promise<DailyClose[]> {
+  const today = new Date().toISOString().slice(0, 10);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const result: any = await yahooFinance.chart(ticker, {
     period1: fromDate,
-    period2: toDate,
+    period2: toDate > today ? toDate : today,
     interval: '1d',
+    events: 'split',
   });
   const timeZone = result.meta?.exchangeTimezoneName ?? fallbackTimeZone;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return dedupeByDate(((result.quotes ?? []) as any[])
+  const splits: SplitEvent[] = ((result.events?.splits ?? []) as any[]).map((s) => ({
+    date: quoteDate(s.date, timeZone),
+    numerator: Number(s.numerator),
+    denominator: Number(s.denominator),
+  }));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const closes = dedupeByDate(((result.quotes ?? []) as any[])
     .filter((q) => q.close != null)
     .map((q) => ({
       date: quoteDate(q.date as string, timeZone),
       close: q.close as number,
     })));
+  return unadjustForSplits(closes, splits).filter((c) => c.date <= toDate);
 }
 
 /** Upserts closes into price_history in chunks (a full-history refresh can be thousands of rows). */

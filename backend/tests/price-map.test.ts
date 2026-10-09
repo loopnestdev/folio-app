@@ -1,7 +1,7 @@
 jest.mock('../src/lib/supabase', () => ({ supabase: {} }));
 
 import { buildDailyPriceMap, calculateHoldings, unpricedSymbols } from '../src/services/calculations/holdings';
-import { benchmarkTimeZone, dedupeByDate, exchangeTimeZone, hasAdjustmentMismatch, quoteDate } from '../src/services/market-data/yahoo';
+import { benchmarkTimeZone, dedupeByDate, exchangeTimeZone, hasAdjustmentMismatch, quoteDate, unadjustForSplits } from '../src/services/market-data/yahoo';
 
 describe('buildDailyPriceMap', () => {
   it('forward-fills a symbol with no row on a date instead of leaving it unpriced', () => {
@@ -111,5 +111,28 @@ describe('hasAdjustmentMismatch', () => {
   it('ignores small corrections and non-overlapping dates', () => {
     expect(hasAdjustmentMismatch(cached, [{ date: '2026-03-03', close: 410 }, { date: '2026-03-09', close: 90 }])).toBe(false);
     expect(hasAdjustmentMismatch([], [{ date: '2026-03-03', close: 1 }])).toBe(false);
+  });
+});
+
+describe('unadjustForSplits', () => {
+  it('restores pre-consolidation prices (CEL 1:20 on 2026-07-29)', () => {
+    const closes = [{ date: '2026-02-05', close: 3.1 }, { date: '2026-07-28', close: 4 }, { date: '2026-07-29', close: 4.2 }];
+    const out = unadjustForSplits(closes, [{ date: '2026-07-29', numerator: 1, denominator: 20 }]);
+    expect(out[0].close).toBeCloseTo(0.155, 6);
+    expect(out[1].close).toBeCloseTo(0.2, 6);
+    expect(out[2].close).toBe(4.2); // split-day close is already post-split
+  });
+
+  it('compounds several splits and handles forward splits', () => {
+    const out = unadjustForSplits([{ date: '2024-01-02', close: 10 }], [
+      { date: '2024-06-10', numerator: 4, denominator: 1 },  // 4-for-1 split: old shares traded 4x higher
+      { date: '2025-01-15', numerator: 1, denominator: 10 }, // later 1-for-10 consolidation
+    ]);
+    expect(out[0].close).toBeCloseTo(4, 6);
+  });
+
+  it('returns closes unchanged without splits', () => {
+    const closes = [{ date: '2026-01-02', close: 5 }];
+    expect(unadjustForSplits(closes, [])).toBe(closes);
   });
 });

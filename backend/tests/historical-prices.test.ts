@@ -121,6 +121,23 @@ describe('getHistoricalPrices', () => {
     expect(chart.mock.calls[0][0]).toBe('KEEL');
   });
 
+  it('stores prices as traded when a split happened after the requested window', async () => {
+    chart.mockResolvedValueOnce({
+      meta: { exchangeTimezoneName: 'Australia/Sydney' },
+      events: { splits: [{ date: new Date('2026-07-28T23:00:00Z'), numerator: 1, denominator: 20 }] }, // 29 Jul in Sydney
+      quotes: [{ date: new Date('2026-02-04T23:00:00Z'), close: 3.1 }, { date: new Date('2026-07-29T00:00:00Z'), close: 4.2 }],
+    });
+
+    const prices = await getHistoricalPrices('CEL', '2026-02-01', '2026-04-30', 'sec-1', 'ASX');
+
+    expect(chart.mock.calls[0][1].events).toBe('split');
+    expect(chart.mock.calls[0][1].period2).toBe(new Date().toISOString().slice(0, 10)); // requested through today to see later splits
+    expect(prices).toHaveLength(1); // the post-window bar is trimmed
+    expect(prices[0].date).toBe('2026-02-05');
+    expect(prices[0].close).toBeCloseTo(0.155, 6);
+    expect(upserts.flat()[0].close_price).toBeCloseTo(0.155, 6);
+  });
+
   it('dates ASX bars in Sydney time when Yahoo omits the timezone', async () => {
     // Friday 9 Jan 2026 session open (10:00 AEDT) = 23:00 UTC Thursday.
     chart.mockResolvedValueOnce({ meta: {}, quotes: [{ date: new Date('2026-01-08T23:00:00Z'), close: 66 }] });

@@ -10,7 +10,8 @@
     "test": "jest --coverage",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
-    "repair:asx-dates": "node --env-file=.env --import tsx scripts/repair-asx-price-dates.ts"
+    "repair:asx-dates": "node --env-file=.env --import tsx scripts/repair-asx-price-dates.ts",
+    "repair:splits": "node --env-file=.env --import tsx scripts/repair-split-history.ts"
   },
   "keywords": [],
   "author": "",
