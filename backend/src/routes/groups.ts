@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth';
 import { requireApproved } from '../middleware/requireApproved';
 import { supabase } from '../lib/supabase';
-import { calculateHoldings, calculateCapitalGainsByRange, calculateCashPosition } from '../services/calculations/holdings';
+import { buildDailyPriceMap, calculateHoldings, calculateCapitalGainsByRange, calculateCashPosition } from '../services/calculations/holdings';
 import { computeStatistics, computeMonthlyReturnMap, computeMonthlyReturnMapModifiedDietz, alignReturnMaps } from '../services/calculations/statistics';
 import {
   getHistoricalPrices, getBenchmarkPrices, getCurrentPrices, BENCHMARKS,
@@ -380,13 +380,7 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
           }),
         );
 
-        const priceMap: Record<string, Record<string, number>> = {};
-        for (const { symbol, prices } of pricesBySymbol) {
-          for (const { date, close } of prices) {
-            if (!priceMap[date]) priceMap[date] = {};
-            priceMap[date][symbol] = close;
-          }
-        }
+        const priceMap = buildDailyPriceMap(pricesBySymbol);
 
         const sortedTrades = [...trades].sort((a, b) => a.trade_date.localeCompare(b.trade_date));
 
@@ -914,13 +908,7 @@ async function buildGroupDailyValues(
         }),
       );
 
-      const priceMap: Record<string, Record<string, number>> = {};
-      for (const { symbol, prices } of pricesBySymbol) {
-        for (const { date, close } of prices) {
-          if (!priceMap[date]) priceMap[date] = {};
-          priceMap[date][symbol] = close;
-        }
-      }
+      const priceMap = buildDailyPriceMap(pricesBySymbol);
 
       const sortedTrades = [...trades].sort((a, b) => a.trade_date.localeCompare(b.trade_date));
       let cashAmt = 0;
@@ -1403,13 +1391,7 @@ router.get('/:id/monthly-profit', async (req: AuthenticatedRequest, res: any) =>
           }),
         );
 
-        const priceMap: Record<string, Record<string, number>> = {};
-        for (const { symbol, prices } of pricesBySymbol) {
-          for (const { date, close } of prices) {
-            if (!priceMap[date]) priceMap[date] = {};
-            priceMap[date][symbol] = close;
-          }
-        }
+        const priceMap = buildDailyPriceMap(pricesBySymbol);
 
         const sortedTrades = [...trades].sort((a, b) => a.trade_date.localeCompare(b.trade_date));
         let cashAmt = 0;

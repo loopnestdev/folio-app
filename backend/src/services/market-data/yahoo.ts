@@ -15,6 +15,18 @@ export const BENCHMARKS = {
 } as const;
 
 /**
+ * quoteDate:
+ *   - Formats a Yahoo daily-bar timestamp as YYYY-MM-DD in the exchange's own timezone (chart `meta.exchangeTimezoneName`)
+ *   - Formatting in the server's timezone shifted ASX bars a day early on Railway (UTC): Friday's close was stored as Thursday and Monday's as Sunday
+ *   - Falls back to UTC when Yahoo omits the timezone
+ */
+export function quoteDate(timestamp: string | number | Date, timeZone?: string | null): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: timeZone || 'UTC', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date(timestamp));
+}
+
+/**
  * Convert a bare ticker + exchange to the Yahoo Finance symbol format.
  *   ASX   → TICKER.AX   (e.g. FANG.AX, VAS.AX)
  *   HK    → TICKER.HK   (e.g. 0700.HK)
@@ -85,7 +97,7 @@ export async function getHistoricalPrices(
     return ((result.quotes ?? []) as any[])
       .filter((q) => q.close != null)
       .map((q) => ({
-        date: format(new Date(q.date as string), 'yyyy-MM-dd'),
+        date: quoteDate(q.date as string, result.meta?.exchangeTimezoneName),
         close: q.close as number,
       }));
   };
@@ -152,7 +164,7 @@ export async function getBenchmarkPrices(
     const prices = ((result.quotes ?? []) as any[])
       .filter((q) => q.close != null)
       .map((q) => ({
-        date: format(new Date(q.date as string), 'yyyy-MM-dd'),
+        date: quoteDate(q.date as string, result.meta?.exchangeTimezoneName),
         close: q.close as number,
       }));
 
@@ -204,7 +216,7 @@ export async function getForexRate(
     return ((result.quotes ?? []) as any[])
       .filter((q) => q.close != null && q.close > 0)
       .map((q) => ({
-        date:  format(new Date(q.date as string), 'yyyy-MM-dd'),
+        date:  quoteDate(q.date as string, result.meta?.exchangeTimezoneName),
         close: invert ? 1 / (q.close as number) : (q.close as number),
       }));
   };

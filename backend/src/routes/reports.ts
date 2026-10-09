@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth';
 import { requireApproved } from '../middleware/requireApproved';
 import { supabase } from '../lib/supabase';
-import { calculateHoldings, calculateCapitalGains, calculateCapitalGainsByRange, calculateCashPosition } from '../services/calculations/holdings';
+import { buildDailyPriceMap, calculateHoldings, calculateCapitalGains, calculateCapitalGainsByRange, calculateCashPosition } from '../services/calculations/holdings';
 import { computeStatistics, computeMonthlyReturnMap, computeMonthlyReturnMapModifiedDietz, alignReturnMaps } from '../services/calculations/statistics';
 import { getHistoricalPrices, getBenchmarkPrices, getCurrentPrices, BENCHMARKS, enrichSecurityMetadata } from '../services/market-data/yahoo';
 import { format, subYears, startOfYear } from 'date-fns';
@@ -272,13 +272,7 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
       })
     );
 
-    const priceMap: Record<string, Record<string, number>> = {};
-    for (const { symbol, prices } of pricesBySymbol) {
-      for (const { date, close } of prices) {
-        if (!priceMap[date]) priceMap[date] = {};
-        priceMap[date][symbol] = close;
-      }
-    }
+    const priceMap = buildDailyPriceMap(pricesBySymbol);
 
     // ── Time-Weighted Return (TWR) ────────────────────────────────────────────
     // TWR chains daily returns and neutralises the effect of external cash flows
@@ -570,13 +564,7 @@ router.get('/:id/statistics', async (req: AuthenticatedRequest, res: any) => {
       })
     );
 
-    const priceMap: Record<string, Record<string, number>> = {};
-    for (const { symbol, prices } of pricesBySymbol) {
-      for (const { date, close } of prices) {
-        if (!priceMap[date]) priceMap[date] = {};
-        priceMap[date][symbol] = close;
-      }
-    }
+    const priceMap = buildDailyPriceMap(pricesBySymbol);
 
     const allPortfolioValues = Object.keys(priceMap).sort().map((date) => {
       const tradesUpToDate = trades.filter(t => t.trade_date <= date) as any;
@@ -818,13 +806,7 @@ router.get('/:id/reports/monthly-profit', async (req: AuthenticatedRequest, res:
       }),
     );
 
-    const priceMap: Record<string, Record<string, number>> = {};
-    for (const { symbol, prices } of pricesBySymbol) {
-      for (const { date, close } of prices) {
-        if (!priceMap[date]) priceMap[date] = {};
-        priceMap[date][symbol] = close;
-      }
-    }
+    const priceMap = buildDailyPriceMap(pricesBySymbol);
 
     // ── Running cash ─────────────────────────────────────────────────────────
     const sortedTrades = [...trades].sort((a, b) => a.trade_date.localeCompare(b.trade_date));
@@ -949,13 +931,7 @@ router.get('/:id/reports/drawdown', async (req: AuthenticatedRequest, res: any) 
       }),
     );
 
-    const priceMap: Record<string, Record<string, number>> = {};
-    for (const { symbol, prices } of pricesBySymbol) {
-      for (const { date, close } of prices) {
-        if (!priceMap[date]) priceMap[date] = {};
-        priceMap[date][symbol] = close;
-      }
-    }
+    const priceMap = buildDailyPriceMap(pricesBySymbol);
 
     // Running cash (same pattern as performance route)
     const sortedTrades = [...trades].sort((a, b) => a.trade_date.localeCompare(b.trade_date));

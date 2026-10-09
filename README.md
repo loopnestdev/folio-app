@@ -128,6 +128,16 @@ cd frontend
 npm test
 ```
 
+### Maintenance Scripts
+
+**Repair ASX price dates** (`backend/scripts/repair-asx-price-dates.ts`) - one-off repair for ASX closes cached one day early before the exchange-timezone fix. It refetches every ASX security in `price_history` and the `^AXJO` benchmark in `benchmark_data`, deletes rows that don't fall on a real trading day, and rewrites the rest with correctly dated closes. Uses `backend/.env` (service-role key), so it writes to the live database; run the dry run first.
+
+```bash
+cd backend
+npm run repair:asx-dates             # dry run: prints what would change
+npm run repair:asx-dates -- --apply  # writes the changes
+```
+
 ## PDF Import
 
 Supported format: **Moomoo Securities Australia** monthly account statements.

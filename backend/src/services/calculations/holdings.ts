@@ -86,6 +86,40 @@ export function calculateCashPosition(trades: TradeWithSecurity[]): {
   };
 }
 
+/**
+ * buildDailyPriceMap:
+ *   - Builds a date -> { symbol: close } map over every weekday any symbol has a price for
+ *   - Forward-fills each symbol's last known close onto later dates, so a holding with no row on a given day keeps its previous price instead of being valued at 0 (which made performance charts spike down)
+ *   - Drops weekend-dated rows: no supported exchange trades on weekends, so they only come from timezone-shifted cache entries
+ *   - A symbol is absent before its first price, same as before
+ */
+export function buildDailyPriceMap(
+  pricesBySymbol: { symbol: string; prices: { date: string; close: number }[] }[],
+): Record<string, Record<string, number>> {
+  const isWeekday = (date: string) => {
+    const dow = new Date(`${date}T00:00:00Z`).getUTCDay();
+    return dow !== 0 && dow !== 6;
+  };
+
+  const series = pricesBySymbol.map(({ symbol, prices }) => ({
+    symbol,
+    prices: prices.filter((p) => isWeekday(p.date)).sort((a, b) => a.date.localeCompare(b.date)),
+  }));
+  const dates = [...new Set(series.flatMap((s) => s.prices.map((p) => p.date)))].sort();
+
+  const priceMap: Record<string, Record<string, number>> = {};
+  for (const date of dates) priceMap[date] = {};
+  for (const { symbol, prices } of series) {
+    let idx = 0;
+    let last: number | undefined;
+    for (const date of dates) {
+      while (idx < prices.length && prices[idx].date <= date) last = prices[idx++].close;
+      if (last !== undefined) priceMap[date][symbol] = last;
+    }
+  }
+  return priceMap;
+}
+
 export function calculateHoldings(
   trades: TradeWithSecurity[],
   currentPrices: Record<string, number>
