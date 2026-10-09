@@ -17,7 +17,7 @@
     "@supabase/supabase-js": "^2.106.1",
     "@tailwindcss/vite": "^4.3.0",
     "@tanstack/react-query": "^5.100.14",
-    "axios": "^1.16.1",
+    "axios": "^1.20.0",
     "date-fns": "^4.3.0",
     "echarts": "^6.1.0",
     "echarts-for-react": "3.0.6",
@@ -38,7 +38,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
-    "@vitest/coverage-v8": "^4.1.7",
+    "@vitest/coverage-v8": "^4.1.11",
     "eslint": "^10.3.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
@@ -47,6 +47,9 @@
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.59.2",
     "vite": "^8.0.12",
-    "vitest": "^4.1.7"
+    "vitest": "^4.1.11"
+  },
+  "overrides": {
+    "size-sensor": "1.0.3"
   }
 }
