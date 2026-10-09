@@ -9,8 +9,10 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import ReactECharts from 'echarts-for-react';
+import { AlertTriangle } from 'lucide-react';
 import { useSettings } from '../../contexts/SettingsContext';
 import type { PerformancePoint, BenchmarkToggle } from '../../types';
+import { summarizeUnpriced, type UnpricedSummary } from '../../lib/unpriced';
 
 // The chart data is P&L gain % with 0 as the breakeven baseline.
 // e.g. 58.0 → "+58.0%", -10.5 → "-10.5%"
@@ -211,6 +213,34 @@ function EChartsPerformanceChart({ data, benchmarks }: PerformanceChartProps) {
   return <ReactECharts option={option} style={{ height: 350 }} />;
 }
 
+/** Warns that some holdings had no price data, so the line understates value on those days. */
+export function UnpricedHoldingsNotice({ data }: { data: PerformancePoint[] }) {
+  const missing = summarizeUnpriced(data);
+  if (!missing.length) return null;
+  const span = (m: UnpricedSummary) => (m.from === m.to ? m.from : `${m.from} – ${m.to}`);
+  return (
+    <div
+      role="status"
+      className="flex items-start gap-2 p-3 mb-4 rounded-lg border border-[var(--c-warn-border)] bg-[var(--c-warn-bg)] text-[13px] text-[var(--c-ink)]"
+    >
+      <AlertTriangle size={15} className="mt-0.5 shrink-0 text-[var(--c-warn)]" />
+      <div>
+        <p>
+          No price data for {missing.length === 1 ? 'one holding' : `${missing.length} holdings`}, so{' '}
+          {missing.length === 1 ? 'it was' : 'they were'} valued at $0 on the days below. The return line understates value there.
+        </p>
+        <ul className="mt-1 text-[var(--c-ink-sec)]">
+          {missing.map((m) => (
+            <li key={m.symbol}>
+              <span className="font-medium text-[var(--c-ink)]">{m.symbol}</span> · {m.days} day{m.days === 1 ? '' : 's'} ({span(m)})
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 export function PerformanceChart(props: PerformanceChartProps) {
   const { chartLibrary } = useSettings();
 
@@ -230,9 +260,14 @@ export function PerformanceChart(props: PerformanceChartProps) {
     );
   }
 
-  return chartLibrary === 'echarts' ? (
-    <EChartsPerformanceChart {...props} />
-  ) : (
-    <RechartsPerformanceChart {...props} />
+  return (
+    <>
+      <UnpricedHoldingsNotice data={props.data} />
+      {chartLibrary === 'echarts' ? (
+        <EChartsPerformanceChart {...props} />
+      ) : (
+        <RechartsPerformanceChart {...props} />
+      )}
+    </>
   );
 }

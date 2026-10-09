@@ -120,6 +120,16 @@ export function buildDailyPriceMap(
   return priceMap;
 }
 
+/**
+ * unpricedSymbols:
+ *   - Symbols still held (quantity > 0) that had no price, so calculateHoldings left market_value null and they count as $0
+ *   - buildDailyPriceMap forward-fills, so this only fires for a symbol with no price at all up to that date (failed or empty fetch, delisted)
+ *   - Performance endpoints attach it to each point so the chart can warn instead of silently understating value
+ */
+export function unpricedSymbols(holdings: HoldingPosition[]): string[] {
+  return holdings.filter((h) => h.quantity > 0 && h.market_value == null).map((h) => h.symbol).sort();
+}
+
 export function calculateHoldings(
   trades: TradeWithSecurity[],
   currentPrices: Record<string, number>

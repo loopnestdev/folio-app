@@ -266,8 +266,8 @@ Note: `backend/package.json` has a `typecheck` script (`tsc --noEmit`). Run `npm
 Run after every change:
 
 ```bash
-cd backend  && npm test   # 57 tests - Jest + ts-jest
-cd frontend && npm test   # 70 tests - Vitest
+cd backend  && npm test   # 64 tests - Jest + ts-jest
+cd frontend && npm test   # 74 tests - Vitest
 ```
 
 All tests must pass before committing. Generate new tests when new logic is introduced.

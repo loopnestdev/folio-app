@@ -243,6 +243,8 @@ export interface PerformancePoint {
   benchmark_sp500: number | null;
   benchmark_nasdaq: number | null;
   benchmark_asx200: number | null;
+  /** Held symbols with no price at all up to this date, valued at $0 (omitted when none) */
+  unpriced?: string[];
 }
 
 export type DateRange = 'YTD' | '1Y' | '2Y' | '3Y' | '5Y' | 'ALL' | 'CUSTOM';

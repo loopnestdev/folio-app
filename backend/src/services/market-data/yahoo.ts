@@ -18,12 +18,48 @@ export const BENCHMARKS = {
  * quoteDate:
  *   - Formats a Yahoo daily-bar timestamp as YYYY-MM-DD in the exchange's own timezone (chart `meta.exchangeTimezoneName`)
  *   - Formatting in the server's timezone shifted ASX bars a day early on Railway (UTC): Friday's close was stored as Thursday and Monday's as Sunday
- *   - Falls back to UTC when Yahoo omits the timezone
+ *   - Callers pass a fallback from exchangeTimeZone / benchmarkTimeZone for when Yahoo omits it; UTC is the last resort (correct for FX, a day early for ASX)
  */
 export function quoteDate(timestamp: string | number | Date, timeZone?: string | null): string {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: timeZone || 'UTC', year: 'numeric', month: '2-digit', day: '2-digit',
   }).format(new Date(timestamp));
+}
+
+/**
+ * exchangeTimeZone:
+ *   - Fallback trading timezone for a security's exchange, used only when Yahoo's chart meta has no exchangeTimezoneName
+ *   - Without it the fallback would be UTC, which dates every ASX bar a day early (the bug quoteDate fixed)
+ */
+export function exchangeTimeZone(exchange?: string | null): string {
+  switch ((exchange ?? '').toUpperCase()) {
+    case 'ASX': return 'Australia/Sydney';
+    case 'HK':  return 'Asia/Hong_Kong';
+    default:    return 'America/New_York';
+  }
+}
+
+/** Fallback trading timezone for a benchmark index (see exchangeTimeZone). */
+export function benchmarkTimeZone(indexSymbol: string): string {
+  return indexSymbol === BENCHMARKS.ASX200 ? 'Australia/Sydney' : 'America/New_York';
+}
+
+/**
+ * hasAdjustmentMismatch:
+ *   - True when any date present in both sets differs by more than `tolerance` (default 15%)
+ *   - Yahoo closes are split-adjusted as of when they are fetched, so after a split or consolidation every older close is re-based (e.g. /4 for a 4-for-1) while cached rows keep the old basis
+ *   - Ordinary corrections are well under 15%; a mismatch above it means the cached history is on a different basis and must be refetched as a whole
+ */
+export function hasAdjustmentMismatch(
+  cached: { date: string; close: number }[],
+  fresh: { date: string; close: number }[],
+  tolerance = 0.15,
+): boolean {
+  const freshByDate = new Map(fresh.map((p) => [p.date, p.close]));
+  return cached.some((c) => {
+    const f = freshByDate.get(c.date);
+    return f !== undefined && c.close > 0 && Math.abs(f / c.close - 1) > tolerance;
+  });
 }
 
 /**
@@ -52,6 +88,36 @@ export function toYahooTicker(symbol: string, exchange?: string | null): string 
   }
 }
 
+type DailyClose = { date: string; close: number };
+
+/** Daily closes for a Yahoo ticker over [fromDate, toDate], dated in the exchange's timezone, one row per date. */
+async function fetchDailyCloses(ticker: string, fromDate: string, toDate: string, fallbackTimeZone: string): Promise<DailyClose[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result: any = await yahooFinance.chart(ticker, {
+    period1: fromDate,
+    period2: toDate,
+    interval: '1d',
+  });
+  const timeZone = result.meta?.exchangeTimezoneName ?? fallbackTimeZone;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return dedupeByDate(((result.quotes ?? []) as any[])
+    .filter((q) => q.close != null)
+    .map((q) => ({
+      date: quoteDate(q.date as string, timeZone),
+      close: q.close as number,
+    })));
+}
+
+/** Upserts closes into price_history in chunks (a full-history refresh can be thousands of rows). */
+async function savePriceHistory(securityId: string, prices: DailyClose[]): Promise<void> {
+  for (let i = 0; i < prices.length; i += 1000) {
+    await supabase.from('price_history').upsert(
+      prices.slice(i, i + 1000).map((p) => ({ security_id: securityId, date: p.date, close_price: p.close })),
+      { onConflict: 'security_id,date' },
+    );
+  }
+}
+
 export async function getHistoricalPrices(
   symbol: string,
   fromDate: string,
@@ -59,6 +125,7 @@ export async function getHistoricalPrices(
   securityId?: string,
   exchange?: string | null,
 ): Promise<{ date: string; close: number }[]> {
+  let cachedRows: DailyClose[] = [];
   if (securityId) {
     const { data: cached } = await supabase
       .from('price_history')
@@ -90,44 +157,43 @@ export async function getHistoricalPrices(
       const reqTo       = new Date(toDate);
       const startDiff   = (firstCached.getTime() - reqFrom.getTime()) / 86_400_000;
       const endDiff     = (reqTo.getTime()    - lastCached.getTime()) / 86_400_000;
+      cachedRows = cached.map((r) => ({ date: r.date as string, close: r.close_price as number }));
       if (startDiff <= 7 && endDiff <= 3) {
-        return cached.map((r) => ({ date: r.date as string, close: r.close_price as number }));
+        return cachedRows;
       }
       // Cache doesn't adequately cover the requested range — fall through to a
       // fresh Yahoo Finance fetch (upsert will update stale rows in-place).
     }
   }
 
-  const fetchChart = async (ticker: string): Promise<{ date: string; close: number }[]> => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result: any = await yahooFinance.chart(ticker, {
-      period1: fromDate,
-      period2: toDate,
-      interval: '1d',
-    });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return dedupeByDate(((result.quotes ?? []) as any[])
-      .filter((q) => q.close != null)
-      .map((q) => ({
-        date: quoteDate(q.date as string, result.meta?.exchangeTimezoneName),
-        close: q.close as number,
-      })));
-  };
-
+  const timeZone = exchangeTimeZone(exchange);
   try {
-    const yahooSym = toYahooTicker(symbol, exchange);
-    let prices = await fetchChart(yahooSym).catch(() => [] as { date: string; close: number }[]);
+    let ticker = toYahooTicker(symbol, exchange);
+    let prices = await fetchDailyCloses(ticker, fromDate, toDate, timeZone).catch(() => [] as DailyClose[]);
 
     // Some ASX-listed securities (Cboe/Chi-X) use .XA instead of .AX on Yahoo Finance
     if (!prices.length && (exchange ?? '').toUpperCase() === 'ASX') {
-      prices = await fetchChart(`${symbol}.XA`).catch(() => []);
+      ticker = `${symbol}.XA`;
+      prices = await fetchDailyCloses(ticker, fromDate, toDate, timeZone).catch(() => []);
     }
 
     if (securityId && prices.length > 0) {
-      await supabase.from('price_history').upsert(
-        prices.map((p) => ({ security_id: securityId, date: p.date, close_price: p.close })),
-        { onConflict: 'security_id,date' }
-      );
+      // Split / consolidation since the cache was filled:
+      //   - Yahoo has re-based its history, so the cached rows outside this window would sit on the old basis next to re-based ones
+      //   - Refetch the security's whole cached span and overwrite it so every row shares one basis
+      if (hasAdjustmentMismatch(cachedRows, prices)) {
+        const { data: first } = await supabase
+          .from('price_history').select('date').eq('security_id', securityId)
+          .order('date', { ascending: true }).limit(1);
+        const fullFrom = (first?.[0]?.date as string | undefined) ?? fromDate;
+        const full = await fetchDailyCloses(ticker, fullFrom < fromDate ? fullFrom : fromDate, toDate, timeZone).catch(() => [] as DailyClose[]);
+        if (full.length >= prices.length) {
+          console.warn(`price_history: ${ticker} re-based by Yahoo (split/consolidation?); refreshed ${full.length} rows from ${fullFrom}`);
+          await savePriceHistory(securityId, full);
+          return full.filter((p) => p.date >= fromDate && p.date <= toDate);
+        }
+      }
+      await savePriceHistory(securityId, prices);
     }
 
     return prices;
@@ -176,7 +242,7 @@ export async function getBenchmarkPrices(
     const prices = dedupeByDate(((result.quotes ?? []) as any[])
       .filter((q) => q.close != null)
       .map((q) => ({
-        date: quoteDate(q.date as string, result.meta?.exchangeTimezoneName),
+        date: quoteDate(q.date as string, result.meta?.exchangeTimezoneName ?? benchmarkTimeZone(indexSymbol)),
         close: q.close as number,
       })));
 

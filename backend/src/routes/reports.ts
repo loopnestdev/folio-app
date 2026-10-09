@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth';
 import { requireApproved } from '../middleware/requireApproved';
 import { supabase } from '../lib/supabase';
-import { buildDailyPriceMap, calculateHoldings, calculateCapitalGains, calculateCapitalGainsByRange, calculateCashPosition } from '../services/calculations/holdings';
+import { buildDailyPriceMap, calculateHoldings, unpricedSymbols, calculateCapitalGains, calculateCapitalGainsByRange, calculateCashPosition } from '../services/calculations/holdings';
 import { computeStatistics, computeMonthlyReturnMap, computeMonthlyReturnMapModifiedDietz, alignReturnMaps } from '../services/calculations/statistics';
 import { getHistoricalPrices, getBenchmarkPrices, getCurrentPrices, BENCHMARKS, enrichSecurityMetadata } from '../services/market-data/yahoo';
 import { format, subYears, startOfYear } from 'date-fns';
@@ -348,8 +348,9 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
       const investedValue = dayHoldings.reduce((s, h) => s + (h.market_value ?? 0), 0);
       const cashBalance   = getCashAt(date);
       // Store cashBalance separately so the TWR loop can detect overdraft states.
-      return { date, totalValue: investedValue + cashBalance, cashBalance };
+      return { date, totalValue: investedValue + cashBalance, cashBalance, unpriced: unpricedSymbols(dayHoldings) };
     });
+    const unpricedByDate = new Map(portfolioValues.map((v) => [v.date, v.unpriced]));
 
     // ── TWR start: find first price-date with BOTH positive net deposits AND
     //    positive total portfolio value.
@@ -512,13 +513,18 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
     const nasdaqMap = benchMap(nasdaq);
     const asx200Map = benchMap(asx200);
 
-    const merged = visibleGain.map(d => ({
-      date:             d.date,
-      portfolio_value:  d.value,
-      benchmark_sp500:  sp500Map[d.date]  ?? null,
-      benchmark_nasdaq: nasdaqMap[d.date] ?? null,
-      benchmark_asx200: asx200Map[d.date] ?? null,
-    }));
+    const merged = visibleGain.map(d => {
+      const unpriced = unpricedByDate.get(d.date) ?? [];
+      return {
+        date:             d.date,
+        portfolio_value:  d.value,
+        benchmark_sp500:  sp500Map[d.date]  ?? null,
+        benchmark_nasdaq: nasdaqMap[d.date] ?? null,
+        benchmark_asx200: asx200Map[d.date] ?? null,
+        // Held symbols valued at $0 that day for lack of any price; omitted when none
+        ...(unpriced.length ? { unpriced } : {}),
+      };
+    });
 
     res.json(merged);
   } catch (err: any) {

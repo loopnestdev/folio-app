@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth';
 import { requireApproved } from '../middleware/requireApproved';
 import { supabase } from '../lib/supabase';
-import { buildDailyPriceMap, calculateHoldings, calculateCapitalGainsByRange, calculateCashPosition } from '../services/calculations/holdings';
+import { buildDailyPriceMap, calculateHoldings, unpricedSymbols, calculateCapitalGainsByRange, calculateCashPosition } from '../services/calculations/holdings';
 import { computeStatistics, computeMonthlyReturnMap, computeMonthlyReturnMapModifiedDietz, alignReturnMaps } from '../services/calculations/statistics';
 import {
   getHistoricalPrices, getBenchmarkPrices, getCurrentPrices, BENCHMARKS,
@@ -359,7 +359,7 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
     // Price history is fetched from each portfolio's EARLIEST TRADE DATE (not fromDate)
     // so the TWR chain can start from the portfolio's real beginning regardless of the
     // display range the user selected. Results are filtered+re-normalised below.
-    type DayEntry = { totalValue: number; extFlow: number; netDep: number };
+    type DayEntry = { totalValue: number; extFlow: number; netDep: number; unpriced: string[] };
     const portfolioDateMaps: Array<Record<string, DayEntry>> = await Promise.all(
       portfolios.map(async (portfolio) => {
         const trades = await getPortfolioTrades(portfolio.id);
@@ -467,6 +467,7 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
             totalValue: (holdingsValue + getCashAt(date)) * fx,
             extFlow:    (extFlowForTWR[date] ?? 0) * fx,
             netDep:     getNetDepAt(date) * fx,
+            unpriced:   unpricedSymbols(dayHoldings),
           };
         }
         return dateMap;
@@ -479,24 +480,28 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
 
     // Carry-forward portfolio value and netDep (they persist between dates);
     // extFlow is only counted on the date it actually occurred (no carry-forward).
-    const lastKnownValue  = portfolioDateMaps.map(() => 0);
-    const lastKnownNetDep = portfolioDateMaps.map(() => 0);
+    const lastKnownValue    = portfolioDateMaps.map(() => 0);
+    const lastKnownNetDep   = portfolioDateMaps.map(() => 0);
+    const lastKnownUnpriced = portfolioDateMaps.map((): string[] => []);
 
-    const combined: { date: string; totalValue: number; extFlow: number; netDep: number }[] = [];
+    const combined: { date: string; totalValue: number; extFlow: number; netDep: number; unpriced: string[] }[] = [];
     for (const date of allDates) {
       let totalValue = 0, totalExtFlow = 0, totalNetDep = 0;
       for (let i = 0; i < portfolioDateMaps.length; i++) {
         const entry = portfolioDateMaps[i][date];
         if (entry !== undefined) {
-          lastKnownValue[i]  = entry.totalValue;
-          lastKnownNetDep[i] = entry.netDep;
+          lastKnownValue[i]    = entry.totalValue;
+          lastKnownNetDep[i]   = entry.netDep;
+          lastKnownUnpriced[i] = entry.unpriced;
           totalExtFlow += entry.extFlow;   // only on its actual date
         }
         totalValue  += lastKnownValue[i];
         totalNetDep += lastKnownNetDep[i];
       }
-      combined.push({ date, totalValue, extFlow: totalExtFlow, netDep: totalNetDep });
+      const unpriced = [...new Set(lastKnownUnpriced.flat())].sort();
+      combined.push({ date, totalValue, extFlow: totalExtFlow, netDep: totalNetDep, unpriced });
     }
+    const unpricedByDate = new Map(combined.map((c) => [c.date, c.unpriced]));
 
     // ── TWR chain ─────────────────────────────────────────────────────────
     // Start from first date where BOTH group netDep > 0 AND totalValue > 0.
@@ -597,13 +602,18 @@ router.get('/:id/performance', async (req: AuthenticatedRequest, res: any) => {
     const nasdaqMap = benchFill(nasdaq);
     const asx200Map = benchFill(asx200);
 
-    const result = visibleGain.map((d) => ({
-      date:             d.date,
-      portfolio_value:  d.value,
-      benchmark_sp500:  sp500Map[d.date]  ?? null,
-      benchmark_nasdaq: nasdaqMap[d.date] ?? null,
-      benchmark_asx200: asx200Map[d.date] ?? null,
-    }));
+    const result = visibleGain.map((d) => {
+      const unpriced = unpricedByDate.get(d.date) ?? [];
+      return {
+        date:             d.date,
+        portfolio_value:  d.value,
+        benchmark_sp500:  sp500Map[d.date]  ?? null,
+        benchmark_nasdaq: nasdaqMap[d.date] ?? null,
+        benchmark_asx200: asx200Map[d.date] ?? null,
+        // Held symbols valued at $0 that day for lack of any price; omitted when none
+        ...(unpriced.length ? { unpriced } : {}),
+      };
+    });
 
     res.json(result);
   } catch (err: any) {

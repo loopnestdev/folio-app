@@ -1,7 +1,7 @@
 jest.mock('../src/lib/supabase', () => ({ supabase: {} }));
 
-import { buildDailyPriceMap, calculateHoldings } from '../src/services/calculations/holdings';
-import { dedupeByDate, quoteDate } from '../src/services/market-data/yahoo';
+import { buildDailyPriceMap, calculateHoldings, unpricedSymbols } from '../src/services/calculations/holdings';
+import { benchmarkTimeZone, dedupeByDate, exchangeTimeZone, hasAdjustmentMismatch, quoteDate } from '../src/services/market-data/yahoo';
 
 describe('buildDailyPriceMap', () => {
   it('forward-fills a symbol with no row on a date instead of leaving it unpriced', () => {
@@ -74,5 +74,42 @@ describe('dedupeByDate', () => {
       { date: '2026-10-09', close: 10.13 },
     ];
     expect(dedupeByDate(rows)).toEqual([{ date: '2026-10-08', close: 10.0 }, { date: '2026-10-09', close: 10.13 }]);
+  });
+});
+
+describe('unpricedSymbols', () => {
+  it('lists held symbols with no price and ignores priced or sold-out ones', () => {
+    const t = (symbol: string, trade_type: string, quantity: number) => ({
+      id: symbol + trade_type, portfolio_id: 'p', trade_date: '2026-01-02', trade_type, quantity, price: 10, brokerage: 0,
+      currency: 'AUD', security: { symbol, name: symbol, exchange: 'ASX', currency: 'AUD' },
+    });
+    const holdings = calculateHoldings(
+      [t('IBTC', 'buy', 5), t('NUGG', 'buy', 5), t('OLD', 'buy', 5), t('OLD', 'sell', 5)] as any,
+      { NUGG: 66 },
+    );
+    expect(unpricedSymbols(holdings)).toEqual(['IBTC']);
+  });
+});
+
+describe('timezone fallbacks', () => {
+  it('maps exchanges and benchmarks to their trading timezone', () => {
+    expect(exchangeTimeZone('ASX')).toBe('Australia/Sydney');
+    expect(exchangeTimeZone('HK')).toBe('Asia/Hong_Kong');
+    expect(exchangeTimeZone('US')).toBe('America/New_York');
+    expect(benchmarkTimeZone('^AXJO')).toBe('Australia/Sydney');
+    expect(benchmarkTimeZone('^GSPC')).toBe('America/New_York');
+  });
+});
+
+describe('hasAdjustmentMismatch', () => {
+  const cached = [{ date: '2026-03-02', close: 400 }, { date: '2026-03-03', close: 404 }];
+
+  it('flags a split re-base (4-for-1) on overlapping dates', () => {
+    expect(hasAdjustmentMismatch(cached, [{ date: '2026-03-03', close: 101 }, { date: '2026-03-04', close: 102 }])).toBe(true);
+  });
+
+  it('ignores small corrections and non-overlapping dates', () => {
+    expect(hasAdjustmentMismatch(cached, [{ date: '2026-03-03', close: 410 }, { date: '2026-03-09', close: 90 }])).toBe(false);
+    expect(hasAdjustmentMismatch([], [{ date: '2026-03-03', close: 1 }])).toBe(false);
   });
 });
