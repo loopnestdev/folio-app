@@ -14,6 +14,7 @@ A portfolio tracking web application for self-directed investors. Track trades, 
 - **CGT report** - Australian rules (50% discount for assets held > 12 months), FIFO matching
 - **Tax report** - dividends, interest, and brokerage fees by financial year (Jul-Jun or Jan-Dec)
 - **Diversity report** - sector, asset type, country, and market breakdown
+- **Target portfolios and groups** - define ideal stock allocations, group several target portfolios with a weight each and a saved investable amount, then see what to buy, sell or keep against a real portfolio or portfolio group (with an SMSF CGT estimate)
 - **Chart library toggle** - switch between Recharts and Apache ECharts live from settings
 - **Role-based access** - admin approves new users; first registered user is automatically admin
 - **Google OAuth** - via Supabase Auth (shared coredb project with other loopnestdev apps)
@@ -84,6 +85,8 @@ Supabase Dashboard --> Project Settings --> API --> Exposed schemas --> add `fol
 -- Creates all folio.* tables, folio.is_admin() function, RLS policies
 -- Safe to re-run (all triggers and policies use DROP IF EXISTS first)
 ```
+
+**Step 3b - Run the incremental migrations** (Supabase SQL Editor), in order: `supabase-central/migrations/003_*.sql` through `014_target_portfolio_groups.sql`. Each is idempotent. When a new migration is added, run it **before** pushing the code that uses it: pushing to `main` deploys automatically.
 
 **Step 4 - Add OAuth redirect URL:**
 Supabase Dashboard --> Authentication --> URL Configuration --> Redirect URLs --> add:

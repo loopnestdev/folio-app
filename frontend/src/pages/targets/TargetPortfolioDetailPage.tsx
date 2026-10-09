@@ -28,7 +28,8 @@ interface DraftItem {
 let _nextKey = 0;
 const newKey = () => String(++_nextKey);
 
-// Per-portfolio localStorage key prefix for the "investable capital" what-if figure
+// Legacy per-portfolio localStorage key for the investable amount, from before it was saved on the
+// target portfolio; only read to seed a portfolio that has no saved amount yet.
 const STORAGE_KEY_INVESTABLE = 'folio_target_investable_';
 const DEFAULT_INVESTABLE = '100000';
 
@@ -83,6 +84,7 @@ export function TargetPortfolioDetailPage() {
   const [dirty, setDirty]   = useState(false);
   const [sort, setSort]     = useState<{ key: SortKey; dir: SortDir } | null>(null);
   const [investable, setInvestable] = useState(DEFAULT_INVESTABLE);
+  const [currency, setCurrency]     = useState('USD');
 
   // Initialise form from loaded data
   useEffect(() => {
@@ -98,16 +100,15 @@ export function TargetPortfolioDetailPage() {
         allocation_pct: String(i.allocation_pct),
       })),
     );
+    setInvestable(
+      tp.investable_amount != null
+        ? String(tp.investable_amount)
+        : (localStorage.getItem(`${STORAGE_KEY_INVESTABLE}${tp.id}`) ?? DEFAULT_INVESTABLE),
+    );
+    setCurrency(tp.investable_currency || 'USD');
     setDirty(false);
     setSort(null);
   }, [tp]);
-
-  // Investable capital is a local "what-if" figure (not part of the saved
-  // portfolio) — persisted per-portfolio in localStorage so it survives reloads.
-  useEffect(() => {
-    if (!id) return;
-    setInvestable(localStorage.getItem(`${STORAGE_KEY_INVESTABLE}${id}`) ?? DEFAULT_INVESTABLE);
-  }, [id]);
 
   const totalAlloc = items.reduce((s, i) => s + (parseFloat(i.allocation_pct) || 0), 0);
   const allocOk    = Math.abs(totalAlloc - 100) < 0.01;
@@ -115,7 +116,7 @@ export function TargetPortfolioDetailPage() {
 
   const handleInvestableChange = (v: string) => {
     setInvestable(v);
-    if (id) localStorage.setItem(`${STORAGE_KEY_INVESTABLE}${id}`, v);
+    setDirty(true);
   };
 
   const addRow = () => {
@@ -161,9 +162,19 @@ export function TargetPortfolioDetailPage() {
     const validItems = items.filter((i) => i.symbol.trim() && parseFloat(i.allocation_pct) > 0);
 
     try {
-      // Save name/description if changed
-      if (tp && (name !== tp.name || desc !== (tp.description ?? ''))) {
-        await updateMutation.mutateAsync({ name: name.trim(), description: desc.trim() || null });
+      // Save name / description / investable amount if changed
+      const investableValue = investable.trim() === '' ? null : investableNum;
+      if (tp && (
+        name !== tp.name || desc !== (tp.description ?? '') ||
+        investableValue !== (tp.investable_amount != null ? Number(tp.investable_amount) : null) ||
+        currency !== tp.investable_currency
+      )) {
+        await updateMutation.mutateAsync({
+          name: name.trim(),
+          description: desc.trim() || null,
+          investable_amount: investableValue,
+          investable_currency: currency,
+        });
       }
 
       // Save items
@@ -217,6 +228,14 @@ export function TargetPortfolioDetailPage() {
           <label htmlFor="investable" className="text-[12px] text-[var(--c-ink-mute)] whitespace-nowrap">
             Investable
           </label>
+          <select
+            aria-label="Investable currency"
+            value={currency}
+            onChange={(e) => { setCurrency(e.target.value); setDirty(true); }}
+            className="h-9 px-2 rounded-lg border border-[var(--c-border)] bg-[var(--c-canvas)] text-[16px] sm:text-[14px] text-[var(--c-ink)] focus:outline-none focus:border-[var(--c-primary)]"
+          >
+            {['USD', 'AUD', 'HKD'].map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
           <div className="relative">
             <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[13px] text-[var(--c-ink-mute)]">$</span>
             <input
@@ -275,9 +294,9 @@ export function TargetPortfolioDetailPage() {
           <div className="flex items-center gap-3">
             {/* Allocated dollars vs investable capital */}
             <span className="hidden sm:inline text-[12px] text-[var(--c-ink-mute)] tnum">
-              {formatCurrency(allocationValue(totalAlloc, investableNum), 'USD', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+              {formatCurrency(allocationValue(totalAlloc, investableNum), currency, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
               {' of '}
-              {formatCurrency(investableNum, 'USD', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+              {formatCurrency(investableNum, currency, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
             </span>
             {/* Allocation total badge */}
             <span
@@ -392,7 +411,7 @@ export function TargetPortfolioDetailPage() {
               </label>
               <span className="h-9 flex items-center sm:justify-end sm:px-3 text-[14px] text-[var(--c-ink-sec)] tnum">
                 <span className="sm:hidden mr-1.5 text-[12px] text-[var(--c-ink-mute)]">Alloc $</span>
-                {formatCurrency(allocationValue(item.allocation_pct, investableNum), 'USD', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                {formatCurrency(allocationValue(item.allocation_pct, investableNum), currency, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
               </span>
               <button
                 onClick={() => removeItem(item.key)}

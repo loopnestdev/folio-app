@@ -7,6 +7,7 @@ import adminRouter from './admin';
 import forexRouter from './forex';
 import groupsRouter from './groups';
 import targetPortfoliosRouter from './targetPortfolios';
+import targetPortfolioGroupsRouter from './targetPortfolioGroups';
 
 export function setupRoutes(app: Application): void {
   app.use('/api/auth', authRouter);
@@ -17,4 +18,5 @@ export function setupRoutes(app: Application): void {
   app.use('/api/forex', forexRouter);
   app.use('/api/groups', groupsRouter);
   app.use('/api/target-portfolios', targetPortfoliosRouter);
+  app.use('/api/target-portfolio-groups', targetPortfolioGroupsRouter);
 }

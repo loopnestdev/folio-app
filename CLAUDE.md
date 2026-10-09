@@ -52,7 +52,7 @@ folio-app/
 |   |   |   +-- SettingsPage.tsx
 |   |   |   +-- AdminPage.tsx
 |   |   |   +-- reports/               # Performance, Statistics, CGT, Tax, etc.
-|   |   |   +-- targets/               # Target portfolio list, detail, rebalance
+|   |   |   +-- targets/               # Target portfolios + target groups: list, edit, rebalance
 |   |   +-- components/
 |   |   |   +-- charts/                # Recharts + ECharts dual implementations
 |   |   |   +-- forms/                 # Trade form, portfolio form
@@ -64,7 +64,8 @@ folio-app/
 |   |   |   +-- usePerformance.ts
 |   |   |   +-- useReports.ts
 |   |   |   +-- useStatistics.ts
-|   |   |   +-- useTargetPortfolios.ts # Target portfolio CRUD + rebalance hook
+|   |   |   +-- useTargetPortfolios.ts # Target portfolio CRUD + rebalance hook (portfolio or group)
+|   |   |   +-- useTargetPortfolioGroups.ts # Target group CRUD, members, activate
 |   |   +-- lib/
 |   |   |   +-- api.ts                 # Axios instance with JWT interceptor
 |   |   |   +-- supabase.ts            # Supabase client (folio schema)
@@ -88,6 +89,7 @@ folio-app/
 |   |   |   +-- trades.ts              # CRUD + PDF import
 |   |   |   +-- reports.ts             # CGT, tax, diversity, statistics, etc.
 |   |   |   +-- targetPortfolios.ts    # Target portfolio CRUD + rebalance analysis
+|   |   |   +-- targetPortfolioGroups.ts # Target groups (weighted target portfolios) CRUD + rebalance
 |   |   |   +-- admin.ts               # User management (admin only)
 |   |   +-- services/
 |   |   |   +-- calculations/
@@ -96,7 +98,9 @@ folio-app/
 |   |   |   +-- market-data/
 |   |   |   |   +-- yahoo.ts           # yahoo-finance2 price history + benchmarks
 |   |   |   +-- pdf-parser/
-|   |   |       +-- moomoo.ts          # Moomoo AU statement parser
+|   |   |   |   +-- moomoo.ts          # Moomoo AU statement parser
+|   |   |   +-- rebalance/
+|   |   |       +-- rebalance.ts       # Shared rebalance engine (target merge, comparison loading, CGT estimate)
 |   |   +-- types/                     # Shared backend types + AuthenticatedRequest
 |   +-- railway.json                   # Build/start/healthcheck config for Railway
 |   +-- .nvmrc                         # Node.js 22 (Nixpacks version pin)
@@ -106,6 +110,7 @@ folio-app/
 |   +-- migrations/
 |       +-- 001_schemas.sql            # Creates folio/signal/moat schemas (idempotent)
 |       +-- 002_folio.sql              # All folio.* tables, RLS, is_admin() (idempotent)
+|       +-- 003..014_*.sql             # Incremental folio changes, run in order (014 = target portfolio groups)
 |
 +-- supabase/                          # LEGACY - standalone project migrations (do NOT use)
 |   +-- migrations/001_initial.sql     # Old public-schema migration, not for coredb
@@ -253,7 +258,7 @@ Always run after making changes. All must pass with zero errors:
 cd backend  && npx tsc --noEmit   # typecheck
 cd backend  && npm run build      # tsc --> dist/
 
-cd frontend && npx tsc --noEmit   # typecheck
+cd frontend && npx tsc -p tsconfig.app.json --noEmit   # typecheck (plain `tsc --noEmit` checks nothing: the root tsconfig only has references)
 cd frontend && npm run build      # tsc + vite --> dist/
 ```
 
@@ -266,8 +271,8 @@ Note: `backend/package.json` has a `typecheck` script (`tsc --noEmit`). Run `npm
 Run after every change:
 
 ```bash
-cd backend  && npm test   # 73 tests - Jest + ts-jest
-cd frontend && npm test   # 79 tests - Vitest
+cd backend  && npm test   # 81 tests - Jest + ts-jest
+cd frontend && npm test   # 81 tests - Vitest
 ```
 
 All tests must pass before committing. Generate new tests when new logic is introduced.
@@ -358,6 +363,13 @@ All data requests go through the Express backend (not direct Supabase queries fr
 ### FIFO cost basis
 
 All holdings and CGT calculations use FIFO (first-in, first-out) matching. The 50% CGT discount applies to assets held for more than 12 months before disposal.
+
+### Target portfolios and groups
+
+- A target portfolio lists stocks with an allocation %. A target group (`folio.target_portfolio_groups`) weights one or more target portfolios (`target_portfolio_group_members.weight_pct`); a target portfolio can be in several groups.
+- Each stock's share of a group = member weight % x stock %, merged across members by symbol (`combineTargets` in `backend/src/services/rebalance/rebalance.ts`; `frontend/src/lib/targetPlan.ts` mirrors it for the edit-page preview).
+- Rebalance compares against a real portfolio (`portfolioId`) or a real portfolio group (`groupId`, converted to its base currency at today's rate), sized from current value (`base=current`) or the saved investable amount (`base=investable`).
+- Exactly one plan is active overall: activating a target portfolio or a target group clears every other.
 
 ### PDF import
 

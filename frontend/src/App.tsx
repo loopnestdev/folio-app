@@ -39,6 +39,7 @@ import { GroupMonthlyProfitPage } from './pages/groups/GroupMonthlyProfitPage';
 import { TargetPortfoliosPage } from './pages/targets/TargetPortfoliosPage';
 import { TargetPortfolioDetailPage } from './pages/targets/TargetPortfolioDetailPage';
 import { RebalancePage } from './pages/targets/RebalancePage';
+import { TargetGroupDetailPage } from './pages/targets/TargetGroupDetailPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -80,6 +81,8 @@ function ProtectedRoutes() {
                 <Route path="target-portfolios" element={<TargetPortfoliosPage />} />
                 <Route path="target-portfolios/:id" element={<TargetPortfolioDetailPage />} />
                 <Route path="target-portfolios/:id/rebalance" element={<RebalancePage />} />
+                <Route path="target-portfolios/groups/:groupId" element={<TargetGroupDetailPage />} />
+                <Route path="target-portfolios/groups/:groupId/rebalance" element={<RebalancePage kind="group" />} />
                 <Route path="settings" element={<SettingsPage />} />
                 <Route
                   path="admin"

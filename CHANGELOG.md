@@ -31,6 +31,19 @@ All notable changes to Folio App are documented here.
 
 ### Added
 
+- **Target portfolio groups** - The Target Portfolios menu can now group several target portfolios into one plan, with a weight per portfolio and a saved investable amount:
+  - List page: a "Groups" section above the portfolios (members with weights, investable amount, Active badge, Set Active / Rebalance / Edit / Delete) and a "New Group" button.
+  - Group edit page (`/target-portfolios/groups/:groupId`): name, description, investable amount and currency, member portfolios with weight % (warns when weights do not total 100%), and a "Planned allocation per stock" list. Each stock's planned amount = investable x portfolio weight x stock %, merged when a stock is in several portfolios, with the contributing portfolios shown.
+  - A target portfolio can belong to several groups, each with its own weight.
+  - Rebalance (`/target-portfolios/groups/:groupId/rebalance`, and the existing single-portfolio page): compares against a real portfolio, or now a real portfolio group (e.g. Super Investment, AUD + USD converted to the group's base currency at today's rate). Targets can be sized from current value (self-funding, as before) or from the saved investable amount. Group rows show which target portfolios each stock's allocation comes from, and amounts use the comparison's currency instead of always `$`.
+  - Active: exactly one plan is active overall. Activating a group clears any active target portfolio, and the reverse.
+  - The investable amount on a single target portfolio is now saved with the portfolio (with a currency) instead of only in the browser. A value previously typed on this browser is used to pre-fill it until saved.
+  - Both rebalance routes share one engine (`backend/src/services/rebalance/rebalance.ts`). A single target portfolio is a one-member plan at 100%, so its results are unchanged.
+  - Checked on real data, read-only: a 40/30/30 group of the three existing target portfolios against Super Investment merges NVDA to 5.1% (30% x 9% + 30% x 8%) and values the group at A$346,264.
+  - **Migration `014_target_portfolio_groups.sql` must be run before deploying this change.** It adds two tables and two columns on `target_portfolios`; until then, saving a target portfolio fails because the new investable columns are missing.
+  
+  (`supabase-central/migrations/014_target_portfolio_groups.sql`, `backend/src/routes/targetPortfolioGroups.ts`, `backend/src/routes/targetPortfolios.ts`, `backend/src/services/rebalance/rebalance.ts`, `frontend/src/pages/targets/*`, `frontend/src/hooks/useTargetPortfolioGroups.ts`, `frontend/src/lib/targetPlan.ts`)
+
 - **Performance chart - warning for holdings with no price data** - A held symbol with no price at all up to a date (failed or empty Yahoo fetch, delisted ticker) is still valued at $0, which forward-filling cannot fix. Both performance endpoints now attach an optional `unpriced: string[]` to each point (`unpricedSymbols`, `backend/src/services/calculations/holdings.ts`; individual in `reports.ts`, group in `groups.ts` with each portfolio's last known list carried across dates it has no entry for), and `PerformanceChart` shows a notice above the chart listing each symbol, the number of days and the date span (`frontend/src/components/charts/PerformanceChart.tsx`, `frontend/src/lib/unpriced.ts`). The field is additive, so the response shape is unchanged for older frontends. Appears on the Performance page and both dashboards.
 
 ### Security

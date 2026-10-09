@@ -436,9 +436,47 @@ export interface TargetPortfolio {
   name: string;
   description: string | null;
   is_active: boolean;
+  /** Capital the plan is sized for (null = not saved yet) */
+  investable_amount: number | null;
+  investable_currency: string;
   created_at: string;
   updated_at: string;
   items: TargetPortfolioItem[];
+}
+
+export interface TargetPortfolioGroupMember {
+  id: string;
+  group_id: string;
+  target_portfolio_id: string;
+  /** Share of the group, % */
+  weight_pct: number;
+  sort_order: number;
+}
+
+/** Several target portfolios, each weighted as a % of the group. */
+export interface TargetPortfolioGroup {
+  id: string;
+  user_id: string;
+  name: string;
+  description: string | null;
+  investable_amount: number | null;
+  investable_currency: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  members: TargetPortfolioGroupMember[];
+}
+
+export type RebalanceBase = 'current' | 'investable';
+
+/** What a rebalance compares against: one real portfolio, or a real portfolio group in its base currency. */
+export type RebalanceComparisonRef = { portfolioId: string } | { groupId: string };
+
+export interface TargetSource {
+  target_portfolio_id: string;
+  name: string;
+  weight_pct: number;
+  item_pct: number;
 }
 
 export type RebalanceAction = 'BUY' | 'SELL' | 'HOLD' | 'EXIT';
@@ -457,6 +495,8 @@ export interface RebalanceRow {
   short_term_gain: number;
   long_term_gain: number;
   tax_tier: TaxTier;
+  /** Target portfolios this stock's allocation comes from (empty for EXIT rows) */
+  sources?: TargetSource[];
 }
 
 export interface RebalanceTaxSummary {
@@ -473,8 +513,18 @@ export interface RebalanceTaxSummary {
 }
 
 export interface RebalanceResult {
+  target: { kind: 'portfolio' | 'group'; id: string; name: string; is_active: boolean };
   target_portfolio: { id: string; name: string; is_active: boolean };
+  comparison: { kind: 'portfolio' | 'group'; id: string; name: string; currency: string };
   portfolio: { id: string; name: string; currency: string };
+  base: RebalanceBase;
+  /** Value every target % is applied to, in the comparison currency */
+  base_value: number;
+  investable_amount: number | null;
+  investable_currency: string;
+  investable_fx_rate: number;
+  /** Sum of all stock targets; the rest of base_value is left unallocated */
+  planned_pct: number;
   total_value: number;
   cash_balance: number;
   invested_value: number;

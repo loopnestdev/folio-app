@@ -1,8 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
-import type { TargetPortfolio, TargetPortfolioItem, RebalanceResult } from '../types';
+import type { TargetPortfolio, TargetPortfolioItem, RebalanceResult, RebalanceBase, RebalanceComparisonRef } from '../types';
 
 const QUERY_KEY = 'target-portfolios';
+// Shared with useTargetPortfolioGroups: activating either kind deactivates the other
+export const GROUPS_QUERY_KEY = 'target-portfolio-groups';
 
 // ── List all ─────────────────────────────────────────────────
 export function useTargetPortfolios() {
@@ -45,7 +47,7 @@ export function useCreateTargetPortfolio() {
 export function useUpdateTargetPortfolio(id: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (values: { name?: string; description?: string | null }) => {
+    mutationFn: async (values: { name?: string; description?: string | null; investable_amount?: number | null; investable_currency?: string }) => {
       const { data } = await api.patch<TargetPortfolio>(`/api/target-portfolios/${id}`, values);
       return data;
     },
@@ -107,24 +109,29 @@ export function useActivateTargetPortfolio() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [QUERY_KEY] });
+      qc.invalidateQueries({ queryKey: [GROUPS_QUERY_KEY] });
     },
   });
 }
 
 // ── Rebalance analysis ────────────────────────────────────────
+// `kind` picks the endpoint: a single target portfolio, or a target group.
 export function useRebalance(
-  targetPortfolioId: string | undefined,
-  portfolioId: string | undefined,
+  kind: 'portfolio' | 'group',
+  targetId: string | undefined,
+  comparison: RebalanceComparisonRef | undefined,
+  base: RebalanceBase,
 ) {
+  const path = kind === 'group' ? 'target-portfolio-groups' : 'target-portfolios';
   return useQuery({
-    queryKey: [QUERY_KEY, targetPortfolioId, 'rebalance', portfolioId],
+    queryKey: [kind === 'group' ? GROUPS_QUERY_KEY : QUERY_KEY, targetId, 'rebalance', comparison, base],
     queryFn: async () => {
-      const { data } = await api.get<RebalanceResult>(
-        `/api/target-portfolios/${targetPortfolioId}/rebalance`,
-        { params: { portfolioId } },
-      );
+      const { data } = await api.get<RebalanceResult>(`/api/${path}/${targetId}/rebalance`, {
+        params: { ...comparison, base },
+      });
       return data;
     },
-    enabled: !!targetPortfolioId && !!portfolioId,
+    enabled: !!targetId && !!comparison,
+    retry: false,
   });
 }
