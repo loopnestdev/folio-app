@@ -10,6 +10,7 @@ import { ReportViewSwitcher } from '../../components/ui/ReportViewSwitcher';
 import { StatCard } from '../../components/ui/StatCard';
 import type { DateRange, BenchmarkToggle } from '../../types';
 import { formatPercent, cn } from '../../lib/utils';
+import { maxDrawdownPct } from '../../lib/drawdown';
 
 export function PerformancePage() {
   const { id } = useParams<{ id: string }>();
@@ -59,13 +60,8 @@ export function PerformancePage() {
   const peakValue      = Math.max(...validPortfolio.map((d) => d.portfolio_value as number), 0);
   const peakReturnPct  = peakValue;
 
-  const troughValue = Math.min(
-    ...validPortfolio.map((d) => d.portfolio_value as number).filter((v) => v > -100),
-    peakValue
-  );
-  const maxDrawdown = peakValue > -100
-    ? ((troughValue - peakValue) / (100 + peakValue)) * 100
-    : 0;
+  // Largest fall from a peak to a LATER low (see maxDrawdownPct)
+  const maxDrawdown = maxDrawdownPct(validPortfolio.map((d) => d.portfolio_value));
 
   // Benchmark returns for the period (0-based % gain)
   const lastSP500Pct  = performanceData.findLast((d) => d.benchmark_sp500  != null)?.benchmark_sp500  ?? 0;

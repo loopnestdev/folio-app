@@ -7,6 +7,8 @@ All notable changes to Folio App are documented here.
 
 ### Fixed
 
+- **Performance page - Max Drawdown paired the overall high with the overall low** - The stat card computed `(lowest value - highest value) / (1 + highest)` across the whole range, even when the low came before the high, so a portfolio that dipped -4% early and later peaked at +598% showed a -86% drawdown it never had. It now uses `maxDrawdownPct` (`frontend/src/lib/drawdown.ts`): the largest fall from the running peak to any later point, measured on growth factors. The Drawdown and Statistics pages were unaffected (their figures come from the backend). (`frontend/src/pages/reports/PerformancePage.tsx`)
+
 - **Target Portfolios - unusable on phones** - The list page's cards kept all four action buttons on one fixed-width row beside the details, so on a phone each card ran off the right edge, "New Portfolio" wrapped onto two lines, and the stats and category tags broke mid-phrase. The pages also added their own `p-6` padding inside the layout's, and `p-4`/`p-5` overrides on `Card` never applied because its `cn` helper does not resolve class conflicts (its built-in `p-6` always won). Now, on phones:
   - List page: the actions sit under the details in one row (text buttons share the width, edit and delete are fixed 38px squares), and the stats and tags wrap.
   - Edit page: the header toolbar wraps under the title, and each holding is a labelled card with sort buttons in place of the 6-column grid. From the `sm` breakpoint the cards use `display: contents`, so the desktop grid is unchanged. Inputs use 16px text on phones so iOS Safari does not zoom in on focus.

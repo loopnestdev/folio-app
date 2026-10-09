@@ -267,7 +267,7 @@ Run after every change:
 
 ```bash
 cd backend  && npm test   # 69 tests - Jest + ts-jest
-cd frontend && npm test   # 74 tests - Vitest
+cd frontend && npm test   # 79 tests - Vitest
 ```
 
 All tests must pass before committing. Generate new tests when new logic is introduced.
