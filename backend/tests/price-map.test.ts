@@ -1,7 +1,7 @@
 jest.mock('../src/lib/supabase', () => ({ supabase: {} }));
 
 import { buildDailyPriceMap, calculateHoldings } from '../src/services/calculations/holdings';
-import { quoteDate } from '../src/services/market-data/yahoo';
+import { dedupeByDate, quoteDate } from '../src/services/market-data/yahoo';
 
 describe('buildDailyPriceMap', () => {
   it('forward-fills a symbol with no row on a date instead of leaving it unpriced', () => {
@@ -63,5 +63,16 @@ describe('quoteDate', () => {
 
   it('falls back to UTC without a timezone', () => {
     expect(quoteDate(asxFridayBar, undefined)).toBe('2026-01-08');
+  });
+});
+
+describe('dedupeByDate', () => {
+  it('keeps the last row per date (the live quote Yahoo appends after the daily bar) without reordering', () => {
+    const rows = [
+      { date: '2026-10-08', close: 10.0 },
+      { date: '2026-10-09', close: 10.1 },
+      { date: '2026-10-09', close: 10.13 },
+    ];
+    expect(dedupeByDate(rows)).toEqual([{ date: '2026-10-08', close: 10.0 }, { date: '2026-10-09', close: 10.13 }]);
   });
 });

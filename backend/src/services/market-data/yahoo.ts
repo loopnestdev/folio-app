@@ -27,6 +27,18 @@ export function quoteDate(timestamp: string | number | Date, timeZone?: string |
 }
 
 /**
+ * dedupeByDate:
+ *   - Keeps the last row for each date, preserving order
+ *   - During a trading session Yahoo appends a live quote after the day's daily bar, and both now format to the same date
+ *   - Without this, the price_history / benchmark_data upsert fails ("cannot affect row a second time") and the fetch returns nothing
+ */
+export function dedupeByDate<T extends { date: string }>(rows: T[]): T[] {
+  const byDate = new Map<string, T>();
+  for (const row of rows) byDate.set(row.date, row); // overwriting keeps the first occurrence's position
+  return [...byDate.values()];
+}
+
+/**
  * Convert a bare ticker + exchange to the Yahoo Finance symbol format.
  *   ASX   → TICKER.AX   (e.g. FANG.AX, VAS.AX)
  *   HK    → TICKER.HK   (e.g. 0700.HK)
@@ -94,12 +106,12 @@ export async function getHistoricalPrices(
       interval: '1d',
     });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return ((result.quotes ?? []) as any[])
+    return dedupeByDate(((result.quotes ?? []) as any[])
       .filter((q) => q.close != null)
       .map((q) => ({
         date: quoteDate(q.date as string, result.meta?.exchangeTimezoneName),
         close: q.close as number,
-      }));
+      })));
   };
 
   try {
@@ -161,12 +173,12 @@ export async function getBenchmarkPrices(
     });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const prices = ((result.quotes ?? []) as any[])
+    const prices = dedupeByDate(((result.quotes ?? []) as any[])
       .filter((q) => q.close != null)
       .map((q) => ({
         date: quoteDate(q.date as string, result.meta?.exchangeTimezoneName),
         close: q.close as number,
-      }));
+      })));
 
     if (prices.length > 0) {
       await supabase.from('benchmark_data').upsert(
@@ -213,12 +225,12 @@ export async function getForexRate(
       interval: '1d',
     });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return ((result.quotes ?? []) as any[])
+    return dedupeByDate(((result.quotes ?? []) as any[])
       .filter((q) => q.close != null && q.close > 0)
       .map((q) => ({
         date:  quoteDate(q.date as string, result.meta?.exchangeTimezoneName),
         close: invert ? 1 / (q.close as number) : (q.close as number),
-      }));
+      })));
   };
 
   let prices: { date: string; close: number }[] = [];

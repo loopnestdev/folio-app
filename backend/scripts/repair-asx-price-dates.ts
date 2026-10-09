@@ -11,13 +11,13 @@
 //
 // What it does, for every ASX security in price_history and the ^AXJO benchmark in benchmark_data:
 //   - Refetches Yahoo daily closes over the span already cached, dated in the exchange's timezone
-//   - Deletes cached rows whose date is not a real trading day in the fresh data (the shifted Sunday / extra rows)
+//   - Deletes cached rows whose date is not a real trading day in the fresh data (the shifted Sunday / extra rows), but only inside the date span Yahoo returned
 //   - Upserts the fresh rows, which corrects the value stored under every remaining date
-//   - Skips a target Yahoo returns nothing for, leaving its rows untouched
+//   - Skips a target, leaving its rows untouched, when Yahoo returns fewer than half as many rows as are cached (e.g. a delisted ticker where only today's quote comes back)
 //   - Without --apply it only prints what would change
 // =============================================================================
 import { supabase } from '../src/lib/supabase';
-import { quoteDate, toYahooTicker } from '../src/services/market-data/yahoo';
+import { dedupeByDate, quoteDate, toYahooTicker } from '../src/services/market-data/yahoo';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const YahooFinanceClass = require('yahoo-finance2').default as new (opts?: object) => {
@@ -26,6 +26,7 @@ const YahooFinanceClass = require('yahoo-finance2').default as new (opts?: objec
 const yahooFinance = new YahooFinanceClass({ suppressNotices: ['yahooSurvey'] });
 
 const APPLY = process.argv.includes('--apply');
+const MIN_COVERAGE = 0.5;
 
 type Price = { date: string; close: number };
 type Target = { label: string; table: 'price_history' | 'benchmark_data'; keyCol: string; keyVal: string; tickers: string[] };
@@ -50,9 +51,9 @@ async function cachedRows(t: Target): Promise<{ date: string; close_price: numbe
 
 async function freshPrices(ticker: string, fromDate: string, toDate: string): Promise<Price[]> {
   const result = await yahooFinance.chart(ticker, { period1: fromDate, period2: nextDay(toDate), interval: '1d' });
-  return ((result.quotes ?? []) as any[])
+  return dedupeByDate(((result.quotes ?? []) as any[])
     .filter((q) => q.close != null)
-    .map((q) => ({ date: quoteDate(q.date, result.meta?.exchangeTimezoneName), close: q.close as number }));
+    .map((q) => ({ date: quoteDate(q.date, result.meta?.exchangeTimezoneName), close: q.close as number })));
 }
 
 async function main() {
@@ -83,8 +84,17 @@ async function main() {
       continue;
     }
 
+    if (fresh.length < rows.length * MIN_COVERAGE) {
+      totalSkipped++;
+      console.log(`${t.label}: Yahoo returned ${fresh.length} rows for ${rows.length} cached, skipped (rows left as-is)`);
+      continue;
+    }
+
     const freshByDate = new Map(fresh.map((p) => [p.date, p.close]));
-    const stale = rows.filter((r) => !freshByDate.has(r.date)).map((r) => r.date);
+    const freshFirst = fresh[0].date, freshLast = fresh[fresh.length - 1].date;
+    const stale = rows
+      .filter((r) => r.date >= freshFirst && r.date <= freshLast && !freshByDate.has(r.date))
+      .map((r) => r.date);
     const revalued = rows.filter((r) => {
       const f = freshByDate.get(r.date);
       return f !== undefined && Math.abs(f - r.close_price) > 1e-6 * Math.max(1, Math.abs(r.close_price));
