@@ -64,16 +64,16 @@ export function TargetPortfoliosPage() {
   if (isLoading) return <PageLoader />;
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--c-ink)]">Target Portfolios</h1>
-          <p className="text-[14px] text-[var(--c-ink-mute)] mt-1">
+    <div className="max-w-4xl mx-auto space-y-6">
+      {/* Header — stacks on phones so the button keeps its one-line label */}
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-[28px] font-semibold tracking-tight text-[var(--c-ink)]">Target Portfolios</h1>
+          <p className="text-[15px] text-[var(--c-ink-mute)] mt-1">
             Define ideal stock allocations and compare against your current holdings.
           </p>
         </div>
-        <Button onClick={() => setShowCreate(true)}>
+        <Button onClick={() => setShowCreate(true)} className="self-start shrink-0 whitespace-nowrap">
           <Plus size={16} className="mr-1.5" /> New Portfolio
         </Button>
       </div>
@@ -99,12 +99,13 @@ export function TargetPortfoliosPage() {
           const allocOk    = Math.abs(totalAlloc - 100) < 0.01;
 
           return (
-            <Card key={tp.id} className="p-5">
-              <div className="flex items-start justify-between gap-4">
+            <Card key={tp.id} padding="sm" className="sm:p-5">
+              {/* Actions sit under the info on phones, beside it from sm up */}
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                 {/* Left: info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold text-[17px] text-[var(--c-ink)] truncate">
+                    <span className="font-semibold text-[17px] text-[var(--c-ink)] break-words min-w-0">
                       {tp.name}
                     </span>
                     {tp.is_active && (
@@ -113,7 +114,7 @@ export function TargetPortfoliosPage() {
                       </span>
                     )}
                     {!allocOk && tp.items.length > 0 && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-700">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap bg-[var(--c-warn-bg)] text-[var(--c-warn)]">
                         {totalAlloc.toFixed(1)}% — needs 100%
                       </span>
                     )}
@@ -123,28 +124,33 @@ export function TargetPortfoliosPage() {
                       {tp.description}
                     </p>
                   )}
-                  <div className="flex gap-4 mt-2 text-[13px] text-[var(--c-ink-mute)]">
-                    <span>{tp.items.length} stocks</span>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-2 text-[13px] text-[var(--c-ink-mute)]">
+                    <span className="whitespace-nowrap tnum">{tp.items.length} stocks</span>
                     {tp.items.length > 0 && (
-                      <span>{totalAlloc.toFixed(1)}% allocated</span>
+                      <span className="whitespace-nowrap tnum">{totalAlloc.toFixed(1)}% allocated</span>
                     )}
-                    {/* Category pills */}
-                    {Array.from(new Set(tp.items.map((i) => i.category).filter(Boolean))).slice(0, 4).map((cat) => (
-                      <span key={cat} className="px-2 py-0.5 rounded bg-[var(--c-canvas-soft)] text-[var(--c-ink-mute)] text-[11px]">
-                        {cat}
-                      </span>
-                    ))}
                   </div>
+                  {/* Category pills — wrap instead of running off the card */}
+                  {tp.items.some((i) => i.category) && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {Array.from(new Set(tp.items.map((i) => i.category).filter(Boolean))).slice(0, 4).map((cat) => (
+                        <span key={cat} className="px-2 py-0.5 rounded bg-[var(--c-canvas-soft)] text-[var(--c-ink-mute)] text-[11px] whitespace-nowrap">
+                          {cat}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
-                {/* Right: actions */}
-                <div className="flex items-center gap-2 shrink-0">
+                {/* Right: actions — text buttons share the row on phones, icon buttons stay square */}
+                <div className="flex items-stretch gap-2 sm:shrink-0">
                   {!tp.is_active && (
                     <Button
                       variant="secondary"
                       size="sm"
                       onClick={() => handleActivate(tp.id)}
                       disabled={activateMutation.isPending}
+                      className="flex-1 min-w-0 px-3! sm:flex-none sm:px-4! whitespace-nowrap"
                     >
                       Set Active
                     </Button>
@@ -154,14 +160,17 @@ export function TargetPortfoliosPage() {
                     size="sm"
                     onClick={() => navigate(`/target-portfolios/${tp.id}/rebalance`)}
                     title="Rebalance analysis"
+                    className="flex-1 min-w-0 px-3! sm:flex-none sm:px-4! whitespace-nowrap"
                   >
-                    <BarChart2 size={14} className="mr-1" /> Rebalance
+                    <BarChart2 size={14} className="mr-1 hidden sm:inline" /> Rebalance
                   </Button>
                   <Button
                     variant="secondary"
                     size="sm"
                     onClick={() => navigate(`/target-portfolios/${tp.id}`)}
                     title="Edit portfolio"
+                    aria-label="Edit portfolio"
+                    className="w-[38px] px-0! shrink-0 justify-center"
                   >
                     <Pencil size={14} />
                   </Button>
@@ -170,7 +179,8 @@ export function TargetPortfoliosPage() {
                     size="sm"
                     onClick={() => setDeleteTarget(tp)}
                     title="Delete portfolio"
-                    className="text-[var(--c-bear)] hover:border-[var(--c-bear)]"
+                    aria-label="Delete portfolio"
+                    className="w-[38px] px-0! shrink-0 justify-center text-[var(--c-bear)] hover:border-[var(--c-bear)]"
                   >
                     <Trash2 size={14} />
                   </Button>

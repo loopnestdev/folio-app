@@ -13,14 +13,14 @@ import type { RebalanceAction, TaxTier, RebalanceRow } from '../../types';
 // ── Action badge ──────────────────────────────────────────────
 function ActionBadge({ action }: { action: RebalanceAction }) {
   const cfg: Record<RebalanceAction, { label: string; icon: React.ReactNode; className: string }> = {
-    BUY:  { label: 'BUY',  icon: <TrendingUp  size={11} />, className: 'bg-emerald-100 text-emerald-700' },
-    SELL: { label: 'SELL', icon: <TrendingDown size={11} />, className: 'bg-red-100 text-red-700' },
-    HOLD: { label: 'HOLD', icon: <Minus        size={11} />, className: 'bg-gray-100 text-gray-600' },
-    EXIT: { label: 'EXIT', icon: <LogOut       size={11} />, className: 'bg-amber-100 text-amber-700' },
+    BUY:  { label: 'BUY',  icon: <TrendingUp  size={11} />, className: 'bg-[var(--c-bull-bg)] text-[var(--c-bull)]' },
+    SELL: { label: 'SELL', icon: <TrendingDown size={11} />, className: 'bg-[var(--c-bear-bg)] text-[var(--c-bear)]' },
+    HOLD: { label: 'HOLD', icon: <Minus        size={11} />, className: 'bg-[var(--c-canvas-soft)] text-[var(--c-ink-mute)]' },
+    EXIT: { label: 'EXIT', icon: <LogOut       size={11} />, className: 'bg-[var(--c-warn-bg)] text-[var(--c-warn)]' },
   };
   const { label, icon, className } = cfg[action];
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold ${className}`}>
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold whitespace-nowrap ${className}`}>
       {icon} {label}
     </span>
   );
@@ -31,19 +31,54 @@ function TaxBadge({ tier, stGain, ltGain }: { tier: TaxTier; stGain: number; ltG
   if (tier === 'none') return null;
   const totalGain = stGain + ltGain;
   if (tier === 'loss') {
-    return <span className="text-[12px] text-emerald-600 font-medium">Loss ({formatCurrency(totalGain)})</span>;
+    return <span className="text-[12px] text-[var(--c-bull)] font-medium">Loss ({formatCurrency(totalGain)})</span>;
   }
   if (tier === 'long_term') {
     return (
-      <span className="text-[12px] text-blue-600 font-medium" title="CGT discount eligible (≥365 days)">
+      <span className="text-[12px] text-[var(--c-primary)] font-medium" title="CGT discount eligible (≥365 days)">
         LT gain {formatCurrency(totalGain)}
       </span>
     );
   }
   return (
-    <span className="text-[12px] text-red-600 font-medium" title="Short-term — no CGT discount">
+    <span className="text-[12px] text-[var(--c-bear)] font-medium" title="Short-term — no CGT discount">
       ST gain {formatCurrency(totalGain)}
     </span>
+  );
+}
+
+const diffClass = (diff: number) =>
+  diff > 0 ? 'text-[var(--c-bull)]' : diff < 0 ? 'text-[var(--c-bear)]' : 'text-[var(--c-ink-mute)]';
+
+// ── Phone layout for one row: the 8-column table does not fit, so each holding is a small card ──
+function RebalanceRowCard({ row }: { row: RebalanceRow }) {
+  return (
+    <div className="px-4 py-3 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <span className="font-semibold text-[var(--c-primary)]">{row.symbol}</span>
+          {row.category && <span className="ml-2 text-[12px] text-[var(--c-ink-mute)]">{row.category}</span>}
+        </div>
+        <ActionBadge action={row.action} />
+      </div>
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-[13px] tnum">
+        <dt className="text-[var(--c-ink-mute)]">Target</dt>
+        <dd className="text-right text-[var(--c-ink)]">
+          {row.allocation_pct > 0 ? `${row.allocation_pct}% · ${formatCurrency(row.target_value)}` : '—'}
+        </dd>
+        <dt className="text-[var(--c-ink-mute)]">Current</dt>
+        <dd className="text-right text-[var(--c-ink)]">{formatCurrency(row.current_value)}</dd>
+        <dt className="text-[var(--c-ink-mute)]">Difference</dt>
+        <dd className={`text-right font-medium ${diffClass(row.diff)}`}>
+          {row.diff > 0 ? '+' : ''}{formatCurrency(row.diff)}
+        </dd>
+      </dl>
+      {row.tax_tier !== 'none' && (
+        <div className="text-right">
+          <TaxBadge tier={row.tax_tier} stGain={row.short_term_gain} ltGain={row.long_term_gain} />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -76,23 +111,24 @@ export function RebalancePage() {
   const hasSells = (grouped.SELL.length + grouped.EXIT.length) > 0;
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
+    <div className="max-w-5xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
         <button
           onClick={() => navigate(`/target-portfolios/${id}`)}
           className="text-[var(--c-ink-mute)] hover:text-[var(--c-ink)] transition-colors"
+          aria-label="Back to target portfolio"
         >
           <ArrowLeft size={20} />
         </button>
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <h1 className="text-xl font-bold text-[var(--c-ink)]">Rebalance</h1>
-          <p className="text-[13px] text-[var(--c-ink-mute)]">
+          <p className="text-[13px] text-[var(--c-ink-mute)] truncate">
             Target: <span className="font-medium text-[var(--c-ink)]">{tp?.name}</span>
           </p>
         </div>
         {result && (
-          <Button variant="secondary" size="sm" onClick={() => refetch()} disabled={rebalLoading}>
+          <Button variant="secondary" size="sm" onClick={() => refetch()} disabled={rebalLoading} className="shrink-0">
             <RefreshCw size={14} className={`mr-1.5 ${rebalLoading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
@@ -100,9 +136,9 @@ export function RebalancePage() {
       </div>
 
       {/* Portfolio selector */}
-      <Card className="p-5">
-        <div className="flex items-end gap-4">
-          <div className="flex-1 max-w-sm">
+      <Card padding="sm" className="sm:p-5">
+        <div className="flex flex-col sm:flex-row sm:items-end gap-4">
+          <div className="flex-1 sm:max-w-sm">
             <label className="block text-[12px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-wide mb-1.5">
               Compare against portfolio
             </label>
@@ -113,7 +149,7 @@ export function RebalancePage() {
             />
           </div>
           {portfolioId && result && (
-            <div className="flex gap-6 text-[13px] pb-0.5">
+            <div className="grid grid-cols-3 gap-4 sm:flex sm:gap-6 text-[13px] pb-0.5 tnum">
               <div>
                 <p className="text-[var(--c-ink-mute)] mb-0.5">Total Value</p>
                 <p className="font-semibold text-[var(--c-ink)]">
@@ -160,12 +196,16 @@ export function RebalancePage() {
             };
 
             return (
-              <Card key={action} className="overflow-hidden">
-                <div className="px-5 py-3 border-b border-[var(--c-border)] bg-[var(--c-canvas-soft)]">
+              <Card key={action} padding="none" className="overflow-hidden">
+                <div className="px-4 sm:px-5 py-3 border-b border-[var(--c-border)] bg-[var(--c-canvas-soft)]">
                   <span className="font-semibold text-[14px] text-[var(--c-ink)]">{sectionTitle[action]}</span>
                   <span className="ml-2 text-[13px] text-[var(--c-ink-mute)]">({rows.length})</span>
                 </div>
-                <div className="overflow-x-auto">
+                {/* Phones: one card per holding */}
+                <div className="sm:hidden divide-y divide-[var(--c-border)]">
+                  {rows.map((row) => <RebalanceRowCard key={row.symbol} row={row} />)}
+                </div>
+                <div className="hidden sm:block overflow-x-auto">
                   <table className="w-full text-[13px]">
                     <thead>
                       <tr className="border-b border-[var(--c-border)]">
@@ -193,13 +233,7 @@ export function RebalancePage() {
                           <td className="px-4 py-3 text-right text-[var(--c-ink)]">
                             {formatCurrency(row.current_value)}
                           </td>
-                          <td className={`px-4 py-3 text-right font-medium ${
-                            row.diff > 0
-                              ? 'text-emerald-600'
-                              : row.diff < 0
-                              ? 'text-red-600'
-                              : 'text-[var(--c-ink-mute)]'
-                          }`}>
+                          <td className={`px-4 py-3 text-right font-medium ${diffClass(row.diff)}`}>
                             {row.diff > 0 ? '+' : ''}{formatCurrency(row.diff)}
                           </td>
                           <td className="px-4 py-3 text-center">
@@ -223,7 +257,7 @@ export function RebalancePage() {
 
           {/* Tax summary */}
           {hasSells && (
-            <Card className="p-5 space-y-4">
+            <Card padding="sm" className="sm:p-5 space-y-4">
               <h2 className="font-semibold text-[15px] text-[var(--c-ink)]">Tax Estimate (SMSF Accumulation Phase)</h2>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="p-4 rounded-xl bg-[var(--c-canvas-soft)]">
@@ -257,23 +291,29 @@ export function RebalancePage() {
                 <p className="font-semibold text-[13px] text-[var(--c-ink)]">Recommended sell order (least tax first)</p>
                 {result.tax_summary.sell_order.loss_symbols.length > 0 && (
                   <div className="flex items-start gap-2 text-[13px]">
-                    <span className="shrink-0 font-semibold text-emerald-600 w-4">1.</span>
-                    <span className="text-[var(--c-ink-mute)]">Sell at a loss first (offsets gains):</span>
-                    <span className="font-semibold text-[var(--c-ink)]">{result.tax_summary.sell_order.loss_symbols.join(', ')}</span>
+                    <span className="shrink-0 font-semibold text-[var(--c-bull)] w-4">1.</span>
+                    <p className="min-w-0">
+                      <span className="text-[var(--c-ink-mute)]">Sell at a loss first (offsets gains):</span>{' '}
+                      <span className="font-semibold text-[var(--c-ink)] break-words">{result.tax_summary.sell_order.loss_symbols.join(', ')}</span>
+                    </p>
                   </div>
                 )}
                 {result.tax_summary.sell_order.long_term_symbols.length > 0 && (
                   <div className="flex items-start gap-2 text-[13px]">
-                    <span className="shrink-0 font-semibold text-blue-600 w-4">2.</span>
-                    <span className="text-[var(--c-ink-mute)]">Long-term gains next (CGT discount, ~10% effective):</span>
-                    <span className="font-semibold text-[var(--c-ink)]">{result.tax_summary.sell_order.long_term_symbols.join(', ')}</span>
+                    <span className="shrink-0 font-semibold text-[var(--c-primary)] w-4">2.</span>
+                    <p className="min-w-0">
+                      <span className="text-[var(--c-ink-mute)]">Long-term gains next (CGT discount, ~10% effective):</span>{' '}
+                      <span className="font-semibold text-[var(--c-ink)] break-words">{result.tax_summary.sell_order.long_term_symbols.join(', ')}</span>
+                    </p>
                   </div>
                 )}
                 {result.tax_summary.sell_order.short_term_symbols.length > 0 && (
                   <div className="flex items-start gap-2 text-[13px]">
-                    <span className="shrink-0 font-semibold text-red-600 w-4">3.</span>
-                    <span className="text-[var(--c-ink-mute)]">Short-term gains last (full 15% rate):</span>
-                    <span className="font-semibold text-[var(--c-ink)]">{result.tax_summary.sell_order.short_term_symbols.join(', ')}</span>
+                    <span className="shrink-0 font-semibold text-[var(--c-bear)] w-4">3.</span>
+                    <p className="min-w-0">
+                      <span className="text-[var(--c-ink-mute)]">Short-term gains last (full 15% rate):</span>{' '}
+                      <span className="font-semibold text-[var(--c-ink)] break-words">{result.tax_summary.sell_order.short_term_symbols.join(', ')}</span>
+                    </p>
                   </div>
                 )}
               </div>

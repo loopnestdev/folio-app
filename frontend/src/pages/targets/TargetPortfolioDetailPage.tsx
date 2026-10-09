@@ -1,4 +1,4 @@
-import { useState, useEffect, Fragment } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Plus, Trash2, Save, BarChart2, CheckCircle, AlertTriangle,
@@ -63,6 +63,9 @@ export function allocationValue(pct: string | number, capital: number): number {
   const p = typeof pct === 'string' ? parseFloat(pct) : pct;
   return ((Number.isFinite(p) ? p : 0) / 100) * capital;
 }
+
+// Field label shown above each input on phones; hidden from sm, where the grid's column headers label the fields.
+const MOBILE_LABEL = 'block mb-1 text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-wide sm:hidden';
 
 export function TargetPortfolioDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -193,20 +196,24 @@ export function TargetPortfolioDetailPage() {
   if (isLoading || !tp) return <PageLoader />;
 
   return (
-    <div className="p-6 max-w-3xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <button
-          onClick={() => navigate('/target-portfolios')}
-          className="text-[var(--c-ink-mute)] hover:text-[var(--c-ink)] transition-colors"
-        >
-          <ArrowLeft size={20} />
-        </button>
-        <div className="flex-1 min-w-0">
-          <h1 className="text-xl font-bold text-[var(--c-ink)] truncate">{tp.name}</h1>
-          <p className="text-[13px] text-[var(--c-ink-mute)]">Target Portfolio</p>
+    <div className="max-w-3xl mx-auto space-y-6">
+      {/* Header — title row, then a toolbar that wraps under it on phones */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <button
+            onClick={() => navigate('/target-portfolios')}
+            className="text-[var(--c-ink-mute)] hover:text-[var(--c-ink)] transition-colors"
+            aria-label="Back to target portfolios"
+          >
+            <ArrowLeft size={20} />
+          </button>
+          <div className="min-w-0">
+            <h1 className="text-xl font-bold text-[var(--c-ink)] truncate">{tp.name}</h1>
+            <p className="text-[13px] text-[var(--c-ink-mute)]">Target Portfolio</p>
+          </div>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <label htmlFor="investable" className="text-[12px] text-[var(--c-ink-mute)] whitespace-nowrap">
             Investable
           </label>
@@ -219,7 +226,7 @@ export function TargetPortfolioDetailPage() {
               step="1000"
               value={investable}
               onChange={(e) => handleInvestableChange(e.target.value)}
-              className="w-28 h-9 pl-5 pr-2 rounded-lg border border-[var(--c-border)] bg-[var(--c-canvas)] text-[14px] text-[var(--c-ink)] text-right tnum focus:outline-none focus:border-[var(--c-primary)]"
+              className="w-28 h-9 pl-5 pr-2 rounded-lg border border-[var(--c-border)] bg-[var(--c-canvas)] text-[16px] sm:text-[14px] text-[var(--c-ink)] text-right tnum focus:outline-none focus:border-[var(--c-primary)]"
             />
           </div>
         </div>
@@ -241,10 +248,11 @@ export function TargetPortfolioDetailPage() {
             <BarChart2 size={14} className="mr-1.5" /> Rebalance
           </Button>
         </div>
+        </div>
       </div>
 
       {/* Name & description */}
-      <Card className="p-5 space-y-4">
+      <Card padding="sm" className="sm:p-5 space-y-4">
         <h2 className="font-semibold text-[15px] text-[var(--c-ink)]">Details</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input
@@ -261,8 +269,8 @@ export function TargetPortfolioDetailPage() {
       </Card>
 
       {/* Items table */}
-      <Card className="p-5 space-y-4">
-        <div className="flex items-center justify-between">
+      <Card padding="sm" className="sm:p-5 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="font-semibold text-[15px] text-[var(--c-ink)]">Holdings</h2>
           <div className="flex items-center gap-3">
             {/* Allocated dollars vs investable capital */}
@@ -274,36 +282,37 @@ export function TargetPortfolioDetailPage() {
             {/* Allocation total badge */}
             <span
               className={[
-                'text-[13px] font-semibold px-2.5 py-0.5 rounded-full',
+                'text-[13px] font-semibold px-2.5 py-0.5 rounded-full whitespace-nowrap tnum',
                 allocOk
-                  ? 'bg-emerald-100 text-emerald-700'
+                  ? 'bg-[var(--c-bull-bg)] text-[var(--c-bull)]'
                   : Math.abs(totalAlloc - 100) < 5
-                  ? 'bg-amber-100 text-amber-700'
-                  : 'bg-red-100 text-red-700',
+                  ? 'bg-[var(--c-warn-bg)] text-[var(--c-warn)]'
+                  : 'bg-[var(--c-bear-bg)] text-[var(--c-bear)]',
               ].join(' ')}
             >
               {totalAlloc.toFixed(1)}% / 100%
             </span>
-            <Button variant="secondary" size="sm" onClick={addRow}>
+            <Button variant="secondary" size="sm" onClick={addRow} className="whitespace-nowrap">
               <Plus size={14} className="mr-1" /> Add Row
             </Button>
           </div>
         </div>
 
         {!allocOk && items.length > 0 && (
-          <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 text-amber-800 text-[13px]">
-            <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+          <div className="flex items-start gap-2 p-3 rounded-lg border border-[var(--c-warn-border)] bg-[var(--c-warn-bg)] text-[var(--c-ink)] text-[13px]">
+            <AlertTriangle size={15} className="mt-0.5 shrink-0 text-[var(--c-warn)]" />
             <span>
               Allocations must total exactly 100%. Currently at {totalAlloc.toFixed(1)}%.
             </span>
           </div>
         )}
 
-        {/* Single flat grid — headers and inputs share identical column widths */}
-        <div className="grid grid-cols-[1.6fr_1.3fr_1.6fr_0.9fr_1fr_2rem] gap-x-2 gap-y-2 items-center">
-          {/* Column headers */}
+        {/* Single flat grid — headers and inputs share identical column widths.
+            Phones: one labelled card per holding. From sm: each card wrapper is display:contents, so its cells join the 6-column grid. */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1.6fr_1.3fr_1.6fr_0.9fr_1fr_2rem] sm:gap-x-2 sm:gap-y-2 sm:items-center">
+          {/* Column headers (desktop only — phones label each field) */}
           {items.length > 0 && (
-            <>
+            <div className="hidden sm:contents">
               <span className="pl-3 text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-wide">Symbol</span>
               <span className="pl-3 text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-wide">Exchange</span>
               <button
@@ -322,32 +331,56 @@ export function TargetPortfolioDetailPage() {
               </button>
               <span className="pr-3 text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-wide text-right">Alloc $</span>
               <span />
-            </>
+            </div>
+          )}
+
+          {/* Phones: sort controls, since the column headers are hidden */}
+          {items.length > 1 && (
+            <div className="flex items-center gap-2 sm:hidden text-[12px] text-[var(--c-ink-mute)]">
+              <span>Sort:</span>
+              <button type="button" onClick={() => handleSort('category')} className="flex items-center gap-1 px-2 py-1 rounded-md border border-[var(--c-border)] hover:text-[var(--c-ink)]">
+                Category {sortIcon('category')}
+              </button>
+              <button type="button" onClick={() => handleSort('allocation')} className="flex items-center gap-1 px-2 py-1 rounded-md border border-[var(--c-border)] hover:text-[var(--c-ink)]">
+                Alloc % {sortIcon('allocation')}
+              </button>
+            </div>
           )}
 
           {/* Data rows */}
           {items.map((item) => (
-            <Fragment key={item.key}>
+            <div key={item.key} className="grid grid-cols-2 gap-2 p-3 rounded-xl border border-[var(--c-border)] sm:contents">
+              <label className="block sm:contents">
+              <span className={MOBILE_LABEL}>Symbol</span>
               <input
-                className="w-full h-9 px-3 rounded-lg border border-[var(--c-border)] bg-[var(--c-canvas)] text-[14px] text-[var(--c-ink)] focus:outline-none focus:border-[var(--c-primary)] uppercase"
+                className="w-full h-9 px-3 rounded-lg border border-[var(--c-border)] bg-[var(--c-canvas)] text-[16px] sm:text-[14px] text-[var(--c-ink)] focus:outline-none focus:border-[var(--c-primary)] uppercase"
                 placeholder="NVDA"
                 value={item.symbol}
                 onChange={(e) => updateItem(item.key, 'symbol', e.target.value)}
               />
+              </label>
+              <label className="block sm:contents">
+              <span className={MOBILE_LABEL}>Exchange</span>
               <input
-                className="w-full h-9 px-3 rounded-lg border border-[var(--c-border)] bg-[var(--c-canvas)] text-[14px] text-[var(--c-ink)] focus:outline-none focus:border-[var(--c-primary)]"
+                className="w-full h-9 px-3 rounded-lg border border-[var(--c-border)] bg-[var(--c-canvas)] text-[16px] sm:text-[14px] text-[var(--c-ink)] focus:outline-none focus:border-[var(--c-primary)]"
                 placeholder="NASDAQ"
                 value={item.exchange}
                 onChange={(e) => updateItem(item.key, 'exchange', e.target.value)}
               />
+              </label>
+              <label className="block sm:contents">
+              <span className={MOBILE_LABEL}>Category</span>
               <input
-                className="w-full h-9 px-3 rounded-lg border border-[var(--c-border)] bg-[var(--c-canvas)] text-[14px] text-[var(--c-ink)] focus:outline-none focus:border-[var(--c-primary)]"
+                className="w-full h-9 px-3 rounded-lg border border-[var(--c-border)] bg-[var(--c-canvas)] text-[16px] sm:text-[14px] text-[var(--c-ink)] focus:outline-none focus:border-[var(--c-primary)]"
                 placeholder="Semi"
                 value={item.category}
                 onChange={(e) => updateItem(item.key, 'category', e.target.value)}
               />
+              </label>
+              <label className="block sm:contents">
+              <span className={MOBILE_LABEL}>Alloc %</span>
               <input
-                className="w-full h-9 px-3 rounded-lg border border-[var(--c-border)] bg-[var(--c-canvas)] text-[14px] text-[var(--c-ink)] focus:outline-none focus:border-[var(--c-primary)] text-right"
+                className="w-full h-9 px-3 rounded-lg border border-[var(--c-border)] bg-[var(--c-canvas)] text-[16px] sm:text-[14px] text-[var(--c-ink)] focus:outline-none focus:border-[var(--c-primary)] text-right"
                 placeholder="9"
                 type="number"
                 min="0"
@@ -356,20 +389,23 @@ export function TargetPortfolioDetailPage() {
                 value={item.allocation_pct}
                 onChange={(e) => updateItem(item.key, 'allocation_pct', e.target.value)}
               />
-              <span className="h-9 flex items-center justify-end px-3 text-[14px] text-[var(--c-ink-sec)] tnum">
+              </label>
+              <span className="h-9 flex items-center sm:justify-end sm:px-3 text-[14px] text-[var(--c-ink-sec)] tnum">
+                <span className="sm:hidden mr-1.5 text-[12px] text-[var(--c-ink-mute)]">Alloc $</span>
                 {formatCurrency(allocationValue(item.allocation_pct, investableNum), 'USD', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
               </span>
               <button
                 onClick={() => removeItem(item.key)}
-                className="flex items-center justify-center w-8 h-8 text-[var(--c-ink-mute)] hover:text-[var(--c-bear)] transition-colors"
+                aria-label={`Remove ${item.symbol || 'row'}`}
+                className="justify-self-end flex items-center justify-center w-8 h-8 text-[var(--c-ink-mute)] hover:text-[var(--c-bear)] transition-colors"
               >
                 <Trash2 size={14} />
               </button>
-            </Fragment>
+            </div>
           ))}
 
           {items.length === 0 && (
-            <div className="col-span-6 text-center py-8 text-[14px] text-[var(--c-ink-mute)]">
+            <div className="sm:col-span-6 text-center py-8 text-[14px] text-[var(--c-ink-mute)]">
               No stocks added yet. Click "Add Row" to start.
             </div>
           )}
@@ -377,7 +413,7 @@ export function TargetPortfolioDetailPage() {
 
         {/* Save */}
         <div className="flex justify-end pt-2">
-          <Button onClick={handleSave} disabled={!dirty || updateMutation.isPending || itemsMutation.isPending}>
+          <Button onClick={handleSave} disabled={!dirty || updateMutation.isPending || itemsMutation.isPending} className="w-full sm:w-auto">
             <Save size={15} className="mr-1.5" />
             {itemsMutation.isPending ? 'Saving…' : 'Save Changes'}
           </Button>
