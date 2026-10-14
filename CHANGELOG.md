@@ -31,6 +31,8 @@ All notable changes to Folio App are documented here.
 
 ### Added
 
+- **Target portfolios - sort stocks by name and allocation** - The target portfolio edit page adds a Symbol sort (column header on desktop, Sort button on phones) next to Category and Alloc %; like those, it reorders the rows and the order is saved. The group edit page's "Planned allocation per stock" list gets Name and Allocation sort buttons (view only, not saved; Name starts A-Z, Allocation starts largest first, a second click reverses). (`frontend/src/pages/targets/TargetPortfolioDetailPage.tsx`, `TargetGroupDetailPage.tsx`, `frontend/src/lib/targetPlan.ts`)
+
 - **Target portfolio groups** - The Target Portfolios menu can now group several target portfolios into one plan, with a weight per portfolio and a saved investable amount:
   - List page: a "Groups" section above the portfolios (members with weights, investable amount, Active badge, Set Active / Rebalance / Edit / Delete) and a "New Group" button.
   - Group edit page (`/target-portfolios/groups/:groupId`): name, description, investable amount and currency, member portfolios with weight % (warns when weights do not total 100%), and a "Planned allocation per stock" list. Each stock's planned amount = investable x portfolio weight x stock %, merged when a stock is in several portfolios, with the contributing portfolios shown.

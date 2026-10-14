@@ -1,14 +1,25 @@
 import { describe, it, expect } from 'vitest';
 import { sortDraftItems, allocationValue } from './TargetPortfolioDetailPage';
 
-type Row = { key: string; category: string; allocation_pct: string };
+type Row = { key: string; symbol: string; category: string; allocation_pct: string };
 
 const rows = (...specs: [string, string, string][]): Row[] =>
-  specs.map(([key, category, allocation_pct]) => ({ key, category, allocation_pct }));
+  specs.map(([key, category, allocation_pct]) => ({ key, symbol: key.toUpperCase(), category, allocation_pct }));
 
 const keys = (r: Row[]) => r.map((x) => x.key);
 
 describe('sortDraftItems', () => {
+  it('sorts by symbol alphabetically, case-insensitive, blanks last', () => {
+    const input: Row[] = [
+      { key: 'a', symbol: 'NVDA', category: '', allocation_pct: '1' },
+      { key: 'b', symbol: '', category: '', allocation_pct: '1' },
+      { key: 'c', symbol: 'amd', category: '', allocation_pct: '1' },
+      { key: 'd', symbol: 'MU', category: '', allocation_pct: '1' },
+    ];
+    expect(keys(sortDraftItems(input, 'symbol', 'asc'))).toEqual(['c', 'd', 'a', 'b']);
+    expect(keys(sortDraftItems(input, 'symbol', 'desc'))).toEqual(['a', 'd', 'c', 'b']);
+  });
+
   it('sorts by category alphabetically ascending', () => {
     const input = rows(['a', 'Tech', '10'], ['b', 'Energy', '20'], ['c', 'Banks', '30']);
     expect(keys(sortDraftItems(input, 'category', 'asc'))).toEqual(['c', 'b', 'a']);

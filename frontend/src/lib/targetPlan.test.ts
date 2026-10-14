@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { groupPlan } from './targetPlan';
+import { groupPlan, sortPlanLines } from './targetPlan';
 import type { TargetPortfolio } from '../types';
 
 const tp = (id: string, name: string, items: [string, number, string | null][]): TargetPortfolio => ({
@@ -22,5 +22,26 @@ describe('groupPlan', () => {
 
   it('ignores members whose portfolio is not loaded', () => {
     expect(groupPlan([{ target_portfolio_id: 'missing', weight_pct: 100 }], portfolios, 1000)).toEqual([]);
+  });
+});
+
+describe('sortPlanLines', () => {
+  const line = (symbol: string, pct: number) => ({ symbol, category: null, pct, amount: 0, sources: [] });
+  const lines = [line('NVDA', 6), line('AMD', 3), line('MU', 9), line('COHR', 3)];
+  const syms = (l: { symbol: string }[]) => l.map((x) => x.symbol);
+
+  it('sorts by symbol both ways', () => {
+    expect(syms(sortPlanLines(lines, 'symbol', 'asc'))).toEqual(['AMD', 'COHR', 'MU', 'NVDA']);
+    expect(syms(sortPlanLines(lines, 'symbol', 'desc'))).toEqual(['NVDA', 'MU', 'COHR', 'AMD']);
+  });
+
+  it('sorts by allocation both ways, ties broken by symbol', () => {
+    expect(syms(sortPlanLines(lines, 'allocation', 'desc'))).toEqual(['MU', 'NVDA', 'AMD', 'COHR']);
+    expect(syms(sortPlanLines(lines, 'allocation', 'asc'))).toEqual(['AMD', 'COHR', 'NVDA', 'MU']);
+  });
+
+  it('does not mutate the input', () => {
+    sortPlanLines(lines, 'symbol', 'asc');
+    expect(syms(lines)).toEqual(['NVDA', 'AMD', 'MU', 'COHR']);
   });
 });

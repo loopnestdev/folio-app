@@ -42,3 +42,16 @@ export function groupPlan(members: PlanMember[], portfolios: TargetPortfolio[], 
   }
   return [...lines.values()].map((l) => ({ ...l, amount: (l.pct / 100) * investable }));
 }
+
+export type PlanSortKey = 'symbol' | 'allocation';
+export type PlanSortDir = 'asc' | 'desc';
+
+/** Sorted copy of a group plan: by symbol (alphabetical) or by allocation % (numeric). */
+export function sortPlanLines(lines: PlanLine[], key: PlanSortKey, dir: PlanSortDir): PlanLine[] {
+  const factor = dir === 'asc' ? 1 : -1;
+  return [...lines].sort((a, b) =>
+    key === 'allocation'
+      ? factor * (a.pct - b.pct) || a.symbol.localeCompare(b.symbol)
+      : factor * a.symbol.localeCompare(b.symbol),
+  );
+}

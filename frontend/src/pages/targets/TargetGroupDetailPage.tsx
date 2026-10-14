@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Save, BarChart2, CheckCircle, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Save, BarChart2, CheckCircle, AlertTriangle, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import {
   useTargetPortfolioGroup,
   useUpdateTargetPortfolioGroup,
@@ -14,7 +14,7 @@ import { Input } from '../../components/ui/Input';
 import { PageLoader } from '../../components/ui/LoadingSpinner';
 import { useToast } from '../../components/ui/Toast';
 import { formatCurrency } from '../../lib/utils';
-import { groupPlan } from '../../lib/targetPlan';
+import { groupPlan, sortPlanLines, type PlanSortKey, type PlanSortDir } from '../../lib/targetPlan';
 import type { TargetPortfolio, TargetPortfolioGroup } from '../../types';
 
 const CURRENCIES = ['AUD', 'USD', 'HKD'];
@@ -62,6 +62,8 @@ function GroupEditor({ group, portfolios }: { group: TargetPortfolioGroup; portf
     group.members.map((m) => ({ key: newKey(), target_portfolio_id: m.target_portfolio_id, weight_pct: String(m.weight_pct) })),
   );
   const [dirty, setDirty] = useState(false);
+  // View-only sort of the per-stock plan (not saved); null = plan order
+  const [planSort, setPlanSort] = useState<{ key: PlanSortKey; dir: PlanSortDir } | null>(null);
   const touch = <T,>(set: (v: T) => void) => (v: T) => { set(v); setDirty(true); };
 
   const investableNum = Math.max(parseFloat(investable) || 0, 0);
@@ -73,6 +75,15 @@ function GroupEditor({ group, portfolios }: { group: TargetPortfolioGroup; portf
     investableNum,
   );
   const plannedPct = plan.reduce((s, l) => s + l.pct, 0);
+  const shownPlan  = planSort ? sortPlanLines(plan, planSort.key, planSort.dir) : plan;
+  // Name starts A→Z, Allocation starts largest first; a repeat click flips the direction
+  const togglePlanSort = (key: PlanSortKey) => setPlanSort((prev) =>
+    prev?.key === key
+      ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
+      : { key, dir: key === 'symbol' ? 'asc' : 'desc' });
+  const planSortIcon = (key: PlanSortKey) =>
+    planSort?.key !== key ? <ChevronsUpDown size={12} className="opacity-40" />
+      : planSort.dir === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />;
   const money = (v: number) => formatCurrency(v, currency, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
   const usedIds = new Set(members.map((m) => m.target_portfolio_id));
@@ -291,9 +302,27 @@ function GroupEditor({ group, portfolios }: { group: TargetPortfolioGroup; portf
             <span className="text-[12px] text-[var(--c-ink-mute)] tnum">
               {plannedPct.toFixed(1)}% of {investableNum > 0 ? money(investableNum) : 'the investable amount'}
             </span>
+            {plan.length > 1 && (
+              <div className="basis-full flex items-center gap-2 text-[12px] text-[var(--c-ink-mute)]">
+                <span>Sort:</span>
+                {([['symbol', 'Name'], ['allocation', 'Allocation']] as const).map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => togglePlanSort(key)}
+                    aria-pressed={planSort?.key === key}
+                    className={`flex items-center gap-1 px-2 py-1 rounded-md border transition-colors hover:text-[var(--c-ink)] ${
+                      planSort?.key === key ? 'border-[var(--c-primary-border)] text-[var(--c-ink)]' : 'border-[var(--c-border)]'
+                    }`}
+                  >
+                    {label} {planSortIcon(key)}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <ul className="divide-y divide-[var(--c-border)]">
-            {plan.map((l) => (
+            {shownPlan.map((l) => (
               <li key={l.symbol} className="px-4 sm:px-5 py-2.5 flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-[14px]">

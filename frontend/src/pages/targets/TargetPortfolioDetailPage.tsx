@@ -33,13 +33,13 @@ const newKey = () => String(++_nextKey);
 const STORAGE_KEY_INVESTABLE = 'folio_target_investable_';
 const DEFAULT_INVESTABLE = '100000';
 
-export type SortKey = 'category' | 'allocation';
+export type SortKey = 'symbol' | 'category' | 'allocation';
 export type SortDir = 'asc' | 'desc';
 
-// Pure reorder helper — sorts a copy of the draft rows by category (alpha) or
-// allocation (numeric). Rows with a blank category always sink to the bottom,
+// Pure reorder helper — sorts a copy of the draft rows by symbol or category (alpha) or
+// allocation (numeric). Rows with a blank symbol / category always sink to the bottom,
 // regardless of direction, so half-filled rows don't wander into the middle.
-export function sortDraftItems<T extends { category: string; allocation_pct: string }>(
+export function sortDraftItems<T extends { symbol: string; category: string; allocation_pct: string }>(
   rows: T[],
   key: SortKey,
   dir: SortDir,
@@ -49,8 +49,8 @@ export function sortDraftItems<T extends { category: string; allocation_pct: str
     if (key === 'allocation') {
       return factor * ((parseFloat(a.allocation_pct) || 0) - (parseFloat(b.allocation_pct) || 0));
     }
-    const av = a.category.trim().toLowerCase();
-    const bv = b.category.trim().toLowerCase();
+    const av = a[key].trim().toLowerCase();
+    const bv = b[key].trim().toLowerCase();
     if (!av && !bv) return 0;
     if (!av) return 1;
     if (!bv) return -1;
@@ -332,7 +332,13 @@ export function TargetPortfolioDetailPage() {
           {/* Column headers (desktop only — phones label each field) */}
           {items.length > 0 && (
             <div className="hidden sm:contents">
-              <span className="pl-3 text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-wide">Symbol</span>
+              <button
+                type="button"
+                onClick={() => handleSort('symbol')}
+                className="pl-3 flex items-center gap-1 text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-wide hover:text-[var(--c-ink)] transition-colors"
+              >
+                Symbol {sortIcon('symbol')}
+              </button>
               <span className="pl-3 text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-wide">Exchange</span>
               <button
                 type="button"
@@ -357,6 +363,9 @@ export function TargetPortfolioDetailPage() {
           {items.length > 1 && (
             <div className="flex items-center gap-2 sm:hidden text-[12px] text-[var(--c-ink-mute)]">
               <span>Sort:</span>
+              <button type="button" onClick={() => handleSort('symbol')} className="flex items-center gap-1 px-2 py-1 rounded-md border border-[var(--c-border)] hover:text-[var(--c-ink)]">
+                Symbol {sortIcon('symbol')}
+              </button>
               <button type="button" onClick={() => handleSort('category')} className="flex items-center gap-1 px-2 py-1 rounded-md border border-[var(--c-border)] hover:text-[var(--c-ink)]">
                 Category {sortIcon('category')}
               </button>
