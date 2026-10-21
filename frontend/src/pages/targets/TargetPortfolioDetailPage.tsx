@@ -297,7 +297,7 @@ export function TargetPortfolioDetailPage() {
       {pie.data.length > 0 && (
         <Card padding="sm" className="sm:p-5 space-y-2">
           <h2 className="font-semibold text-[15px] text-[var(--c-ink)]">Allocation</h2>
-          <DiversityChart data={pie.data} legend={false} />
+          <DiversityChart data={pie.data} labels="slices" />
         </Card>
       )}
 
