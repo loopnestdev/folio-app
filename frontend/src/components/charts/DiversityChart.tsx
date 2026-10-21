@@ -2,15 +2,17 @@ import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recha
 import ReactECharts from 'echarts-for-react';
 import { useSettings } from '../../contexts/SettingsContext';
 import type { DiversityAllocation } from '../../types';
-import { CHART_COLORS, formatPercent } from '../../lib/utils';
+import { CHART_COLORS } from '../../lib/utils';
 
 interface DiversityChartProps {
   data: DiversityAllocation[];
   title?: string;
   loading?: boolean;
+  /** Show the built-in legend (default true); off when a list beside the chart already names each slice */
+  legend?: boolean;
 }
 
-function RechartsDiversityChart({ data }: DiversityChartProps) {
+function RechartsDiversityChart({ data, legend = true }: DiversityChartProps) {
   return (
     <ResponsiveContainer width="100%" height={300}>
       <PieChart>
@@ -19,7 +21,7 @@ function RechartsDiversityChart({ data }: DiversityChartProps) {
           dataKey="pct"
           nameKey="name"
           cx="50%"
-          cy="45%"
+          cy={legend ? '45%' : '50%'}
           innerRadius={60}
           outerRadius={100}
           paddingAngle={2}
@@ -32,22 +34,24 @@ function RechartsDiversityChart({ data }: DiversityChartProps) {
           ))}
         </Pie>
         <Tooltip
-          formatter={(value: any, name: any) => [formatPercent(value, 1), name]}
+          formatter={(value: any, name: any) => [`${Number(value).toFixed(1)}%`, name]}
           contentStyle={{ borderRadius: 12, border: '1px solid var(--c-border)', fontSize: 13 }}
         />
-        <Legend wrapperStyle={{ fontSize: 13, paddingTop: 8 }} />
+        {legend && <Legend wrapperStyle={{ fontSize: 13, paddingTop: 8 }} />}
       </PieChart>
     </ResponsiveContainer>
   );
 }
 
-function EChartsDiversityChart({ data }: DiversityChartProps) {
+function EChartsDiversityChart({ data, legend = true }: DiversityChartProps) {
   const option = {
     tooltip: {
       trigger: 'item',
-      formatter: '{b}: {d}%',
+      // The slice's own pct (as Recharts shows), not its normalised share of the sum
+      formatter: (p: { name: string; value: number }) => `${p.name}: ${p.value.toFixed(1)}%`,
     },
     legend: {
+      show: legend,
       bottom: 0,
       textStyle: { fontSize: 13, color: 'var(--c-ink-mute)' },
     },
@@ -55,7 +59,7 @@ function EChartsDiversityChart({ data }: DiversityChartProps) {
       {
         type: 'pie',
         radius: ['40%', '65%'],
-        center: ['50%', '45%'],
+        center: ['50%', legend ? '45%' : '50%'],
         padAngle: 3,
         data: data.map((d, idx) => ({
           name: d.name,

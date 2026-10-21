@@ -31,6 +31,8 @@ All notable changes to Folio App are documented here.
 
 ### Added
 
+- **Target portfolios - allocation pie chart** - The target portfolio and target group edit pages show an Allocation donut above the stock list ("Holdings" / "Planned allocation per stock"), drawn with the user's chart library and updating live as allocations are edited. Slices run largest first, anything short of 100% shows as a grey Unallocated slice, and each stock's row carries a colour dot matching its slice in place of a chart legend. The colours repeat after 10 stocks. The shared pie's tooltip now shows plain percentages (`12.0%`, previously `+12.0%`), which also affects the Diversity report, and the ECharts tooltip shows each slice's own % rather than its share of the slice total. (`frontend/src/lib/targetPlan.ts` `allocationPie`, `frontend/src/components/charts/DiversityChart.tsx`, `frontend/src/pages/targets/TargetPortfolioDetailPage.tsx`, `TargetGroupDetailPage.tsx`)
+
 - **Target portfolios - sort stocks by name and allocation** - The target portfolio edit page adds a Symbol sort (column header on desktop, Sort button on phones) next to Category and Alloc %; like those, it reorders the rows and the order is saved. The group edit page's "Planned allocation per stock" list gets Name and Allocation sort buttons (view only, not saved; Name starts A-Z, Allocation starts largest first, a second click reverses). (`frontend/src/pages/targets/TargetPortfolioDetailPage.tsx`, `TargetGroupDetailPage.tsx`, `frontend/src/lib/targetPlan.ts`)
 
 - **Target portfolio groups** - The Target Portfolios menu can now group several target portfolios into one plan, with a weight per portfolio and a saved investable amount:

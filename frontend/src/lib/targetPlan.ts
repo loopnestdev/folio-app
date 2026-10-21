@@ -1,4 +1,5 @@
-import type { TargetPortfolio } from '../types';
+import type { DiversityAllocation, TargetPortfolio } from '../types';
+import { CHART_COLORS, UNALLOCATED_COLOR } from './utils';
 
 export interface PlanMember {
   target_portfolio_id: string;
@@ -54,4 +55,29 @@ export function sortPlanLines(lines: PlanLine[], key: PlanSortKey, dir: PlanSort
       ? factor * (a.pct - b.pct) || a.symbol.localeCompare(b.symbol)
       : factor * a.symbol.localeCompare(b.symbol),
   );
+}
+
+/**
+ * allocationPie:
+ *   - Pie slices for a plan's per-stock allocation, largest first, merging repeated symbols
+ *   - Coloured by size rank so neighbouring slices differ; `colorOf` gives each symbol's colour for a list beside the chart
+ *   - Anything short of 100% becomes a neutral "Unallocated" slice
+ */
+export function allocationPie(lines: { symbol: string; pct: number; amount: number }[]): {
+  data: DiversityAllocation[];
+  colorOf: Map<string, string>;
+} {
+  const bySymbol = new Map<string, { pct: number; amount: number }>();
+  for (const l of lines) {
+    if (!l.symbol || !(l.pct > 0)) continue;
+    const prev = bySymbol.get(l.symbol);
+    bySymbol.set(l.symbol, { pct: (prev?.pct ?? 0) + l.pct, amount: (prev?.amount ?? 0) + l.amount });
+  }
+  const data: DiversityAllocation[] = [...bySymbol]
+    .sort(([as, a], [bs, b]) => b.pct - a.pct || as.localeCompare(bs))
+    .map(([name, { pct, amount }], i) => ({ name, pct, value: amount, color: CHART_COLORS[i % CHART_COLORS.length] }));
+  const colorOf = new Map(data.map((d) => [d.name, d.color!]));
+  const total = data.reduce((s, d) => s + d.pct, 0);
+  if (data.length && total < 99.99) data.push({ name: 'Unallocated', pct: 100 - total, value: 0, color: UNALLOCATED_COLOR });
+  return { data, colorOf };
 }

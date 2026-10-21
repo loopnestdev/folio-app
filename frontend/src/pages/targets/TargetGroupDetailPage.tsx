@@ -13,8 +13,9 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { PageLoader } from '../../components/ui/LoadingSpinner';
 import { useToast } from '../../components/ui/Toast';
+import { DiversityChart } from '../../components/charts/DiversityChart';
 import { formatCurrency } from '../../lib/utils';
-import { groupPlan, sortPlanLines, type PlanSortKey, type PlanSortDir } from '../../lib/targetPlan';
+import { groupPlan, sortPlanLines, allocationPie, type PlanSortKey, type PlanSortDir } from '../../lib/targetPlan';
 import type { TargetPortfolio, TargetPortfolioGroup } from '../../types';
 
 const CURRENCIES = ['AUD', 'USD', 'HKD'];
@@ -76,6 +77,7 @@ function GroupEditor({ group, portfolios }: { group: TargetPortfolioGroup; portf
   );
   const plannedPct = plan.reduce((s, l) => s + l.pct, 0);
   const shownPlan  = planSort ? sortPlanLines(plan, planSort.key, planSort.dir) : plan;
+  const pie        = allocationPie(plan);
   // Name starts A→Z, Allocation starts largest first; a repeat click flips the direction
   const togglePlanSort = (key: PlanSortKey) => setPlanSort((prev) =>
     prev?.key === key
@@ -294,6 +296,14 @@ function GroupEditor({ group, portfolios }: { group: TargetPortfolioGroup; portf
         </div>
       </Card>
 
+      {/* Allocation pie */}
+      {plan.length > 0 && (
+        <Card padding="sm" className="sm:p-5 space-y-2">
+          <h2 className="font-semibold text-[15px] text-[var(--c-ink)]">Allocation</h2>
+          <DiversityChart data={pie.data} legend={false} />
+        </Card>
+      )}
+
       {/* Per-stock plan */}
       {plan.length > 0 && (
         <Card padding="none" className="overflow-hidden">
@@ -325,7 +335,8 @@ function GroupEditor({ group, portfolios }: { group: TargetPortfolioGroup; portf
             {shownPlan.map((l) => (
               <li key={l.symbol} className="px-4 sm:px-5 py-2.5 flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-[14px]">
+                  <p className="text-[14px] flex items-center flex-wrap">
+                    <span aria-hidden className="w-2.5 h-2.5 rounded-full mr-2 shrink-0" style={{ background: pie.colorOf.get(l.symbol) }} />
                     <span className="font-semibold text-[var(--c-primary)]">{l.symbol}</span>
                     {l.category && <span className="ml-2 text-[12px] text-[var(--c-ink-mute)]">{l.category}</span>}
                   </p>

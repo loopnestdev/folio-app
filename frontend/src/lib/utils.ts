@@ -187,6 +187,9 @@ export const CHART_COLORS = [
   '#b45309',
 ];
 
+// Slice colour for the part of a plan left unallocated (neutral, so it reads as "not a stock")
+export const UNALLOCATED_COLOR = '#a3acb9';
+
 // Month names
 export const MONTH_NAMES = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',

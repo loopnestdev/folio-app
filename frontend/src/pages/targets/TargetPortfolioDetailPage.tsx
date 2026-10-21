@@ -15,7 +15,9 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { PageLoader } from '../../components/ui/LoadingSpinner';
 import { useToast } from '../../components/ui/Toast';
+import { DiversityChart } from '../../components/charts/DiversityChart';
 import { formatCurrency } from '../../lib/utils';
+import { allocationPie } from '../../lib/targetPlan';
 
 interface DraftItem {
   key: string; // local-only stable key for list rendering
@@ -113,6 +115,10 @@ export function TargetPortfolioDetailPage() {
   const totalAlloc = items.reduce((s, i) => s + (parseFloat(i.allocation_pct) || 0), 0);
   const allocOk    = Math.abs(totalAlloc - 100) < 0.01;
   const investableNum = Math.max(parseFloat(investable) || 0, 0);
+  const pie = allocationPie(items.map((i) => {
+    const pct = parseFloat(i.allocation_pct) || 0;
+    return { symbol: i.symbol.trim().toUpperCase(), pct, amount: allocationValue(pct, investableNum) };
+  }));
 
   const handleInvestableChange = (v: string) => {
     setInvestable(v);
@@ -287,6 +293,14 @@ export function TargetPortfolioDetailPage() {
         </div>
       </Card>
 
+      {/* Allocation pie */}
+      {pie.data.length > 0 && (
+        <Card padding="sm" className="sm:p-5 space-y-2">
+          <h2 className="font-semibold text-[15px] text-[var(--c-ink)]">Allocation</h2>
+          <DiversityChart data={pie.data} legend={false} />
+        </Card>
+      )}
+
       {/* Items table */}
       <Card padding="sm" className="sm:p-5 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -335,7 +349,7 @@ export function TargetPortfolioDetailPage() {
               <button
                 type="button"
                 onClick={() => handleSort('symbol')}
-                className="pl-3 flex items-center gap-1 text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-wide hover:text-[var(--c-ink)] transition-colors"
+                className="pl-7 flex items-center gap-1 text-[11px] font-semibold text-[var(--c-ink-mute)] uppercase tracking-wide hover:text-[var(--c-ink)] transition-colors"
               >
                 Symbol {sortIcon('symbol')}
               </button>
@@ -380,12 +394,20 @@ export function TargetPortfolioDetailPage() {
             <div key={item.key} className="grid grid-cols-2 gap-2 p-3 rounded-xl border border-[var(--c-border)] sm:contents">
               <label className="block sm:contents">
               <span className={MOBILE_LABEL}>Symbol</span>
-              <input
-                className="w-full h-9 px-3 rounded-lg border border-[var(--c-border)] bg-[var(--c-canvas)] text-[16px] sm:text-[14px] text-[var(--c-ink)] focus:outline-none focus:border-[var(--c-primary)] uppercase"
-                placeholder="NVDA"
-                value={item.symbol}
-                onChange={(e) => updateItem(item.key, 'symbol', e.target.value)}
-              />
+              {/* Colour dot ties the row to its slice in the Allocation pie */}
+              <div className="relative">
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full"
+                  style={{ background: pie.colorOf.get(item.symbol.trim().toUpperCase()) }}
+                />
+                <input
+                  className="w-full h-9 pl-7 pr-3 rounded-lg border border-[var(--c-border)] bg-[var(--c-canvas)] text-[16px] sm:text-[14px] text-[var(--c-ink)] focus:outline-none focus:border-[var(--c-primary)] uppercase"
+                  placeholder="NVDA"
+                  value={item.symbol}
+                  onChange={(e) => updateItem(item.key, 'symbol', e.target.value)}
+                />
+              </div>
               </label>
               <label className="block sm:contents">
               <span className={MOBILE_LABEL}>Exchange</span>

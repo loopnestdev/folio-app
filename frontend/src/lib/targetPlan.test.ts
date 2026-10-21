@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { groupPlan, sortPlanLines } from './targetPlan';
+import { groupPlan, sortPlanLines, allocationPie } from './targetPlan';
+import { CHART_COLORS, UNALLOCATED_COLOR } from './utils';
 import type { TargetPortfolio } from '../types';
 
 const tp = (id: string, name: string, items: [string, number, string | null][]): TargetPortfolio => ({
@@ -43,5 +44,31 @@ describe('sortPlanLines', () => {
   it('does not mutate the input', () => {
     sortPlanLines(lines, 'symbol', 'asc');
     expect(syms(lines)).toEqual(['NVDA', 'AMD', 'MU', 'COHR']);
+  });
+});
+
+describe('allocationPie', () => {
+  const line = (symbol: string, pct: number) => ({ symbol, pct, amount: pct * 10 });
+
+  it('orders slices largest first, colours by rank, and merges repeated symbols', () => {
+    const { data, colorOf } = allocationPie([line('AMD', 20), line('NVDA', 30), line('MU', 25), line('AMD', 25)]);
+    expect(data.map((d) => [d.name, d.pct])).toEqual([['AMD', 45], ['NVDA', 30], ['MU', 25]]);
+    expect(data[0].value).toBe(450);
+    expect(colorOf.get('NVDA')).toBe(CHART_COLORS[1]);
+  });
+
+  it('adds an Unallocated slice when the plan is under 100%', () => {
+    const { data, colorOf } = allocationPie([line('NVDA', 60), line('MU', 30)]);
+    expect(data[2]).toEqual({ name: 'Unallocated', pct: 10, value: 0, color: UNALLOCATED_COLOR });
+    expect(colorOf.has('Unallocated')).toBe(false);
+  });
+
+  it('skips blank symbols and zero allocations', () => {
+    const { data } = allocationPie([line('', 50), line('NVDA', 0), line('MU', 100)]);
+    expect(data.map((d) => d.name)).toEqual(['MU']);
+  });
+
+  it('is empty for an empty plan', () => {
+    expect(allocationPie([]).data).toEqual([]);
   });
 });
