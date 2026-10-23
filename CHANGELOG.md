@@ -5,6 +5,10 @@ All notable changes to Folio App are documented here.
 
 ## [Unreleased]
 
+### Security
+
+- **Removed the public `/health/jwt` endpoint and retired `SUPABASE_JWT_SECRET`** - The endpoint told anyone whether a JWT secret was loaded and how long it was. After the Railway environment-variable breach (2026-10-21), coredb's legacy HS256 secret was revoked and the variable removed from Railway, so the backend verifies every token through Supabase `getUser()`. `backend/.env.example` no longer lists the secret and now shows the `sb_secret_` / `sb_publishable_` key formats. (`backend/src/app.ts`, `backend/.env.example`, `CLAUDE.md`)
+
 ### Fixed
 
 - **Positions valued 10-20x too high before a later share consolidation (CEL, LCID)** - Yahoo rescales every close before a split or consolidation to the post-split share count, but trades are stored in the shares held at the time. CEL (held Feb-Apr 2026, 1-for-20 consolidation on 2026-07-29) was valued at about $3.00 a share instead of the $0.155 it traded at, adding a phantom A$15,000 (+6.5%) to the Super Investment chart on the buy date and removing it on the sale date. LCID (1-for-10, 2025-09-02) had the same 10x error on a 3-share position in Personal Investment. `fetchDailyCloses` now requests Yahoo's split events through today (they are only returned inside the requested range) and stores closes as traded (`unadjustForSplits`: adjusted x numerator / denominator for each later split). No position was open on either split date, so as-traded prices are correct for every recorded trade. A position held across a future split would also need its quantity adjusted on the split date, which the app does not yet do. Already-cached rows are corrected by `npm run repair:splits` (dry run), then `-- --apply` (`backend/scripts/repair-split-history.ts`). (`backend/src/services/market-data/yahoo.ts`)

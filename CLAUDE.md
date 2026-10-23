@@ -246,7 +246,7 @@ authMiddleware --> requireApproved --> [requireAdmin] --> route handler
 - Supabase shows the JWT secret base64url-encoded; the code decodes it before passing to `createHmac`
 - `coredb` has migrated to ES256 signing keys; tokens are always verified via `getUser()` for this project
 
-**Environment variable:** `SUPABASE_JWT_SECRET` (Railway) - from Supabase Dashboard --> Settings --> JWT Keys --> Legacy JWT Secret.
+**Environment variable:** `SUPABASE_JWT_SECRET` is not set anywhere. coredb's legacy HS256 secret was revoked on 2026-10-23 after the Railway environment-variable breach, so leave it unset - setting it would only re-enable local checks against a revoked secret.
 
 ---
 
