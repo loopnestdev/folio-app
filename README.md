@@ -174,6 +174,19 @@ Upload via **Portfolio --> Import** in the app. Review the parsed trades before 
    - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`
    - `FRONTEND_URL=https://folio.ailab.build`
    - `NODE_ENV=production`
+   - `ORIGIN_AUTH_SECRET` - set only after the Cloudflare origin lock below is in place
+
+#### Cloudflare origin lock (API domain)
+
+The frontend calls the backend at `folio-api.ailab.build`, a proxied Cloudflare record pointing at the Railway service, so the zone's WAF rules (IP / country) cover the API too:
+
+1. **Railway --> service --> Settings --> Networking --> Custom Domain:** `folio-api.ailab.build`; add the CNAME (proxied) and TXT records it shows in Cloudflare DNS. SSL/TLS mode must be Full or Full (strict), never Flexible.
+2. **Cloudflare --> Rules --> Transform Rules --> Modify Request Header:** for `folio-api.ailab.build`, set `X-Origin-Auth` to a random secret (`openssl rand -hex 32`).
+3. **Frontend** `VITE_API_URL=https://folio-api.ailab.build`, rebuild and deploy.
+4. **Railway variable** `ORIGIN_AUTH_SECRET` = the same secret. From then on, requests that reach Railway without passing Cloudflare get 403 (`/health` stays open for Railway's health check).
+5. Remove the Railway-generated `*.up.railway.app` domain.
+
+`frontend/public/_headers` allows `https://folio-api.ailab.build` in `connect-src`.
 
 ### Frontend (Cloudflare Workers + Assets)
 

@@ -11,6 +11,8 @@ const envSchema = z.object({
   // Falls back to network verification when absent (slower but functional).
   SUPABASE_JWT_SECRET: z.string().optional().default(''),
   FRONTEND_URL: z.string().default('http://localhost:5173'),
+  // Must match the X-Origin-Auth header Cloudflare adds; empty = check off (see middleware/originAuth.ts)
+  ORIGIN_AUTH_SECRET: z.string().optional().default(''),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 });
 

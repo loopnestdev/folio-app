@@ -4,8 +4,12 @@ import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
 import { env } from './config/env';
 import { setupRoutes } from './routes';
+import { requireOriginAuth } from './middleware/originAuth';
 
 export const app = express();
+
+// Only requests that passed Cloudflare (WAF IP / country rules) reach the routes
+app.use(requireOriginAuth);
 
 // Security headers
 app.use(helmet());

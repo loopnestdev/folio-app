@@ -150,6 +150,7 @@ The frontend calls the backend at `VITE_API_URL` (defaults to `http://localhost:
 | `FRONTEND_URL` | No | CORS origin (`https://folio.ailab.build` in prod) |
 | `PORT` | No | Defaults to `3001` |
 | `NODE_ENV` | No | `development` \| `production` |
+| `ORIGIN_AUTH_SECRET` | No | When set, every request except `/health` needs a matching `X-Origin-Auth` header (403 otherwise), added by a Cloudflare Transform Rule on `folio-api.ailab.build`, so requests that skip Cloudflare's WAF are refused (`middleware/originAuth.ts`) |
 
 **`frontend/.env`**
 
@@ -271,7 +272,7 @@ Note: `backend/package.json` has a `typecheck` script (`tsc --noEmit`). Run `npm
 Run after every change:
 
 ```bash
-cd backend  && npm test   # 81 tests - Jest + ts-jest
+cd backend  && npm test   # 88 tests - Jest + ts-jest
 cd frontend && npm test   # 99 tests - Vitest
 ```
 
