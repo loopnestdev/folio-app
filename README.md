@@ -182,10 +182,15 @@ Upload via **Portfolio --> Import** in the app. Review the parsed trades before 
 ```toml
 name = "folio-app"
 compatibility_date = "2024-01-01"
+workers_dev = false
+preview_urls = false
+routes = [{ pattern = "folio.ailab.build", custom_domain = true }]
 
 [assets]
 directory = "./dist"
 ```
+
+`workers_dev = false` and `preview_urls = false` keep the app off `*.workers.dev` addresses, which bypass the zone's WAF rules (IP / country blocks); it is served only on `folio.ailab.build`. Leave them set: a deploy without them turns the `workers.dev` address back on.
 
 SPA routing (React Router deep-links) is handled by `not_found_handling = "single-page-application"`. Do **not** add a `public/_redirects` file - the `/* /index.html 200` rule is Cloudflare Pages syntax and causes error 100324 (infinite redirect loop) in Workers Assets.
 
