@@ -7,6 +7,7 @@ All notable changes to Folio App are documented here.
 
 ### Security
 
+- **Backend reachable only through Cloudflare** - New optional `ORIGIN_AUTH_SECRET`: when set, the backend answers 403 to every request except `/health` without a matching `X-Origin-Auth` header, which a Cloudflare Transform Rule adds on `folio-api.ailab.build`. Requests that skip Cloudflare's WAF rules (IP / country blocks) are refused. The frontend CSP allows the new API domain. (`backend/src/middleware/originAuth.ts`, `backend/src/app.ts`, `frontend/public/_headers`)
 - **Removed the public `/health/jwt` endpoint and retired `SUPABASE_JWT_SECRET`** - The endpoint told anyone whether a JWT secret was loaded and how long it was. After the Railway environment-variable breach (2026-10-21), coredb's legacy HS256 secret was revoked and the variable removed from Railway, so the backend verifies every token through Supabase `getUser()`. `backend/.env.example` no longer lists the secret and now shows the `sb_secret_` / `sb_publishable_` key formats. (`backend/src/app.ts`, `backend/.env.example`, `CLAUDE.md`)
 
 ### Fixed
